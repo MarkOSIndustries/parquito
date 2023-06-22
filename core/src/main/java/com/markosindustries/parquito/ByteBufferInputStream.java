@@ -26,7 +26,7 @@ public class ByteBufferInputStream extends InputStream {
   }
 
   public int read() {
-    if (byteBuffer.position() < byteBuffer.limit()) return byteBuffer.get();
+    if (byteBuffer.position() < byteBuffer.limit()) return 0xFF & byteBuffer.get();
     return -1;
   }
 

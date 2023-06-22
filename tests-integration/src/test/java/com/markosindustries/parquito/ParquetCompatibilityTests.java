@@ -19,13 +19,47 @@ import org.apache.parquet.proto.ProtoParquetWriter;
 import org.json.JSONObject;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 public class ParquetCompatibilityTests {
+  @ParameterizedTest
+  @EnumSource(
+      value = CompressionCodecName.class,
+      names = {"UNCOMPRESSED", "SNAPPY", "GZIP"})
+  public void canReadAFileAsMap(CompressionCodecName codecName) throws IOException {
+    final var file =
+        generateFileUsingApacheHadoop(
+            List.of(Example.newBuilder().build(), Example.newBuilder().build()), codecName);
+    try (final var byteRangeReader = new FileByteRangeReader(file)) {
+      ParquetMetadata.read(byteRangeReader)
+          .thenAccept(
+              footer -> {
+                final var schema = ParquetSchemaNode.from(footer.schema);
+                for (RowGroup rowGroup : footer.row_groups) {
+                  final var rowGroupReader = new RowGroupReader(rowGroup);
+                  final var rowIterator =
+                      rowGroupReader.getRowIterator(new MapReader(), schema, byteRangeReader);
+                  var rows = 0;
+                  while (rowIterator.hasNext()) {
+                    final var next = rowIterator.next();
+                    Assertions.assertTrue(next.containsKey("some_repeated"));
+                    Assertions.assertTrue(next.containsKey("some_string"));
+                    rows++;
+                  }
+                  Assertions.assertEquals(2, rows);
+                }
+              })
+          .join();
+    }
+  }
+
   @Test
   public void canReadAFileAsJson() throws IOException {
     final var file =
         generateFileUsingApacheHadoop(
-            List.of(Example.newBuilder().build(), Example.newBuilder().build()));
+            List.of(Example.newBuilder().build(), Example.newBuilder().build()),
+            CompressionCodecName.UNCOMPRESSED);
     try (final var byteRangeReader = new FileByteRangeReader(file)) {
       ParquetMetadata.read(byteRangeReader)
           .thenAccept(
@@ -73,7 +107,7 @@ public class ParquetCompatibilityTests {
                 .build(),
             Example.newBuilder().build());
 
-    final var file = generateFileUsingApacheHadoop(expectedProtobufs);
+    final var file = generateFileUsingApacheHadoop(expectedProtobufs, CompressionCodecName.SNAPPY);
     try (final var byteRangeReader = new FileByteRangeReader(file)) {
       ParquetMetadata.read(byteRangeReader)
           .thenAccept(
@@ -97,14 +131,15 @@ public class ParquetCompatibilityTests {
     }
   }
 
-  private static File generateFileUsingApacheHadoop(List<Example> rows) throws IOException {
+  private static File generateFileUsingApacheHadoop(
+      List<Example> rows, CompressionCodecName codecName) throws IOException {
     final File tempFile = File.createTempFile("integration-test", ".parquet");
     tempFile.deleteOnExit();
 
     try (final ParquetWriter<Example> writer =
         ProtoParquetWriter.<Example>builder(new SimpleOutputFile(tempFile))
             .withMessage(Example.class)
-            .withCompressionCodec(CompressionCodecName.SNAPPY)
+            .withCompressionCodec(codecName)
             .withWriteMode(OVERWRITE)
             .build()) {
       for (Example row : rows) {
@@ -118,7 +153,8 @@ public class ParquetCompatibilityTests {
   public void randomJunkForFutureTests() throws IOException {
     final var file =
         generateFileUsingApacheHadoop(
-            List.of(Example.newBuilder().build(), Example.newBuilder().build()));
+            List.of(Example.newBuilder().build(), Example.newBuilder().build()),
+            CompressionCodecName.SNAPPY);
     try (final var byteRangeReader = new FileByteRangeReader(file)) {
       ParquetMetadata.read(byteRangeReader)
           .thenAccept(

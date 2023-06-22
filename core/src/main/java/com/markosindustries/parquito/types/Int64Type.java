@@ -19,6 +19,10 @@ public abstract class Int64Type<ReadAs extends Comparable<ReadAs>> extends Parqu
   public Values<ReadAs> readPlainPage(
       int expectedValues, final int decompressedPageBytes, InputStream inputStream)
       throws IOException {
+    if (expectedValues == 0) {
+      return Values.empty();
+    }
+
     final var expectedBytes = expectedValues * 8;
     final var buffer = ByteBuffer.allocate(expectedBytes);
     if (inputStream.read(buffer.array()) != expectedBytes) {

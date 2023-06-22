@@ -38,7 +38,7 @@ public class RepeatedBranchIterator<Repeated, Value> implements ParquetFieldIter
     final var values = reader.repeatedBuilder();
     if (optionalBranchIterator.peekDefinitionLevel() >= schemaNode.getDefinitionLevelMax()) {
       do {
-        values.add((Value) optionalBranchIterator.next());
+        values.add(optionalBranchIterator.next());
       } while (optionalBranchIterator.peekRepetitionLevel() >= schemaNode.getRepetitionLevelMax());
     } else {
       optionalBranchIterator.next();

@@ -58,6 +58,7 @@ public class RepeatedValueIterator<ReadAs extends Comparable<ReadAs>, Repeated, 
     final var values = reader.repeatedBuilder();
     if (dataPage.getDefinitionLevels()[definitionIndex] == schemaNode.getDefinitionLevelMax()) {
       do {
+        //noinspection unchecked
         values.add((Value) dataPage.getValue(valueIndex++));
         definitionIndex++;
         advancePageIfNecessary();

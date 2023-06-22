@@ -18,6 +18,10 @@ public abstract class ByteArrayType<ReadAs extends Comparable<ReadAs>> extends P
   public Values<ReadAs> readPlainPage(
       final int expectedValues, final int decompressedPageBytes, final InputStream inputStream)
       throws IOException {
+    if (expectedValues == 0) {
+      return Values.empty();
+    }
+
     final var lengthPrefixBuffer = new byte[4];
     final var lengthPrefix =
         ByteBuffer.wrap(lengthPrefixBuffer).order(ByteOrder.LITTLE_ENDIAN).asIntBuffer();

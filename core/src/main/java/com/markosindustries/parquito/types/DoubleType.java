@@ -17,6 +17,10 @@ public abstract class DoubleType<ReadAs extends Comparable<ReadAs>> extends Parq
   public Values<ReadAs> readPlainPage(
       final int expectedValues, final int decompressedPageBytes, final InputStream inputStream)
       throws IOException {
+    if (expectedValues == 0) {
+      return Values.empty();
+    }
+
     final var expectedBytes = expectedValues * 8;
     final var buffer = ByteBuffer.allocate(expectedBytes);
     if (inputStream.read(buffer.array()) != expectedBytes) {

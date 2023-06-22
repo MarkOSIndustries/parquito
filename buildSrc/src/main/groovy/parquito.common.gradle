@@ -21,8 +21,9 @@ tasks.withType(JavaCompile) {
 }
 
 dependencies {
-  testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.3'
-  testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.3'
+  testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter-api', version: '5.9.3'
+  testImplementation group: 'org.junit.jupiter', name: 'junit-jupiter-params', version: '5.9.3'
+  testRuntimeOnly group: 'org.junit.jupiter', name: 'junit-jupiter-engine', version: '5.9.3'
 }
 
 test {

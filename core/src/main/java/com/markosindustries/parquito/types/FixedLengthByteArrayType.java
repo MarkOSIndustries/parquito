@@ -20,6 +20,10 @@ public abstract class FixedLengthByteArrayType<ReadAs extends Comparable<ReadAs>
   public Values<ReadAs> readPlainPage(
       final int expectedValues, final int decompressedPageBytes, final InputStream inputStream)
       throws IOException {
+    if (expectedValues == 0) {
+      return Values.empty();
+    }
+
     final var totalBytes = expectedValues * typeLength;
     final var values = ByteBuffer.allocate(totalBytes);
     inputStream.readNBytes(values.array(), 0, totalBytes);
