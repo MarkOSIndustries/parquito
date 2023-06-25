@@ -5,6 +5,7 @@ import com.markosindustries.parquito.page.DictionaryPage;
 import com.markosindustries.parquito.types.ColumnType;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.Set;
@@ -116,12 +117,16 @@ public class ColumnChunk<ReadAs extends Comparable<ReadAs>> {
         && header.meta_data.statistics.max_value != null;
   }
 
+  public ReadAs read(ByteBuffer byteBuffer) {
+    return columnType.parquetType().readFromByteBuffer(byteBuffer);
+  }
+
   public ReadAs getStatsMin() {
-    return columnType.parquetType().readColumnStatsValue(header.meta_data.statistics.min_value);
+    return read(header.meta_data.statistics.min_value);
   }
 
   public ReadAs getStatsMax() {
-    return columnType.parquetType().readColumnStatsValue(header.meta_data.statistics.max_value);
+    return read(header.meta_data.statistics.max_value);
   }
 
   public boolean containsNonNulls() {

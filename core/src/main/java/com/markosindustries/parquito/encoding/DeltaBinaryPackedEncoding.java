@@ -1,16 +1,40 @@
 package com.markosindustries.parquito.encoding;
 
+import static org.apache.parquet.format.Encoding.DELTA_BINARY_PACKED;
+
 import com.clearspring.analytics.util.Varint;
+import com.markosindustries.parquito.ColumnChunk;
+import com.markosindustries.parquito.page.Values;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
-public class DeltaBinaryIntEncoding implements ParquetIntEncoding {
+public class DeltaBinaryPackedEncoding<ReadAs extends Comparable<ReadAs>>
+    implements ParquetEncoding<ReadAs> {
   @Override
-  public int[] decode(
-      final int expectedValues, final int bitWidthIgnored, final InputStream decompressedPageStream)
+  public Values<ReadAs> decode(
+      final int expectedValues,
+      final int decompressedPageBytes,
+      final InputStream decompressedPageStream,
+      final ColumnChunk<ReadAs> columnChunk)
       throws IOException {
-    final var values = new int[expectedValues];
+    final var readAsClass = columnChunk.getColumnType().parquetType().getReadAsClass();
+    if (!(readAsClass.isAssignableFrom(Integer.class)
+        || readAsClass.isAssignableFrom(Long.class))) {
+      throw new UnsupportedOperationException(
+          "Can't use " + DELTA_BINARY_PACKED + " with: " + readAsClass);
+    }
+
+    if (expectedValues == 0) {
+      return Values.empty();
+    }
+    final var values = decode(expectedValues, decompressedPageStream);
+    return index -> readAsClass.cast(values[index]);
+  }
+
+  public static long[] decode(final int expectedValues, final InputStream decompressedPageStream)
+      throws IOException {
+    final var values = new long[expectedValues];
     if (expectedValues == 0) {
       return values;
     }
@@ -37,19 +61,19 @@ public class DeltaBinaryIntEncoding implements ParquetIntEncoding {
     }
 
     final var valuesPerMiniBlock = valuesPerBlock / miniBlocksPerBlock;
-    int previousValue = ZigZag.decode(Varint.readUnsignedVarInt(dataInputStream));
+    long previousValue = ZigZag.decode(Varint.readUnsignedVarLong(dataInputStream));
     values[0] = previousValue;
 
     final var bitWidthsForBlock = new int[miniBlocksPerBlock];
     for (int valuesSeen = 1; valuesSeen < totalValueCount; ) {
       // Read a block
-      final var minDelta = ZigZag.decode(Varint.readUnsignedVarInt(dataInputStream));
+      final long minDelta = ZigZag.decode(Varint.readUnsignedVarLong(dataInputStream));
       for (int miniBlockIdx = 0; miniBlockIdx < miniBlocksPerBlock; miniBlockIdx++) {
         bitWidthsForBlock[miniBlockIdx] = dataInputStream.readUnsignedByte();
       }
       for (int miniBlockIdx = 0; miniBlockIdx < miniBlocksPerBlock; miniBlockIdx++) {
         final var bitWidth = bitWidthsForBlock[miniBlockIdx];
-        int mask = Maths.intMaskLowerBits(bitWidth);
+        long mask = Maths.longMaskLowerBits(bitWidth);
 
         long buffer = 0;
         int availableBits = 0;

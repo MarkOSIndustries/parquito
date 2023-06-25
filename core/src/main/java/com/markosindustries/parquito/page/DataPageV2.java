@@ -1,6 +1,6 @@
 package com.markosindustries.parquito.page;
 
-import static com.markosindustries.parquito.encoding.IntEncodings.INT_ENCODING_RLE;
+import static com.markosindustries.parquito.encoding.IntEncodings.INT_ENCODING_RLE_WITHOUT_LENGTH_HEADER;
 
 import com.markosindustries.parquito.ByteBufferInputStream;
 import com.markosindustries.parquito.ColumnChunk;
@@ -29,31 +29,36 @@ public class DataPageV2<ReadAs extends Comparable<ReadAs>> implements DataPage<R
     final var pageStream = new ByteBufferInputStream(pageBuffer);
 
     this.repetitionLevels =
-        INT_ENCODING_RLE.decode(
+        INT_ENCODING_RLE_WITHOUT_LENGTH_HEADER.decode(
             pageHeader.data_page_header_v2.num_values,
             IntEncodings.bitWidth(columnChunk.getColumnType().schemaNode().getRepetitionLevelMax()),
             pageStream);
     this.definitionLevels =
-        INT_ENCODING_RLE.decode(
+        INT_ENCODING_RLE_WITHOUT_LENGTH_HEADER.decode(
             pageHeader.data_page_header_v2.num_values,
             IntEncodings.bitWidth(columnChunk.getColumnType().schemaNode().getDefinitionLevelMax()),
             pageStream);
-    final var decompressedPageStream =
-        (pageHeader.data_page_header_v2.isSetIs_compressed()
-                && !pageHeader.data_page_header_v2.is_compressed)
-            ? pageStream
-            : CompressionCodecs.decompress(columnChunk.getHeader().meta_data.codec, pageStream);
 
     this.totalValues = pageHeader.data_page_header_v2.num_values;
     this.nonNullValues =
         pageHeader.data_page_header_v2.num_values - pageHeader.data_page_header_v2.num_nulls;
-    this.values =
-        Encodings.<ReadAs>getDecoder(pageHeader.data_page_header.encoding)
-            .decode(
-                nonNullValues,
-                pageHeader.uncompressed_page_size,
-                decompressedPageStream,
-                columnChunk);
+
+    if (nonNullValues == 0) {
+      this.values = Values.empty();
+    } else {
+      final var decompressedPageStream =
+          (pageHeader.data_page_header_v2.isSetIs_compressed()
+                  && !pageHeader.data_page_header_v2.is_compressed)
+              ? pageStream
+              : CompressionCodecs.decompress(columnChunk.getHeader().meta_data.codec, pageStream);
+      this.values =
+          Encodings.<ReadAs>getDecoder(pageHeader.data_page_header_v2.encoding)
+              .decode(
+                  nonNullValues,
+                  pageHeader.uncompressed_page_size,
+                  decompressedPageStream,
+                  columnChunk);
+    }
   }
 
   @Override

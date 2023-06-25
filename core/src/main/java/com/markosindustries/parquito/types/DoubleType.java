@@ -32,7 +32,7 @@ public abstract class DoubleType<ReadAs extends Comparable<ReadAs>> extends Parq
   }
 
   @Override
-  public ReadAs readColumnStatsValue(final ByteBuffer byteBuffer) {
+  public ReadAs readFromByteBuffer(final ByteBuffer byteBuffer) {
     return wrap(byteBuffer.order(ByteOrder.LITTLE_ENDIAN).asDoubleBuffer().get(0));
   }
 

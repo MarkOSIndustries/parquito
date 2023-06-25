@@ -34,7 +34,7 @@ public abstract class Int32Type<ReadAs extends Comparable<ReadAs>> extends Parqu
   }
 
   @Override
-  public ReadAs readColumnStatsValue(final ByteBuffer byteBuffer) {
+  public ReadAs readFromByteBuffer(final ByteBuffer byteBuffer) {
     return wrap(byteBuffer.order(ByteOrder.LITTLE_ENDIAN).asIntBuffer().get(0));
   }
 

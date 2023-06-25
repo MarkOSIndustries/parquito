@@ -46,7 +46,7 @@ public abstract class ByteArrayType<ReadAs extends Comparable<ReadAs>> extends P
   }
 
   @Override
-  public ReadAs readColumnStatsValue(final ByteBuffer buffer) {
+  public ReadAs readFromByteBuffer(final ByteBuffer buffer) {
     return wrap(buffer);
   }
 

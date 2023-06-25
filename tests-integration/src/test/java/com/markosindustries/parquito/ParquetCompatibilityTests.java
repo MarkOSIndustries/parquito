@@ -12,30 +12,47 @@ import com.markosindustries.parquito.schemas.ExampleEnum;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import java.util.stream.Stream;
+import org.apache.parquet.column.ParquetProperties;
 import org.apache.parquet.format.RowGroup;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.proto.ProtoParquetWriter;
 import org.json.JSONObject;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 public class ParquetCompatibilityTests {
+  private static Stream<Arguments> writerConfigCombinations() {
+    return Stream.of(
+        Arguments.of(
+            CompressionCodecName.UNCOMPRESSED, ParquetProperties.WriterVersion.PARQUET_1_0),
+        Arguments.of(CompressionCodecName.SNAPPY, ParquetProperties.WriterVersion.PARQUET_1_0),
+        Arguments.of(CompressionCodecName.GZIP, ParquetProperties.WriterVersion.PARQUET_1_0),
+        Arguments.of(
+            CompressionCodecName.UNCOMPRESSED, ParquetProperties.WriterVersion.PARQUET_2_0),
+        Arguments.of(CompressionCodecName.SNAPPY, ParquetProperties.WriterVersion.PARQUET_2_0),
+        Arguments.of(CompressionCodecName.GZIP, ParquetProperties.WriterVersion.PARQUET_2_0));
+  }
+
   @ParameterizedTest
-  @EnumSource(
-      value = CompressionCodecName.class,
-      names = {"UNCOMPRESSED", "SNAPPY", "GZIP"})
-  public void canReadAFileAsMap(CompressionCodecName codecName) throws IOException {
+  @MethodSource("writerConfigCombinations")
+  public void canReadAFileAsMap(
+      CompressionCodecName codecName, ParquetProperties.WriterVersion writerVersion)
+      throws IOException {
     final var file =
         generateFileUsingApacheHadoop(
-            List.of(Example.newBuilder().build(), Example.newBuilder().build()), codecName);
+            List.of(Example.newBuilder().build(), Example.newBuilder().build()),
+            codecName,
+            writerVersion);
     try (final var byteRangeReader = new FileByteRangeReader(file)) {
-      ParquetMetadata.read(byteRangeReader)
+      ParquetFooter.read(byteRangeReader)
           .thenAccept(
               footer -> {
                 final var schema = ParquetSchemaNode.from(footer.schema);
+                System.out.println("Oh my v " + footer.version + " c " + footer.created_by);
                 for (RowGroup rowGroup : footer.row_groups) {
                   final var rowGroupReader = new RowGroupReader(rowGroup);
                   final var rowIterator =
@@ -54,14 +71,18 @@ public class ParquetCompatibilityTests {
     }
   }
 
-  @Test
-  public void canReadAFileAsJson() throws IOException {
+  @ParameterizedTest
+  @MethodSource("writerConfigCombinations")
+  public void canReadAFileAsJson(
+      CompressionCodecName codecName, ParquetProperties.WriterVersion writerVersion)
+      throws IOException {
     final var file =
         generateFileUsingApacheHadoop(
             List.of(Example.newBuilder().build(), Example.newBuilder().build()),
-            CompressionCodecName.UNCOMPRESSED);
+            codecName,
+            writerVersion);
     try (final var byteRangeReader = new FileByteRangeReader(file)) {
-      ParquetMetadata.read(byteRangeReader)
+      ParquetFooter.read(byteRangeReader)
           .thenAccept(
               footer -> {
                 final var schema = ParquetSchemaNode.from(footer.schema);
@@ -83,8 +104,11 @@ public class ParquetCompatibilityTests {
     }
   }
 
-  @Test
-  public void canReadAFileAsProtobuf() throws IOException {
+  @ParameterizedTest
+  @MethodSource("writerConfigCombinations")
+  public void canReadAFileAsProtobuf(
+      CompressionCodecName codecName, ParquetProperties.WriterVersion writerVersion)
+      throws IOException {
     final var expectedProtobufs =
         List.of(
             Example.newBuilder()
@@ -92,7 +116,52 @@ public class ParquetCompatibilityTests {
                     ExampleChild.newBuilder()
                         .setSomeString("str")
                         .addAllSomeStrings(List.of("str1", "str2"))
-                        .setSomeNumber(7)
+                        .setSomeInt32(Integer.MAX_VALUE - 872634)
+                        .setSomeInt64(Integer.MAX_VALUE + 872634L)
+                        .setSomeFloat(Float.MAX_VALUE - 328746.23462F)
+                        .setSomeDouble(Float.MAX_VALUE + 328746.23462D)
+                        .setSomeBinary(ByteString.copyFromUtf8("just some bytes")))
+                .addAllSomeRepeated(
+                    List.of(
+                        Example.ExampleRepeated.newBuilder()
+                            .setSomeString("strrr1")
+                            .setSomeEnum(ExampleEnum.EXAMPLE_ENUM_TWO)
+                            .build(),
+                        Example.ExampleRepeated.newBuilder()
+                            .setSomeString("strrr2")
+                            .setSomeEnum(ExampleEnum.EXAMPLE_ENUM_ONE)
+                            .build()))
+                .build(),
+            Example.newBuilder()
+                .setSomeChild(
+                    ExampleChild.newBuilder()
+                        .setSomeString("str")
+                        .addAllSomeStrings(List.of("str1", "str2"))
+                        .setSomeInt32(Integer.MAX_VALUE - 872634)
+                        .setSomeInt64(Integer.MAX_VALUE + 872634L)
+                        .setSomeFloat(Float.MAX_VALUE - 9837465.23462F)
+                        .setSomeDouble(Float.MAX_VALUE + 9837465.23462D)
+                        .setSomeBinary(ByteString.copyFromUtf8("just some bytes")))
+                .addAllSomeRepeated(
+                    List.of(
+                        Example.ExampleRepeated.newBuilder()
+                            .setSomeString("strrr1")
+                            .setSomeEnum(ExampleEnum.EXAMPLE_ENUM_TWO)
+                            .build(),
+                        Example.ExampleRepeated.newBuilder()
+                            .setSomeString("strrr2")
+                            .setSomeEnum(ExampleEnum.EXAMPLE_ENUM_ONE)
+                            .build()))
+                .build(),
+            Example.newBuilder()
+                .setSomeChild(
+                    ExampleChild.newBuilder()
+                        .setSomeString("str")
+                        .addAllSomeStrings(List.of("str1", "str2"))
+                        .setSomeInt32(Integer.MAX_VALUE - 872634)
+                        .setSomeInt64(Integer.MAX_VALUE + 872634L)
+                        .setSomeFloat(Float.MAX_VALUE - 102987.23462F)
+                        .setSomeDouble(Float.MAX_VALUE + 102987.23462D)
                         .setSomeBinary(ByteString.copyFromUtf8("just some bytes")))
                 .addAllSomeRepeated(
                     List.of(
@@ -107,9 +176,9 @@ public class ParquetCompatibilityTests {
                 .build(),
             Example.newBuilder().build());
 
-    final var file = generateFileUsingApacheHadoop(expectedProtobufs, CompressionCodecName.SNAPPY);
+    final var file = generateFileUsingApacheHadoop(expectedProtobufs, codecName, writerVersion);
     try (final var byteRangeReader = new FileByteRangeReader(file)) {
-      ParquetMetadata.read(byteRangeReader)
+      ParquetFooter.read(byteRangeReader)
           .thenAccept(
               footer -> {
                 final var schema = ParquetSchemaNode.from(footer.schema);
@@ -132,7 +201,10 @@ public class ParquetCompatibilityTests {
   }
 
   private static File generateFileUsingApacheHadoop(
-      List<Example> rows, CompressionCodecName codecName) throws IOException {
+      List<Example> rows,
+      CompressionCodecName codecName,
+      final ParquetProperties.WriterVersion writerVersion)
+      throws IOException {
     final File tempFile = File.createTempFile("integration-test", ".parquet");
     tempFile.deleteOnExit();
 
@@ -141,6 +213,7 @@ public class ParquetCompatibilityTests {
             .withMessage(Example.class)
             .withCompressionCodec(codecName)
             .withWriteMode(OVERWRITE)
+            .withWriterVersion(writerVersion)
             .build()) {
       for (Example row : rows) {
         writer.write(row);
@@ -154,9 +227,10 @@ public class ParquetCompatibilityTests {
     final var file =
         generateFileUsingApacheHadoop(
             List.of(Example.newBuilder().build(), Example.newBuilder().build()),
-            CompressionCodecName.SNAPPY);
+            CompressionCodecName.SNAPPY,
+            ParquetProperties.WriterVersion.PARQUET_1_0);
     try (final var byteRangeReader = new FileByteRangeReader(file)) {
-      ParquetMetadata.read(byteRangeReader)
+      ParquetFooter.read(byteRangeReader)
           .thenAccept(
               footer -> {
                 final var schema = ParquetSchemaNode.from(footer.schema);

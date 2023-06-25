@@ -31,7 +31,7 @@ public abstract class FixedLengthByteArrayType<ReadAs extends Comparable<ReadAs>
   }
 
   @Override
-  public ReadAs readColumnStatsValue(final ByteBuffer buffer) {
+  public ReadAs readFromByteBuffer(final ByteBuffer buffer) {
     return wrap(buffer);
   }
 

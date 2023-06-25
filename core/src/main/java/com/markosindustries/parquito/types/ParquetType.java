@@ -22,7 +22,7 @@ public abstract class ParquetType<ReadAs extends Comparable<ReadAs>> {
       final int expectedValues, final int decompressedPageBytes, final InputStream inputStream)
       throws IOException;
 
-  public abstract ReadAs readColumnStatsValue(final ByteBuffer byteBuffer);
+  public abstract ReadAs readFromByteBuffer(final ByteBuffer byteBuffer);
 
   public static ParquetType<?> create(
       final Type type, final LogicalType logicalType, final int typeLength) {

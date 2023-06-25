@@ -22,7 +22,7 @@ public abstract class BooleanType<ReadAs extends Comparable<ReadAs>> extends Par
   }
 
   @Override
-  public ReadAs readColumnStatsValue(final ByteBuffer buffer) {
+  public ReadAs readFromByteBuffer(final ByteBuffer buffer) {
     return wrap(buffer.order(ByteOrder.LITTLE_ENDIAN).asIntBuffer().get(0) != 0);
   }
 
