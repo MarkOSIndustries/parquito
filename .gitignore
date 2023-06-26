@@ -1,0 +1,8 @@
+.gradle/
+build/
+/.idea/*
+!/.idea/runConfigurations
+*.iml
+out/
+**/.terraform/
+schemas/gen

@@ -1,0 +1,8 @@
+rootProject.name = 'parquito'
+
+include 'schemas'
+include 'core'
+include 'tests-integration'
+include 'json'
+include 'protobuf'
+

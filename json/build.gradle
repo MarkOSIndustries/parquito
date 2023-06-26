@@ -1,0 +1,9 @@
+plugins {
+  id 'parquito.published-library'
+  id 'parquito.linting'
+}
+
+dependencies {
+  api project(':core')
+  api group: 'org.json', name: 'json', version: '20230227'
+}

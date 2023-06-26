@@ -1,0 +1,9 @@
+plugins {
+  id 'parquito.published-library'
+  id 'parquito.linting'
+}
+
+dependencies {
+  api project(':core')
+  api group: 'com.google.protobuf', name: 'protobuf-java', version: '3.19.6'
+}

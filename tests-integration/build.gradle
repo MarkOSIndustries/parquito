@@ -1,0 +1,30 @@
+plugins {
+  id 'parquito.linting'
+}
+
+dependencies {
+  testImplementation project(':core')
+  testImplementation project(':json')
+  testImplementation project(':protobuf')
+  testImplementation project(':schemas')
+
+  // Pull in the Apache Parquet libraries for compatibility testing
+  testImplementation (group: 'org.apache.parquet', name: 'parquet-hadoop', version: parquet_version) {
+    exclude group: 'org.apache.hadoop'
+  }
+  testImplementation (group: 'org.apache.parquet', name: 'parquet-protobuf', version: parquet_version) {
+    exclude group: 'org.apache.hadoop'
+  }
+  testImplementation (group: 'org.apache.parquet', name: 'parquet-avro', version: parquet_version) {
+    exclude group: 'org.apache.hadoop'
+  }
+  testImplementation (group: 'org.apache.hadoop', name: 'hadoop-common', version: hadoop_version) {
+    transitive = false
+  }
+  testImplementation (group: 'org.apache.hadoop', name: 'hadoop-mapreduce-client-core', version: hadoop_version) {
+    transitive = false
+  }
+  testImplementation (group: 'com.fasterxml.woodstox', name: 'woodstox-core', version: '5.0.3')
+  testImplementation (group: 'commons-collections', name: 'commons-collections', version: '3.2.2')
+  testImplementation (group: 'log4j', name: 'log4j', version: '1.2.17')
+}
