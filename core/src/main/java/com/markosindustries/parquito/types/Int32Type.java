@@ -57,7 +57,7 @@ public abstract class Int32Type<ReadAs extends Comparable<ReadAs>> extends Parqu
 
   public static Int32Type<?> create(final LogicalType logicalType) {
     if (logicalType != null) {
-      if (logicalType.isSetDATE() || logicalType.isSetENUM()) {
+      if (logicalType.isSetDATE()) {
         return DATES;
       }
     }
