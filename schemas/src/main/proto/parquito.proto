@@ -15,6 +15,8 @@ message Example {
 
   repeated ExampleRepeated some_repeated = 4;
 
+  map<uint64,ExampleChild> some_map = 6;
+
   message ExampleRepeated {
     string some_string = 1;
     ExampleEnum some_enum = 2;
