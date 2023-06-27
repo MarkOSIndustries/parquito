@@ -3,7 +3,7 @@ package com.markosindustries.parquito.encoding;
 import static org.apache.parquet.format.Encoding.DELTA_BINARY_PACKED;
 
 import com.clearspring.analytics.util.Varint;
-import com.markosindustries.parquito.ColumnChunk;
+import com.markosindustries.parquito.ColumnChunkReader;
 import com.markosindustries.parquito.page.Values;
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -16,9 +16,9 @@ public class DeltaBinaryPackedEncoding<ReadAs extends Comparable<ReadAs>>
       final int expectedValues,
       final int decompressedPageBytes,
       final InputStream decompressedPageStream,
-      final ColumnChunk<ReadAs> columnChunk)
+      final ColumnChunkReader<ReadAs> columnChunkReader)
       throws IOException {
-    final var readAsClass = columnChunk.getColumnType().parquetType().getReadAsClass();
+    final var readAsClass = columnChunkReader.getColumnType().parquetType().getReadAsClass();
     if (!(readAsClass.isAssignableFrom(Integer.class)
         || readAsClass.isAssignableFrom(Long.class))) {
       throw new UnsupportedOperationException(

@@ -1,6 +1,6 @@
 package com.markosindustries.parquito.encoding;
 
-import com.markosindustries.parquito.ColumnChunk;
+import com.markosindustries.parquito.ColumnChunkReader;
 import com.markosindustries.parquito.page.Values;
 import java.io.IOException;
 import java.io.InputStream;
@@ -13,7 +13,7 @@ public class DeltaByteArrayEncoding<ReadAs extends Comparable<ReadAs>>
       final int expectedValues,
       final int decompressedPageBytes,
       final InputStream decompressedPageStream,
-      final ColumnChunk<ReadAs> columnChunk)
+      final ColumnChunkReader<ReadAs> columnChunkReader)
       throws IOException {
     final var prefixLengths =
         IntEncodings.INT_ENCODING_DELTA_BINARY_PACKED.decode(
@@ -33,17 +33,17 @@ public class DeltaByteArrayEncoding<ReadAs extends Comparable<ReadAs>>
 
     return index -> {
       if (prefixLengths[index] == 0) {
-        return columnChunk.read(bytes.slice(offsets[index], lengths[index]));
+        return columnChunkReader.read(bytes.slice(offsets[index], lengths[index]));
       }
       if (lengths[index] == 0) {
-        return columnChunk.read(bytes.slice(offsets[index - 1], prefixLengths[index]));
+        return columnChunkReader.read(bytes.slice(offsets[index - 1], prefixLengths[index]));
       }
       final var prefix = bytes.slice(offsets[index - 1], prefixLengths[index]);
       final var suffix = bytes.slice(offsets[index], lengths[index]);
       final var concat = ByteBuffer.allocate(prefix.capacity() + suffix.capacity());
       concat.put(prefix);
       concat.put(suffix);
-      return columnChunk.read(concat);
+      return columnChunkReader.read(concat);
     };
   }
 }

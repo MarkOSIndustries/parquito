@@ -1,7 +1,7 @@
 package com.markosindustries.parquito.page;
 
 import com.markosindustries.parquito.ByteBufferInputStream;
-import com.markosindustries.parquito.ColumnChunk;
+import com.markosindustries.parquito.ColumnChunkReader;
 import com.markosindustries.parquito.CompressionCodecs;
 import com.markosindustries.parquito.encoding.Encodings;
 import com.markosindustries.parquito.encoding.IntEncodings;
@@ -20,34 +20,34 @@ public class DataPageV1<ReadAs extends Comparable<ReadAs>> implements DataPage<R
 
   protected DataPageV1(
       final PageHeader pageHeader,
-      final ColumnChunk<ReadAs> columnChunk,
+      final ColumnChunkReader<ReadAs> columnChunkReader,
       final ByteBuffer pageBuffer)
       throws IOException {
     this.pageHeader = pageHeader;
 
     final var decompressedPageStream =
         CompressionCodecs.decompress(
-            columnChunk.getHeader().meta_data.codec, new ByteBufferInputStream(pageBuffer));
+            columnChunkReader.getHeader().meta_data.codec, new ByteBufferInputStream(pageBuffer));
 
     this.repetitionLevels =
         IntEncodings.getDecoder(pageHeader.data_page_header.repetition_level_encoding)
             .decode(
                 pageHeader.data_page_header.num_values,
                 IntEncodings.bitWidth(
-                    columnChunk.getColumnType().schemaNode().getRepetitionLevelMax()),
+                    columnChunkReader.getColumnType().schemaNode().getRepetitionLevelMax()),
                 decompressedPageStream);
     this.definitionLevels =
         IntEncodings.getDecoder(pageHeader.data_page_header.definition_level_encoding)
             .decode(
                 pageHeader.data_page_header.num_values,
                 IntEncodings.bitWidth(
-                    columnChunk.getColumnType().schemaNode().getDefinitionLevelMax()),
+                    columnChunkReader.getColumnType().schemaNode().getDefinitionLevelMax()),
                 decompressedPageStream);
     this.totalValues = pageHeader.data_page_header.num_values;
     this.nonNullValues =
         (int)
             Arrays.stream(definitionLevels)
-                .filter(d -> d == columnChunk.getColumnType().schemaNode().getDefinitionLevelMax())
+                .filter(d -> d == columnChunkReader.getColumnType().schemaNode().getDefinitionLevelMax())
                 .count();
     this.values =
         Encodings.<ReadAs>getDecoder(pageHeader.data_page_header.encoding)
@@ -55,7 +55,7 @@ public class DataPageV1<ReadAs extends Comparable<ReadAs>> implements DataPage<R
                 nonNullValues,
                 pageHeader.uncompressed_page_size,
                 decompressedPageStream,
-                columnChunk);
+                columnChunkReader);
   }
 
   @Override

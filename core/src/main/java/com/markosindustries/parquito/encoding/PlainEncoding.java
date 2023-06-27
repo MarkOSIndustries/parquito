@@ -1,6 +1,6 @@
 package com.markosindustries.parquito.encoding;
 
-import com.markosindustries.parquito.ColumnChunk;
+import com.markosindustries.parquito.ColumnChunkReader;
 import com.markosindustries.parquito.page.Values;
 import java.io.IOException;
 import java.io.InputStream;
@@ -11,9 +11,9 @@ public class PlainEncoding<ReadAs extends Comparable<ReadAs>> implements Parquet
       final int expectedValues,
       final int decompressedPageBytes,
       final InputStream decompressedPageStream,
-      final ColumnChunk<ReadAs> columnChunk)
+      final ColumnChunkReader<ReadAs> columnChunkReader)
       throws IOException {
-    return columnChunk
+    return columnChunkReader
         .getColumnType()
         .parquetType()
         .readPlainPage(expectedValues, decompressedPageBytes, decompressedPageStream);

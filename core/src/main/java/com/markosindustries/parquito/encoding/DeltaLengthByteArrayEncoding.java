@@ -1,6 +1,6 @@
 package com.markosindustries.parquito.encoding;
 
-import com.markosindustries.parquito.ColumnChunk;
+import com.markosindustries.parquito.ColumnChunkReader;
 import com.markosindustries.parquito.page.Values;
 import java.io.IOException;
 import java.io.InputStream;
@@ -13,7 +13,7 @@ public class DeltaLengthByteArrayEncoding<ReadAs extends Comparable<ReadAs>>
       final int expectedValues,
       final int decompressedPageBytes,
       final InputStream decompressedPageStream,
-      final ColumnChunk<ReadAs> columnChunk)
+      final ColumnChunkReader<ReadAs> columnChunkReader)
       throws IOException {
     final var lengths =
         IntEncodings.INT_ENCODING_DELTA_BINARY_PACKED.decode(
@@ -28,6 +28,6 @@ public class DeltaLengthByteArrayEncoding<ReadAs extends Comparable<ReadAs>>
     }
     final var bytes = ByteBuffer.wrap(decompressedPageStream.readAllBytes());
 
-    return index -> columnChunk.read(bytes.slice(offsets[index], lengths[index]));
+    return index -> columnChunkReader.read(bytes.slice(offsets[index], lengths[index]));
   }
 }

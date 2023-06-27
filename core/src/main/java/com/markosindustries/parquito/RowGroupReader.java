@@ -65,7 +65,7 @@ public class RowGroupReader {
       final ColumnType<ReadAs> columnType,
       final ByteRangeReader byteRangeReader) {
     var columnChunk =
-        com.markosindustries.parquito.ColumnChunk.create(
+        ColumnChunkReader.create(
             columnChunkHeader, columnType, byteRangeReader);
     final var dataPageIterator = columnChunk.readPages(byteRangeReader).join();
     return switch (parquetSchema.getRepetitionType()) {

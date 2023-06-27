@@ -1,7 +1,7 @@
 package com.markosindustries.parquito.page;
 
 import com.markosindustries.parquito.ByteBufferInputStream;
-import com.markosindustries.parquito.ColumnChunk;
+import com.markosindustries.parquito.ColumnChunkReader;
 import com.markosindustries.parquito.CompressionCodecs;
 import com.markosindustries.parquito.encoding.Encodings;
 import java.io.IOException;
@@ -15,14 +15,14 @@ public class DictionaryPage<ReadAs extends Comparable<ReadAs>> implements Parque
 
   public DictionaryPage(
       final PageHeader pageHeader,
-      final ColumnChunk<ReadAs> columnChunk,
+      final ColumnChunkReader<ReadAs> columnChunkReader,
       final ByteBuffer pageBuffer)
       throws IOException {
     this.pageHeader = pageHeader;
 
     final var decompressedPageStream =
         CompressionCodecs.decompress(
-            columnChunk.getHeader().meta_data.codec, new ByteBufferInputStream(pageBuffer));
+            columnChunkReader.getHeader().meta_data.codec, new ByteBufferInputStream(pageBuffer));
 
     this.values =
         Encodings.<ReadAs>getDecoder(Encoding.PLAIN)
@@ -30,7 +30,7 @@ public class DictionaryPage<ReadAs extends Comparable<ReadAs>> implements Parque
                 pageHeader.dictionary_page_header.num_values,
                 pageHeader.uncompressed_page_size,
                 decompressedPageStream,
-                columnChunk);
+                columnChunkReader);
   }
 
   @Override

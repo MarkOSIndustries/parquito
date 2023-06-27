@@ -15,13 +15,13 @@ import java.util.stream.IntStream;
 import org.apache.parquet.format.PageHeader;
 import org.apache.parquet.format.Util;
 
-public class ColumnChunk<ReadAs extends Comparable<ReadAs>> {
+public class ColumnChunkReader<ReadAs extends Comparable<ReadAs>> {
   private final org.apache.parquet.format.ColumnChunk header;
   private final ColumnType<ReadAs> columnType;
   private final CompletableFuture<DictionaryPage<ReadAs>> dictionaryPage;
   private final long dataPageCompressedBytes;
 
-  private ColumnChunk(
+  private ColumnChunkReader(
       final org.apache.parquet.format.ColumnChunk header,
       final ColumnType<ReadAs> columnType,
       final CompletableFuture<DictionaryPage<ReadAs>> dictionaryPage,
@@ -32,7 +32,7 @@ public class ColumnChunk<ReadAs extends Comparable<ReadAs>> {
     this.dataPageCompressedBytes = dataPageCompressedBytes;
   }
 
-  public static <ReadAs extends Comparable<ReadAs>> ColumnChunk<ReadAs> create(
+  public static <ReadAs extends Comparable<ReadAs>> ColumnChunkReader<ReadAs> create(
       final org.apache.parquet.format.ColumnChunk columnChunkHeader,
       final ColumnType<ReadAs> type,
       final ByteRangeReader byteRangeReader) {
@@ -45,7 +45,7 @@ public class ColumnChunk<ReadAs extends Comparable<ReadAs>> {
 
     final var dictionaryPageFuture = new CompletableFuture<DictionaryPage<ReadAs>>();
     final var columnChunk =
-        new ColumnChunk<ReadAs>(
+        new ColumnChunkReader<ReadAs>(
             columnChunkHeader,
             type,
             dictionaryPageFuture,
@@ -197,12 +197,12 @@ public class ColumnChunk<ReadAs extends Comparable<ReadAs>> {
 
                 @Override
                 public DataPage<ReadAs> next() {
-                  final var pageHeader = ColumnChunk.readPageHeader(chunkDataBufferStream);
+                  final var pageHeader = ColumnChunkReader.readPageHeader(chunkDataBufferStream);
                   // TODO - CRC with
                   //     import java.util.zip.CRC32;
                   final var parquetPage =
                       DataPage.create(
-                          ColumnChunk.this,
+                          ColumnChunkReader.this,
                           pageHeader,
                           chunkDataBufferStream.readAsBufferView(pageHeader.compressed_page_size));
                   valuesFound += parquetPage.getTotalValues();

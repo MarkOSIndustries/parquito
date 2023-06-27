@@ -3,7 +3,7 @@ package com.markosindustries.parquito.page;
 import static com.markosindustries.parquito.encoding.IntEncodings.INT_ENCODING_RLE_WITHOUT_LENGTH_HEADER;
 
 import com.markosindustries.parquito.ByteBufferInputStream;
-import com.markosindustries.parquito.ColumnChunk;
+import com.markosindustries.parquito.ColumnChunkReader;
 import com.markosindustries.parquito.CompressionCodecs;
 import com.markosindustries.parquito.encoding.Encodings;
 import com.markosindustries.parquito.encoding.IntEncodings;
@@ -21,7 +21,7 @@ public class DataPageV2<ReadAs extends Comparable<ReadAs>> implements DataPage<R
 
   protected DataPageV2(
       final PageHeader pageHeader,
-      final ColumnChunk<ReadAs> columnChunk,
+      final ColumnChunkReader<ReadAs> columnChunkReader,
       final ByteBuffer pageBuffer)
       throws IOException {
     this.pageHeader = pageHeader;
@@ -31,12 +31,12 @@ public class DataPageV2<ReadAs extends Comparable<ReadAs>> implements DataPage<R
     this.repetitionLevels =
         INT_ENCODING_RLE_WITHOUT_LENGTH_HEADER.decode(
             pageHeader.data_page_header_v2.num_values,
-            IntEncodings.bitWidth(columnChunk.getColumnType().schemaNode().getRepetitionLevelMax()),
+            IntEncodings.bitWidth(columnChunkReader.getColumnType().schemaNode().getRepetitionLevelMax()),
             pageStream);
     this.definitionLevels =
         INT_ENCODING_RLE_WITHOUT_LENGTH_HEADER.decode(
             pageHeader.data_page_header_v2.num_values,
-            IntEncodings.bitWidth(columnChunk.getColumnType().schemaNode().getDefinitionLevelMax()),
+            IntEncodings.bitWidth(columnChunkReader.getColumnType().schemaNode().getDefinitionLevelMax()),
             pageStream);
 
     this.totalValues = pageHeader.data_page_header_v2.num_values;
@@ -50,14 +50,14 @@ public class DataPageV2<ReadAs extends Comparable<ReadAs>> implements DataPage<R
           (pageHeader.data_page_header_v2.isSetIs_compressed()
                   && !pageHeader.data_page_header_v2.is_compressed)
               ? pageStream
-              : CompressionCodecs.decompress(columnChunk.getHeader().meta_data.codec, pageStream);
+              : CompressionCodecs.decompress(columnChunkReader.getHeader().meta_data.codec, pageStream);
       this.values =
           Encodings.<ReadAs>getDecoder(pageHeader.data_page_header_v2.encoding)
               .decode(
                   nonNullValues,
                   pageHeader.uncompressed_page_size,
                   decompressedPageStream,
-                  columnChunk);
+                  columnChunkReader);
     }
   }
 
