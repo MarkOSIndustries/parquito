@@ -8,7 +8,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import org.apache.parquet.format.LogicalType;
 
-public abstract class DoubleType<ReadAs extends Comparable<ReadAs>> extends ParquetType<ReadAs> {
+public abstract class DoubleType<ReadAs> extends ParquetType<ReadAs> {
   public DoubleType(final Class<ReadAs> doubleClass) {
     super(doubleClass);
   }
@@ -43,6 +43,11 @@ public abstract class DoubleType<ReadAs extends Comparable<ReadAs>> extends Parq
         @Override
         protected Double wrap(final double value) {
           return value;
+        }
+
+        @Override
+        public int compare(final Double o1, final Double o2) {
+          return o1.compareTo(o2);
         }
       };
 

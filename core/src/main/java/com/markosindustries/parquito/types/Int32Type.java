@@ -10,7 +10,7 @@ import java.time.Duration;
 import java.time.Instant;
 import org.apache.parquet.format.LogicalType;
 
-public abstract class Int32Type<ReadAs extends Comparable<ReadAs>> extends ParquetType<ReadAs> {
+public abstract class Int32Type<ReadAs> extends ParquetType<ReadAs> {
   protected Int32Type(final Class<ReadAs> readAsClass) {
     super(readAsClass);
   }
@@ -40,11 +40,28 @@ public abstract class Int32Type<ReadAs extends Comparable<ReadAs>> extends Parqu
 
   protected abstract ReadAs wrap(final int value);
 
-  private static final Int32Type<Integer> INTEGERS =
+  private static final Int32Type<Integer> SIGNED_INTEGERS =
       new Int32Type<Integer>(Integer.class) {
         @Override
         protected Integer wrap(final int value) {
           return value;
+        }
+
+        @Override
+        public int compare(final Integer o1, final Integer o2) {
+          return o1.compareTo(o2);
+        }
+      };
+  private static final Int32Type<Integer> UNSIGNED_INTEGERS =
+      new Int32Type<Integer>(Integer.class) {
+        @Override
+        protected Integer wrap(final int value) {
+          return value;
+        }
+
+        @Override
+        public int compare(final Integer o1, final Integer o2) {
+          return Long.compare(0xFFFFFFFFL & o1, 0xFFFFFFFFL & o2);
         }
       };
   private static final Int32Type<Instant> DATES =
@@ -53,6 +70,11 @@ public abstract class Int32Type<ReadAs extends Comparable<ReadAs>> extends Parqu
         protected Instant wrap(final int value) {
           return Instant.ofEpochSecond(Duration.ofDays(value).getSeconds());
         }
+
+        @Override
+        public int compare(final Instant o1, final Instant o2) {
+          return o1.compareTo(o2);
+        }
       };
 
   public static Int32Type<?> create(final LogicalType logicalType) {
@@ -60,8 +82,16 @@ public abstract class Int32Type<ReadAs extends Comparable<ReadAs>> extends Parqu
       if (logicalType.isSetDATE()) {
         return DATES;
       }
+
+      if (logicalType.isSetINTEGER()) {
+        if (logicalType.getINTEGER().isSigned) {
+          return SIGNED_INTEGERS;
+        } else {
+          return UNSIGNED_INTEGERS;
+        }
+      }
     }
 
-    return INTEGERS;
+    return SIGNED_INTEGERS;
   }
 }

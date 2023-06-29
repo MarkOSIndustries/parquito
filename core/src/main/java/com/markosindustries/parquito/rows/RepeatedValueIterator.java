@@ -5,7 +5,7 @@ import com.markosindustries.parquito.Reader;
 import com.markosindustries.parquito.page.DataPage;
 import java.util.Iterator;
 
-public class RepeatedValueIterator<ReadAs extends Comparable<ReadAs>, Repeated, Value>
+public class RepeatedValueIterator<ReadAs, Repeated, Value>
     implements ParquetFieldIterator<Repeated> {
   private final Iterator<DataPage<ReadAs>> dataPageIterator;
   private final ParquetSchemaNode schemaNode;

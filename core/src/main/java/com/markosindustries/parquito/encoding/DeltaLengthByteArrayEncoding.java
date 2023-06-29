@@ -6,8 +6,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 
-public class DeltaLengthByteArrayEncoding<ReadAs extends Comparable<ReadAs>>
-    implements ParquetEncoding<ReadAs> {
+public class DeltaLengthByteArrayEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
   @Override
   public Values<ReadAs> decode(
       final int expectedValues,

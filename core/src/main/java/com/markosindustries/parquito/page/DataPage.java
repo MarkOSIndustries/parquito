@@ -6,8 +6,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import org.apache.parquet.format.PageHeader;
 
-public interface DataPage<ReadAs extends Comparable<ReadAs>> extends ParquetPage<ReadAs> {
-  static <ReadAs extends Comparable<ReadAs>> DataPage<ReadAs> create(
+public interface DataPage<ReadAs> extends ParquetPage<ReadAs> {
+  static <ReadAs> DataPage<ReadAs> create(
       final ColumnChunkReader<ReadAs> columnChunkReader,
       final PageHeader pageHeader,
       final ByteBuffer pageBuffer) {

@@ -9,7 +9,7 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import org.apache.parquet.format.LogicalType;
 
-public abstract class ByteArrayType<ReadAs extends Comparable<ReadAs>> extends ParquetType<ReadAs> {
+public abstract class ByteArrayType<ReadAs> extends ParquetType<ReadAs> {
   public ByteArrayType(final Class<ReadAs> readAsClass) {
     super(readAsClass);
   }
@@ -56,13 +56,34 @@ public abstract class ByteArrayType<ReadAs extends Comparable<ReadAs>> extends P
     return wrap(EMPTY_BUFFER);
   }
 
-  protected abstract ReadAs wrap(ByteBuffer bytes);
+  protected abstract ReadAs wrap(final ByteBuffer bytes);
+
+  static int unsignedByteComparison(final ByteBuffer o1, final ByteBuffer o2) {
+    final int o1Start = o1.position();
+    final int o1Size = o1.limit() - o1Start;
+    final int o2Start = o2.position();
+    final int o2Size = o2.limit() - o2Start;
+    final int length = Math.min(o1Size, o2Size);
+    int cmp;
+    for (int i = 0; i < length; i++) {
+      cmp = Byte.compareUnsigned(o1.get(o1Start + i), o2.get(o2Start + i));
+      if (cmp != 0) {
+        return cmp;
+      }
+    }
+    return Integer.compare(o1Size, o2Size);
+  }
 
   private static final ByteArrayType<ByteBuffer> BYTE_BUFFERS =
       new ByteArrayType<ByteBuffer>(ByteBuffer.class) {
         @Override
         protected ByteBuffer wrap(final ByteBuffer bytes) {
           return bytes;
+        }
+
+        @Override
+        public int compare(final ByteBuffer o1, final ByteBuffer o2) {
+          return ByteArrayType.unsignedByteComparison(o1, o2);
         }
       };
 
@@ -77,6 +98,13 @@ public abstract class ByteArrayType<ReadAs extends Comparable<ReadAs>> extends P
         protected String wrap(final ByteBuffer bytes) {
           return new String(
               bytes.array(), bytes.arrayOffset(), bytes.capacity(), StandardCharsets.UTF_8);
+        }
+
+        @Override
+        public int compare(final String o1, final String o2) {
+          return ByteArrayType.unsignedByteComparison(
+              ByteBuffer.wrap(o1.getBytes(StandardCharsets.UTF_8)),
+              ByteBuffer.wrap(o2.getBytes(StandardCharsets.UTF_8)));
         }
       };
 

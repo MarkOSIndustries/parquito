@@ -9,7 +9,7 @@ import java.nio.ByteBuffer;
 import org.apache.parquet.format.Encoding;
 import org.apache.parquet.format.PageHeader;
 
-public class DictionaryPage<ReadAs extends Comparable<ReadAs>> implements ParquetPage<ReadAs> {
+public class DictionaryPage<ReadAs> implements ParquetPage<ReadAs> {
   private final PageHeader pageHeader;
   private final Values<ReadAs> values;
 

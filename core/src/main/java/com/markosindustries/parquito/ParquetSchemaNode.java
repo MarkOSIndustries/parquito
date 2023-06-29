@@ -145,17 +145,17 @@ public class ParquetSchemaNode {
     return getChild(schemaPath).element.type_length;
   }
   //
-  //  public <ReadAs extends Comparable<ReadAs>> RequiredColumnAccessor<ReadAs>
+  //  public <ReadAs> RequiredColumnAccessor<ReadAs>
   // getRequiredColumnAccessor(String... schemaPath) {
   //    return new RequiredColumnAccessor<>(getChild(schemaPath).element);
   //  }
   //
-  //  public <ReadAs extends Comparable<ReadAs>> OptionalColumnAccessor<ReadAs>
+  //  public <ReadAs> OptionalColumnAccessor<ReadAs>
   // getOptionalColumnAccessor(String... schemaPath) {
   //    return new OptionalColumnAccessor<>(getChild(schemaPath).element);
   //  }
   //
-  //  public <ReadAs extends Comparable<ReadAs>> RepeatedColumnAccessor<ReadAs>
+  //  public <ReadAs> RepeatedColumnAccessor<ReadAs>
   // getRepeatedColumnAccessor(String... schemaPath) {
   //    return new RepeatedColumnAccessor<>(getChild(schemaPath).element);
   //  }

@@ -36,6 +36,54 @@ public class OptionalBranchIterator<Branch> implements ParquetFieldIterator<Bran
             : 0;
     this.reader = reader;
   }
+  //
+  //  private Branch materialiseNext() {
+  //    // Always have next ready to go by doing the work in constructor()/next(). Allows predicate
+  // to align with hasNext
+  //
+  //    // Do branches which have predicates first
+  //    // Apply predicate to half-baked result
+  //    // "Finish it off" with non-predicate children
+  //  }
+  //
+  //  /**
+  //   * Skip rows until we find one where the given predicate is true
+  //   * @param parquetPredicate
+  //   */
+  //  public void skipUntil(ParquetPredicate parquetPredicate) {
+  //
+  //  }
+  //
+  //  private boolean peekPredicateFailure() {
+  //    if(!hasPredicate) {
+  //      return false;
+  //    }
+  //    for (final var entry : childIterators.entrySet()) {
+  //      final var child = entry.getKey();
+  //      final var iterator = entry.getValue();
+  //      if(iterator.peekPredicateFailure()) {
+  //        return true;
+  //      }
+  //    }
+  //    return false;
+  //  }
+  //
+  //  private void skipPredicateFailures() {
+  //    if(hasNext) {
+  //        boolean anyPredicateFailure;
+  //        do {
+  //          anyPredicateFailure = false;
+  //          for (final var entry : childIterators.entrySet()) {
+  //            final var child = entry.getKey();
+  //            final var iterator = entry.getValue();
+  //            if(iterator.peekPredicateFailure()) {
+  //              anyPredicateFailure = true;
+  //              break;
+  //            }
+  //          }
+  //        } while (anyPredicateFailure && hasNext);
+  //      }
+  //  }
 
   @Override
   public int peekDefinitionLevel() {

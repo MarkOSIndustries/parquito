@@ -11,7 +11,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import org.apache.parquet.format.PageHeader;
 
-public class DataPageV2<ReadAs extends Comparable<ReadAs>> implements DataPage<ReadAs> {
+public class DataPageV2<ReadAs> implements DataPage<ReadAs> {
   private final int[] repetitionLevels;
   private final int[] definitionLevels;
   private final PageHeader pageHeader;
@@ -31,12 +31,14 @@ public class DataPageV2<ReadAs extends Comparable<ReadAs>> implements DataPage<R
     this.repetitionLevels =
         INT_ENCODING_RLE_WITHOUT_LENGTH_HEADER.decode(
             pageHeader.data_page_header_v2.num_values,
-            IntEncodings.bitWidth(columnChunkReader.getColumnType().schemaNode().getRepetitionLevelMax()),
+            IntEncodings.bitWidth(
+                columnChunkReader.getColumnType().schemaNode().getRepetitionLevelMax()),
             pageStream);
     this.definitionLevels =
         INT_ENCODING_RLE_WITHOUT_LENGTH_HEADER.decode(
             pageHeader.data_page_header_v2.num_values,
-            IntEncodings.bitWidth(columnChunkReader.getColumnType().schemaNode().getDefinitionLevelMax()),
+            IntEncodings.bitWidth(
+                columnChunkReader.getColumnType().schemaNode().getDefinitionLevelMax()),
             pageStream);
 
     this.totalValues = pageHeader.data_page_header_v2.num_values;
@@ -50,7 +52,8 @@ public class DataPageV2<ReadAs extends Comparable<ReadAs>> implements DataPage<R
           (pageHeader.data_page_header_v2.isSetIs_compressed()
                   && !pageHeader.data_page_header_v2.is_compressed)
               ? pageStream
-              : CompressionCodecs.decompress(columnChunkReader.getHeader().meta_data.codec, pageStream);
+              : CompressionCodecs.decompress(
+                  columnChunkReader.getHeader().meta_data.codec, pageStream);
       this.values =
           Encodings.<ReadAs>getDecoder(pageHeader.data_page_header_v2.encoding)
               .decode(

@@ -15,7 +15,7 @@ import java.util.stream.IntStream;
 import org.apache.parquet.format.PageHeader;
 import org.apache.parquet.format.Util;
 
-public class ColumnChunkReader<ReadAs extends Comparable<ReadAs>> {
+public class ColumnChunkReader<ReadAs> {
   private final org.apache.parquet.format.ColumnChunk header;
   private final ColumnType<ReadAs> columnType;
   private final CompletableFuture<DictionaryPage<ReadAs>> dictionaryPage;
@@ -32,7 +32,7 @@ public class ColumnChunkReader<ReadAs extends Comparable<ReadAs>> {
     this.dataPageCompressedBytes = dataPageCompressedBytes;
   }
 
-  public static <ReadAs extends Comparable<ReadAs>> ColumnChunkReader<ReadAs> create(
+  public static <ReadAs> ColumnChunkReader<ReadAs> create(
       final org.apache.parquet.format.ColumnChunk columnChunkHeader,
       final ColumnType<ReadAs> type,
       final ByteRangeReader byteRangeReader) {
@@ -90,7 +90,7 @@ public class ColumnChunkReader<ReadAs extends Comparable<ReadAs>> {
     return dictionaryPage.join();
   }
 
-  public boolean mightContain(Object value) {
+  public boolean mightContainObject(Object value) {
     final var readAsClass = columnType.parquetType().getReadAsClass();
     if (readAsClass.isInstance(value)) {
       return mightContain(readAsClass.cast(value));
@@ -100,7 +100,8 @@ public class ColumnChunkReader<ReadAs extends Comparable<ReadAs>> {
 
   public boolean mightContain(ReadAs value) {
     if (hasRangeStats()
-        && (getStatsMin().compareTo(value) > 0 || getStatsMax().compareTo(value) < 0)) {
+        && (columnType.compare(getStatsMin(), value) > 0
+            || columnType.compare(getStatsMax(), value) < 0)) {
       return false;
     }
     if (hasBloomFilter() && !bloomFilterMightContain(value)) {

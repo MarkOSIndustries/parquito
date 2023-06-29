@@ -8,7 +8,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import org.apache.parquet.format.LogicalType;
 
-public abstract class BooleanType<ReadAs extends Comparable<ReadAs>> extends ParquetType<ReadAs> {
+public abstract class BooleanType<ReadAs> extends ParquetType<ReadAs> {
   public BooleanType(final Class<ReadAs> booleanClass) {
     super(booleanClass);
   }
@@ -33,6 +33,11 @@ public abstract class BooleanType<ReadAs extends Comparable<ReadAs>> extends Par
         @Override
         protected Boolean wrap(final boolean value) {
           return value;
+        }
+
+        @Override
+        public int compare(final Boolean o1, final Boolean o2) {
+          return o1.compareTo(o2);
         }
       };
 

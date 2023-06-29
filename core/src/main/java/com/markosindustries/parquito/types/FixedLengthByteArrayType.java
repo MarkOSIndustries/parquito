@@ -7,8 +7,7 @@ import java.nio.ByteBuffer;
 import java.util.UUID;
 import org.apache.parquet.format.LogicalType;
 
-public abstract class FixedLengthByteArrayType<ReadAs extends Comparable<ReadAs>>
-    extends ParquetType<ReadAs> {
+public abstract class FixedLengthByteArrayType<ReadAs> extends ParquetType<ReadAs> {
   private final int typeLength;
 
   public FixedLengthByteArrayType(final Class<ReadAs> readAsClass, int typeLength) {
@@ -46,8 +45,12 @@ public abstract class FixedLengthByteArrayType<ReadAs extends Comparable<ReadAs>
     protected ByteBuffer wrap(final ByteBuffer bytes) {
       return bytes;
     }
+
+    @Override
+    public int compare(final ByteBuffer o1, final ByteBuffer o2) {
+      return ByteArrayType.unsignedByteComparison(o1, o2);
+    }
   }
-  ;
 
   private static final FixedLengthByteArrayType<UUID> UUIDS =
       new FixedLengthByteArrayType<UUID>(UUID.class, 16) {
@@ -57,6 +60,18 @@ public abstract class FixedLengthByteArrayType<ReadAs extends Comparable<ReadAs>
           for (int i = 0; i < 8; i++) msb = (msb << 8) | (bytes.get(i) & 0xff);
           for (int i = 8; i < 16; i++) lsb = (lsb << 8) | (bytes.get(i) & 0xff);
           return new UUID(msb, lsb);
+        }
+
+        @Override
+        public int compare(final UUID o1, final UUID o2) {
+          final int topCmp =
+              Int64Type.unsignedLongComparison(
+                  o1.getMostSignificantBits(), o2.getMostSignificantBits());
+          if (topCmp != 0) {
+            return topCmp;
+          }
+          return Int64Type.unsignedLongComparison(
+              o1.getLeastSignificantBits(), o2.getLeastSignificantBits());
         }
       };
 

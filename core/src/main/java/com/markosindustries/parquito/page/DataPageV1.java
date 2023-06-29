@@ -10,7 +10,7 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import org.apache.parquet.format.PageHeader;
 
-public class DataPageV1<ReadAs extends Comparable<ReadAs>> implements DataPage<ReadAs> {
+public class DataPageV1<ReadAs> implements DataPage<ReadAs> {
   private final int[] repetitionLevels;
   private final int[] definitionLevels;
   private final PageHeader pageHeader;
@@ -47,7 +47,9 @@ public class DataPageV1<ReadAs extends Comparable<ReadAs>> implements DataPage<R
     this.nonNullValues =
         (int)
             Arrays.stream(definitionLevels)
-                .filter(d -> d == columnChunkReader.getColumnType().schemaNode().getDefinitionLevelMax())
+                .filter(
+                    d ->
+                        d == columnChunkReader.getColumnType().schemaNode().getDefinitionLevelMax())
                 .count();
     this.values =
         Encodings.<ReadAs>getDecoder(pageHeader.data_page_header.encoding)

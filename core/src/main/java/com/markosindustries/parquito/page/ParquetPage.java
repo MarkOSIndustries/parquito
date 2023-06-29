@@ -2,7 +2,7 @@ package com.markosindustries.parquito.page;
 
 import org.apache.parquet.format.PageHeader;
 
-public interface ParquetPage<ReadAs extends Comparable<ReadAs>> {
+public interface ParquetPage<ReadAs> {
   PageHeader getPageHeader();
 
   int getTotalValues();

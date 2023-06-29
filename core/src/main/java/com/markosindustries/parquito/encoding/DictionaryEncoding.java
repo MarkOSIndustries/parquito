@@ -5,8 +5,7 @@ import com.markosindustries.parquito.page.Values;
 import java.io.IOException;
 import java.io.InputStream;
 
-public class DictionaryEncoding<ReadAs extends Comparable<ReadAs>>
-    implements ParquetEncoding<ReadAs> {
+public class DictionaryEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
   @Override
   public Values<ReadAs> decode(
       final int expectedValues,

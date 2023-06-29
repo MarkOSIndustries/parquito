@@ -15,11 +15,11 @@ import java.util.List;
 import java.util.stream.Stream;
 import org.apache.parquet.column.ParquetProperties;
 import org.apache.parquet.format.RowGroup;
-import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.proto.ProtoParquetWriter;
 import org.json.JSONObject;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -52,7 +52,6 @@ public class ParquetCompatibilityTests {
           .thenAccept(
               footer -> {
                 final var schema = ParquetSchemaNode.from(footer.schema);
-                System.out.println("Oh my v " + footer.version + " c " + footer.created_by);
                 for (RowGroup rowGroup : footer.row_groups) {
                   final var rowGroupReader = new RowGroupReader(rowGroup);
                   final var rowIterator =
@@ -62,6 +61,7 @@ public class ParquetCompatibilityTests {
                     final var next = rowIterator.next();
                     Assertions.assertTrue(next.containsKey("some_repeated"));
                     Assertions.assertTrue(next.containsKey("some_string"));
+                    Assertions.assertTrue(next.containsKey("some_map"));
                     rows++;
                   }
                   Assertions.assertEquals(2, rows);
@@ -94,7 +94,8 @@ public class ParquetCompatibilityTests {
                   while (rowIterator.hasNext()) {
                     final JSONObject next = rowIterator.next();
                     Assertions.assertEquals(
-                        "{\"some_repeated\":[],\"some_string\":\"\"}", next.toString());
+                        "{\"some_map\":[],\"some_repeated\":[],\"some_string\":\"\"}",
+                        next.toString());
                     rows++;
                   }
                   Assertions.assertEquals(2, rows);
@@ -200,33 +201,13 @@ public class ParquetCompatibilityTests {
     }
   }
 
-  private static File generateFileUsingApacheHadoop(
-      List<Example> rows,
-      CompressionCodecName codecName,
-      final ParquetProperties.WriterVersion writerVersion)
-      throws IOException {
-    final File tempFile = File.createTempFile("integration-test", ".parquet");
-    tempFile.deleteOnExit();
-
-    try (final ParquetWriter<Example> writer =
-        ProtoParquetWriter.<Example>builder(new SimpleOutputFile(tempFile))
-            .withMessage(Example.class)
-            .withCompressionCodec(codecName)
-            .withWriteMode(OVERWRITE)
-            .withWriterVersion(writerVersion)
-            .build()) {
-      for (Example row : rows) {
-        writer.write(row);
-      }
-    }
-
-    return tempFile;
-  }
-
-  public void randomJunkForFutureTests() throws IOException {
+  @Test
+  public void canCheckForValuePresenceUsingStats() throws IOException {
     final var file =
         generateFileUsingApacheHadoop(
-            List.of(Example.newBuilder().build(), Example.newBuilder().build()),
+            List.of(
+                Example.newBuilder().setSomeString("styx").build(),
+                Example.newBuilder().setSomeString("stab").build()),
             CompressionCodecName.SNAPPY,
             ParquetProperties.WriterVersion.PARQUET_1_0);
     try (final var byteRangeReader = new FileByteRangeReader(file)) {
@@ -237,67 +218,74 @@ public class ParquetCompatibilityTests {
 
                 for (RowGroup rowGroup : footer.row_groups) {
                   final var rowGroupReader = new RowGroupReader(rowGroup);
-                  //                  final var ck =
-                  //                      rowGroupReader.getColumnChunkForSchemaPath(
-                  //                          "message", "contact_id", "cs_shard_contact_id",
-                  // "contact_id");
-                  //                  final var columnType = ColumnType.create(ck.get(), schema);
-                  //                  final var columnChunk = ColumnChunk.create(ck.get(),
-                  // columnType, byteRangeReader);
-                  //                  columnChunk.mightContain("");
-
-                  final var rowIterator =
-                      rowGroupReader.getRowIterator(new JSONReader(), schema, byteRangeReader);
-                  var rows = 0L;
-                  while (rowIterator.hasNext()) {
-                    final JSONObject next = rowIterator.next();
-                    rows++;
-                  }
-                  Assertions.assertEquals(2, rows);
-
-                  //          for (org.apache.parquet.format.ColumnChunk columnChunkHeader :
-                  // rowGroup.columns) {
-                  //            if(columnChunkHeader.file_path != null) {
-                  //              throw new RuntimeException("Sorry, can't handle chunks in
-                  // different files yet");
-                  //            }
-                  //            if(columnChunkHeader.meta_data.total_compressed_size >
-                  // Integer.MAX_VALUE) {
-                  //              throw new RuntimeException("Sorry, can't handle chunks bigger than
-                  // " + Integer.MAX_VALUE + " bytes yet");
-                  //            }
-                  //
-                  //            final var columnType = ColumnType.create(columnChunkHeader, schema);
-                  //            var columnChunk = ColumnChunk.create(columnChunkHeader, columnType,
-                  // byteRangeReader);
-                  //            System.out.println(columnChunk + " at " +
-                  // Math.min(columnChunk.getHeader().file_offset,
-                  // columnChunk.getHeader().meta_data.dictionary_page_offset) + " in row group at "
-                  // + rowGroup.file_offset);
-                  //
-                  //
-                  //            System.out.println(columnChunk + " -- stats test " +
-                  // columnChunk.mightContain("0A070A0132108FC93D"));
-                  //            if(columnChunk.hasRangeStats()) {
-                  //              System.out.println(columnChunk + " -- stats " +
-                  // columnChunk.getStatsMin() + " -> " + columnChunk.getStatsMax());
-                  //            }
-                  //
-                  //            // TODO - if we decide based on stats etc, then we run this
-                  //
-                  // columnChunk.readPages(byteRangeReader).join().forEachRemaining(dataPage -> {
-                  //              System.out.println(columnChunk + " -- page with " +
-                  // dataPage.getNonNullValues() + " values");
-                  //              for (int i = 0; i < dataPage.getNonNullValues(); i++) {
-                  //                dataPage.getValue(i);
-                  //                //                System.out.println("    value " +
-                  // dataPage.getValue(i));
-                  //              }
-                  //            });
-                  //          }
+                  final var columnChunkReader =
+                      rowGroupReader
+                          .getColumnChunkReaderForSchemaPath(byteRangeReader, schema, "some_string")
+                          .orElseThrow();
+                  Assertions.assertTrue(columnChunkReader.mightContainObject("str"));
                 }
               })
           .join();
     }
+  }
+
+  @Test
+  public void canCheckForValuePresenceUsingStatsAndDictionary() throws IOException {
+    final var file =
+        generateFileUsingApacheHadoop(
+            List.of(
+                Example.newBuilder().setSomeString("styx").build(),
+                Example.newBuilder().setSomeString("stonks").build(),
+                Example.newBuilder().setSomeString("styx").build(),
+                Example.newBuilder().setSomeString("stab").build()),
+            CompressionCodecName.SNAPPY,
+            ParquetProperties.WriterVersion.PARQUET_1_0,
+            "some_string");
+    try (final var byteRangeReader = new FileByteRangeReader(file)) {
+      ParquetFooter.read(byteRangeReader)
+          .thenAccept(
+              footer -> {
+                final var schema = ParquetSchemaNode.from(footer.schema);
+
+                for (RowGroup rowGroup : footer.row_groups) {
+                  final var rowGroupReader = new RowGroupReader(rowGroup);
+                  final var columnChunkReader =
+                      rowGroupReader
+                          .getColumnChunkReaderForSchemaPath(byteRangeReader, schema, "some_string")
+                          .orElseThrow();
+                  Assertions.assertFalse(columnChunkReader.mightContainObject("str"));
+                  Assertions.assertTrue(columnChunkReader.mightContainObject("stonks"));
+                }
+              })
+          .join();
+    }
+  }
+
+  private static File generateFileUsingApacheHadoop(
+      List<Example> rows,
+      CompressionCodecName codecName,
+      final ParquetProperties.WriterVersion writerVersion,
+      String... dictionaryColumnPaths)
+      throws IOException {
+    final File tempFile = File.createTempFile("integration-test", ".parquet");
+    tempFile.deleteOnExit();
+
+    final var writerBuilder =
+        ProtoParquetWriter.<Example>builder(new SimpleOutputFile(tempFile))
+            .withMessage(Example.class)
+            .withCompressionCodec(codecName)
+            .withWriteMode(OVERWRITE)
+            .withWriterVersion(writerVersion);
+    for (final String dictionaryColumnPath : dictionaryColumnPaths) {
+      writerBuilder.withDictionaryEncoding(dictionaryColumnPath, true);
+    }
+
+    try (final var writer = writerBuilder.build()) {
+      for (Example row : rows) {
+        writer.write(row);
+      }
+    }
+
+    return tempFile;
   }
 }

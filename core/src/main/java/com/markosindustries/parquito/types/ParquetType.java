@@ -7,7 +7,7 @@ import java.nio.ByteBuffer;
 import org.apache.parquet.format.LogicalType;
 import org.apache.parquet.format.Type;
 
-public abstract class ParquetType<ReadAs extends Comparable<ReadAs>> {
+public abstract class ParquetType<ReadAs> {
   protected final Class<ReadAs> readAsClass;
 
   protected ParquetType(final Class<ReadAs> readAsClass) {
@@ -23,6 +23,16 @@ public abstract class ParquetType<ReadAs extends Comparable<ReadAs>> {
       throws IOException;
 
   public abstract ReadAs readFromByteBuffer(final ByteBuffer byteBuffer);
+
+  /**
+   * We don't implement {@link java.util.Comparator} because we have no need of Serialization etc.
+   *
+   * @see java.util.Comparator
+   * @param o1 Comparable left
+   * @param o2 Comparable right
+   * @return &lt;0 if o1&lt;o2, 0 if o1==o2, &gt;0 if o1&gt;o2
+   */
+  public abstract int compare(ReadAs o1, ReadAs o2);
 
   public static ParquetType<?> create(
       final Type type, final LogicalType logicalType, final int typeLength) {

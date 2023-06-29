@@ -8,7 +8,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import org.apache.parquet.format.LogicalType;
 
-public abstract class FloatType<ReadAs extends Comparable<ReadAs>> extends ParquetType<ReadAs> {
+public abstract class FloatType<ReadAs> extends ParquetType<ReadAs> {
   public FloatType(final Class<ReadAs> readAsClass) {
     super(readAsClass);
   }
@@ -43,6 +43,11 @@ public abstract class FloatType<ReadAs extends Comparable<ReadAs>> extends Parqu
         @Override
         protected Float wrap(final float value) {
           return value;
+        }
+
+        @Override
+        public int compare(final Float o1, final Float o2) {
+          return o1.compareTo(o2);
         }
       };
 

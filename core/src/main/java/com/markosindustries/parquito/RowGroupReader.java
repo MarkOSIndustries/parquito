@@ -7,17 +7,18 @@ import com.markosindustries.parquito.rows.RepeatedBranchIterator;
 import com.markosindustries.parquito.rows.RepeatedValueIterator;
 import com.markosindustries.parquito.types.ColumnType;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.stream.Collectors;
-import org.apache.parquet.format.ColumnChunk;
+import java.util.stream.IntStream;
 import org.apache.parquet.format.FieldRepetitionType;
 import org.apache.parquet.format.RowGroup;
+import org.apache.parquet.format.SortingColumn;
 
 public class RowGroupReader {
   private final RowGroup rowGroupHeader;
 
-  public RowGroupReader(RowGroup rowGroupHeader) {
+  public RowGroupReader(final RowGroup rowGroupHeader) {
     this.rowGroupHeader = rowGroupHeader;
   }
 
@@ -48,26 +49,21 @@ public class RowGroupReader {
       final Reader<Repeated, Value> reader,
       final ParquetSchemaNode parquetSchema,
       final ByteRangeReader byteRangeReader) {
-    final var maybeColumnChunkHeader = getColumnChunkHeaderForSchemaPath(parquetSchema.getPath());
-    if (maybeColumnChunkHeader.isPresent()) {
-      final var columnChunkHeader = maybeColumnChunkHeader.get();
-      final var columnType = ColumnType.create(columnChunkHeader, parquetSchema);
-      return iterateLeaf(reader, parquetSchema, columnChunkHeader, columnType, byteRangeReader);
+    final var maybeColumnChunkReader =
+        getColumnChunkReaderForSchemaPath(byteRangeReader, parquetSchema, parquetSchema.getPath());
+    if (maybeColumnChunkReader.isPresent()) {
+      return iterateLeaf(reader, parquetSchema, maybeColumnChunkReader.get(), byteRangeReader);
     } else {
       return iterateBranch(reader, parquetSchema, byteRangeReader);
     }
   }
 
-  private <ReadAs extends Comparable<ReadAs>, Repeated, Value> ParquetFieldIterator<?> iterateLeaf(
+  private <ReadAs, Repeated, Value> ParquetFieldIterator<?> iterateLeaf(
       final Reader<Repeated, Value> reader,
       final ParquetSchemaNode parquetSchema,
-      final org.apache.parquet.format.ColumnChunk columnChunkHeader,
-      final ColumnType<ReadAs> columnType,
+      final ColumnChunkReader<ReadAs> columnChunkReader,
       final ByteRangeReader byteRangeReader) {
-    var columnChunk =
-        ColumnChunkReader.create(
-            columnChunkHeader, columnType, byteRangeReader);
-    final var dataPageIterator = columnChunk.readPages(byteRangeReader).join();
+    final var dataPageIterator = columnChunkReader.readPages(byteRangeReader).join();
     return switch (parquetSchema.getRepetitionType()) {
       case REQUIRED, OPTIONAL -> {
         // Required can be nested within Optional/Repeated, so we always have to respect definition
@@ -122,41 +118,54 @@ public class RowGroupReader {
     };
   }
 
-  public Optional<ColumnChunk> getColumnChunkHeaderForSchemaPath(String... schemaPath) {
-    var matchingChunks =
-        rowGroupHeader.columns.stream()
-            .filter(
-                columnChunk -> columnChunk.meta_data.path_in_schema.size() == schemaPath.length);
-    for (int i = 0; i < schemaPath.length; i++) {
-      final var pathElementIndex = i;
-      matchingChunks =
-          matchingChunks.filter(
-              columnChunk ->
-                  columnChunk
-                      .meta_data
-                      .path_in_schema
-                      .get(pathElementIndex)
-                      .equals(schemaPath[pathElementIndex]));
-    }
-    return matchingChunks.findAny();
+  public Optional<? extends ColumnChunkReader<?>> getColumnChunkReaderForSchemaPath(
+      final ByteRangeReader byteRangeReader,
+      final ParquetSchemaNode.Root schema,
+      final String... schemaPath) {
+    return getColumnChunkReaderForSchemaPath(
+        byteRangeReader, schema.getChild(schemaPath), schemaPath);
   }
 
-  public List<ColumnChunk> getColumnChunkHeadersUnderSchemaPath(String... schemaPath) {
-    var matchingChunks =
-        rowGroupHeader.columns.stream()
+  private Optional<? extends ColumnChunkReader<?>> getColumnChunkReaderForSchemaPath(
+      final ByteRangeReader byteRangeReader,
+      final ParquetSchemaNode columnSchema,
+      final String... schemaPath) {
+    return getColumnChunkIndexForSchemaPath(schemaPath).stream()
+        .mapToObj(
+            columnChunkIndex -> {
+              final var columnChunkHeader = rowGroupHeader.columns.get(columnChunkIndex);
+              final var columnChunkSorting =
+                  rowGroupHeader.isSetSorting_columns()
+                      ? rowGroupHeader.sorting_columns.get(columnChunkIndex)
+                      : new SortingColumn(columnChunkIndex, false, true);
+              final var columnType =
+                  ColumnType.create(columnChunkHeader, columnChunkSorting, columnSchema);
+              return (ColumnChunkReader<?>)
+                  ColumnChunkReader.create(columnChunkHeader, columnType, byteRangeReader);
+            })
+        .findAny();
+  }
+
+  public OptionalInt getColumnChunkIndexForSchemaPath(final String... schemaPath) {
+    var matchingIndices =
+        IntStream.range(0, rowGroupHeader.columns.size())
             .filter(
-                columnChunk -> columnChunk.meta_data.path_in_schema.size() >= schemaPath.length);
+                index ->
+                    rowGroupHeader.columns.get(index).meta_data.path_in_schema.size()
+                        == schemaPath.length);
     for (int i = 0; i < schemaPath.length; i++) {
       final var pathElementIndex = i;
-      matchingChunks =
-          matchingChunks.filter(
-              columnChunk ->
-                  columnChunk
+      matchingIndices =
+          matchingIndices.filter(
+              index ->
+                  rowGroupHeader
+                      .columns
+                      .get(index)
                       .meta_data
                       .path_in_schema
                       .get(pathElementIndex)
                       .equals(schemaPath[pathElementIndex]));
     }
-    return matchingChunks.toList();
+    return matchingIndices.findAny();
   }
 }

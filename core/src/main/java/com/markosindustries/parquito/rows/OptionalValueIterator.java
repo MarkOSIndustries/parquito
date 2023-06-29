@@ -4,8 +4,7 @@ import com.markosindustries.parquito.ParquetSchemaNode;
 import com.markosindustries.parquito.page.DataPage;
 import java.util.Iterator;
 
-public class OptionalValueIterator<ReadAs extends Comparable<ReadAs>>
-    implements ParquetFieldIterator<ReadAs> {
+public class OptionalValueIterator<ReadAs> implements ParquetFieldIterator<ReadAs> {
   private final Iterator<DataPage<ReadAs>> dataPageIterator;
   private final ParquetSchemaNode schemaNode;
   private DataPage<ReadAs> dataPage = null;
