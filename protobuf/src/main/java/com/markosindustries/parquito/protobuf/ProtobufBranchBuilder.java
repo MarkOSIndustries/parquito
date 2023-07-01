@@ -7,7 +7,7 @@ import com.markosindustries.parquito.rows.BranchBuilder;
 import java.nio.ByteBuffer;
 import java.util.Map;
 
-class ProtobufBranchBuilder implements BranchBuilder<Message> {
+class ProtobufBranchBuilder<M extends Message> implements BranchBuilder<M> {
   private final Message.Builder builder;
   private final Map<String, Descriptors.FieldDescriptor> fields;
 
@@ -28,8 +28,9 @@ class ProtobufBranchBuilder implements BranchBuilder<Message> {
   }
 
   @Override
-  public Message build() {
-    return builder.build();
+  public M build() {
+    //noinspection unchecked
+    return (M) builder.build();
   }
 
   private static Object mapToProtobuf(final Descriptors.FieldDescriptor field, final Object value) {

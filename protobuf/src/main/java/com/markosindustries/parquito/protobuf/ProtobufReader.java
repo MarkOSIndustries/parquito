@@ -13,13 +13,14 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-public class ProtobufReader implements Reader<List<Message>, Message> {
+public class ProtobufReader<M extends Message> implements Reader<List<M>, M> {
   private final Supplier<Message.Builder> newBuilder;
   private final Map<String, Descriptors.FieldDescriptor> fields;
   private final Map<String, Reader<?, ?>> fieldReaders;
 
-  public ProtobufReader(final Descriptors.Descriptor descriptor) {
-    this(() -> DynamicMessage.newBuilder(descriptor));
+  public static ProtobufReader<DynamicMessage> fromDescriptor(
+      final Descriptors.Descriptor descriptor) {
+    return new ProtobufReader<>(() -> DynamicMessage.newBuilder(descriptor));
   }
 
   public ProtobufReader(final Supplier<Message.Builder> newBuilder) {
@@ -35,7 +36,7 @@ public class ProtobufReader implements Reader<List<Message>, Message> {
                     Descriptors.FieldDescriptor::getName,
                     field -> {
                       if (field.getType() == Descriptors.FieldDescriptor.Type.MESSAGE) {
-                        return new ProtobufReader(() -> builder.newBuilderForField(field));
+                        return new ProtobufReader<>(() -> builder.newBuilderForField(field));
                       } else {
                         return ProtobufLeafReader.INSTANCE;
                       }
@@ -43,17 +44,17 @@ public class ProtobufReader implements Reader<List<Message>, Message> {
   }
 
   @Override
-  public Reader<?, ?> getChild(final String child) {
+  public Reader<?, ?> forChild(final String child) {
     return fieldReaders.getOrDefault(child, NoOpReader.INSTANCE);
   }
 
   @Override
-  public BranchBuilder<Message> branchBuilder() {
-    return new ProtobufBranchBuilder(newBuilder.get(), fields);
+  public BranchBuilder<M> branchBuilder() {
+    return new ProtobufBranchBuilder<>(newBuilder.get(), fields);
   }
 
   @Override
-  public RepeatedBuilder<List<Message>, Message> repeatedBuilder() {
-    return new ProtobufRepeatedBuilder();
+  public RepeatedBuilder<List<M>, M> repeatedBuilder() {
+    return new ProtobufRepeatedBuilder<>();
   }
 }

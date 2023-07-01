@@ -9,7 +9,7 @@ public class NoOpReader implements Reader<Void, Void> {
   private NoOpReader() {}
 
   @Override
-  public Reader<?, ?> getChild(final String child) {
+  public Reader<?, ?> forChild(final String child) {
     return this;
   }
 

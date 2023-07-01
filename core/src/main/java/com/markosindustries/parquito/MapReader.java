@@ -9,7 +9,7 @@ import java.util.Map;
 
 public class MapReader implements Reader<List<Map<String, Object>>, Map<String, Object>> {
   @Override
-  public Reader<?, ?> getChild(final String child) {
+  public Reader<?, ?> forChild(final String child) {
     return this;
   }
 

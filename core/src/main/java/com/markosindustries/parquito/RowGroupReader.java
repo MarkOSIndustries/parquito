@@ -27,39 +27,40 @@ public class RowGroupReader {
   }
 
   public <Repeated, Value> Iterator<Value> getRowIterator(
-      final Reader<Repeated, Value> reader,
+      final RowReadSpec<Repeated, Value> rowReadSpec,
       final ParquetSchemaNode.Root parquetSchemaRoot,
       final ByteRangeReader byteRangeReader) {
     return new OptionalBranchIterator<>(
         parquetSchemaRoot.getChildren().stream()
+            .filter(rowReadSpec::includesChild)
             .collect(
                 Collectors.toMap(
                     child -> child,
                     child -> {
                       return getRowIterator(
-                          reader.getChild(child),
+                          rowReadSpec.forChild(child),
                           parquetSchemaRoot.getChild(child),
                           byteRangeReader);
                     })),
         parquetSchemaRoot,
-        reader);
+        rowReadSpec);
   }
 
   public <Repeated, Value> ParquetFieldIterator<?> getRowIterator(
-      final Reader<Repeated, Value> reader,
+      final RowReadSpec<Repeated, Value> rowReadSpec,
       final ParquetSchemaNode parquetSchema,
       final ByteRangeReader byteRangeReader) {
     final var maybeColumnChunkReader =
         getColumnChunkReaderForSchemaPath(byteRangeReader, parquetSchema, parquetSchema.getPath());
     if (maybeColumnChunkReader.isPresent()) {
-      return iterateLeaf(reader, parquetSchema, maybeColumnChunkReader.get(), byteRangeReader);
+      return iterateLeaf(rowReadSpec, parquetSchema, maybeColumnChunkReader.get(), byteRangeReader);
     } else {
-      return iterateBranch(reader, parquetSchema, byteRangeReader);
+      return iterateBranch(rowReadSpec, parquetSchema, byteRangeReader);
     }
   }
 
   private <ReadAs, Repeated, Value> ParquetFieldIterator<?> iterateLeaf(
-      final Reader<Repeated, Value> reader,
+      final RowReadSpec<Repeated, Value> rowReadSpec,
       final ParquetSchemaNode parquetSchema,
       final ColumnChunkReader<ReadAs> columnChunkReader,
       final ByteRangeReader byteRangeReader) {
@@ -68,16 +69,16 @@ public class RowGroupReader {
       case REQUIRED, OPTIONAL -> {
         // Required can be nested within Optional/Repeated, so we always have to respect definition
         // levels
-        yield new OptionalValueIterator<>(dataPageIterator, parquetSchema);
+        yield new OptionalValueIterator<>(dataPageIterator, parquetSchema, rowReadSpec);
       }
       case REPEATED -> {
-        yield new RepeatedValueIterator<>(dataPageIterator, parquetSchema, reader);
+        yield new RepeatedValueIterator<>(dataPageIterator, parquetSchema, rowReadSpec);
       }
     };
   }
 
   private <Repeated, Value> ParquetFieldIterator<?> iterateBranch(
-      final Reader<Repeated, Value> reader,
+      final RowReadSpec<Repeated, Value> rowReadSpec,
       final ParquetSchemaNode parquetSchema,
       final ByteRangeReader byteRangeReader) {
     final var repetitionType =
@@ -88,32 +89,34 @@ public class RowGroupReader {
       case REQUIRED, OPTIONAL -> {
         yield new OptionalBranchIterator<>(
             parquetSchema.getChildren().stream()
+                .filter(rowReadSpec::includesChild)
                 .collect(
                     Collectors.toMap(
                         child -> child,
                         child -> {
                           return getRowIterator(
-                              reader.getChild(child),
+                              rowReadSpec.forChild(child),
                               parquetSchema.getChild(child),
                               byteRangeReader);
                         })),
             parquetSchema,
-            reader);
+            rowReadSpec);
       }
       case REPEATED -> {
         yield new RepeatedBranchIterator<>(
             parquetSchema.getChildren().stream()
+                .filter(rowReadSpec::includesChild)
                 .collect(
                     Collectors.toMap(
                         child -> child,
                         child -> {
                           return getRowIterator(
-                              reader.getChild(child),
+                              rowReadSpec.forChild(child),
                               parquetSchema.getChild(child),
                               byteRangeReader);
                         })),
             parquetSchema,
-            reader);
+            rowReadSpec);
       }
     };
   }

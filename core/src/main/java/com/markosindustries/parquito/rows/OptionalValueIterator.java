@@ -1,20 +1,25 @@
 package com.markosindustries.parquito.rows;
 
 import com.markosindustries.parquito.ParquetSchemaNode;
+import com.markosindustries.parquito.RowReadSpec;
 import com.markosindustries.parquito.page.DataPage;
 import java.util.Iterator;
 
-public class OptionalValueIterator<ReadAs> implements ParquetFieldIterator<ReadAs> {
+public class OptionalValueIterator<ReadAs, Value> implements ParquetFieldIterator<ReadAs> {
   private final Iterator<DataPage<ReadAs>> dataPageIterator;
   private final ParquetSchemaNode schemaNode;
+  private final RowReadSpec<?, Value> rowReadSpec;
   private DataPage<ReadAs> dataPage = null;
   private int valueIndex = 0;
   private int definitionIndex = 0;
 
   public OptionalValueIterator(
-      Iterator<DataPage<ReadAs>> dataPageIterator, ParquetSchemaNode schemaNode) {
+      Iterator<DataPage<ReadAs>> dataPageIterator,
+      ParquetSchemaNode schemaNode,
+      RowReadSpec<?, Value> rowReadSpec) {
     this.dataPageIterator = dataPageIterator;
     this.schemaNode = schemaNode;
+    this.rowReadSpec = rowReadSpec;
     if (dataPageIterator.hasNext()) {
       this.dataPage = dataPageIterator.next();
     }

@@ -55,7 +55,8 @@ public class ParquetCompatibilityTests {
                 for (RowGroup rowGroup : footer.row_groups) {
                   final var rowGroupReader = new RowGroupReader(rowGroup);
                   final var rowIterator =
-                      rowGroupReader.getRowIterator(new MapReader(), schema, byteRangeReader);
+                      rowGroupReader.getRowIterator(
+                          new RowReadSpec<>(new MapReader()), schema, byteRangeReader);
                   var rows = 0;
                   while (rowIterator.hasNext()) {
                     final var next = rowIterator.next();
@@ -89,7 +90,8 @@ public class ParquetCompatibilityTests {
                 for (RowGroup rowGroup : footer.row_groups) {
                   final var rowGroupReader = new RowGroupReader(rowGroup);
                   final var rowIterator =
-                      rowGroupReader.getRowIterator(new JSONReader(), schema, byteRangeReader);
+                      rowGroupReader.getRowIterator(
+                          new RowReadSpec<>(new JSONReader()), schema, byteRangeReader);
                   var rows = 0;
                   while (rowIterator.hasNext()) {
                     final JSONObject next = rowIterator.next();
@@ -187,10 +189,12 @@ public class ParquetCompatibilityTests {
                   final var rowGroupReader = new RowGroupReader(rowGroup);
                   final var rowIterator =
                       rowGroupReader.getRowIterator(
-                          new ProtobufReader(Example::newBuilder), schema, byteRangeReader);
+                          new RowReadSpec<>(new ProtobufReader<Example>(Example::newBuilder)),
+                          schema,
+                          byteRangeReader);
                   var rows = 0;
                   while (rowIterator.hasNext()) {
-                    final Example next = (Example) rowIterator.next();
+                    final Example next = rowIterator.next();
                     Assertions.assertEquals(expectedProtobufs.get(rows), next);
                     rows++;
                   }

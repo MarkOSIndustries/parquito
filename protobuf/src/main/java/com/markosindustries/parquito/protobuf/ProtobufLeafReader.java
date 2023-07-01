@@ -12,7 +12,7 @@ public class ProtobufLeafReader implements Reader<List<Object>, Object> {
   private ProtobufLeafReader() {}
 
   @Override
-  public Reader<?, ?> getChild(final String child) {
+  public Reader<?, ?> forChild(final String child) {
     throw new UnsupportedOperationException("Leaf nodes don't have children");
   }
 

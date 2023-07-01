@@ -8,7 +8,7 @@ import org.json.JSONObject;
 
 public class JSONReader implements Reader<JSONArray, JSONObject> {
   @Override
-  public Reader<?, ?> getChild(final String child) {
+  public Reader<?, ?> forChild(final String child) {
     return this;
   }
 

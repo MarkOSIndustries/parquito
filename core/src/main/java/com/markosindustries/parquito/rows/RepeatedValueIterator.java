@@ -1,7 +1,7 @@
 package com.markosindustries.parquito.rows;
 
 import com.markosindustries.parquito.ParquetSchemaNode;
-import com.markosindustries.parquito.Reader;
+import com.markosindustries.parquito.RowReadSpec;
 import com.markosindustries.parquito.page.DataPage;
 import java.util.Iterator;
 
@@ -9,7 +9,7 @@ public class RepeatedValueIterator<ReadAs, Repeated, Value>
     implements ParquetFieldIterator<Repeated> {
   private final Iterator<DataPage<ReadAs>> dataPageIterator;
   private final ParquetSchemaNode schemaNode;
-  private final Reader<Repeated, Value> reader;
+  private final RowReadSpec<Repeated, Value> rowReadSpec;
   private DataPage<ReadAs> dataPage = null;
   private int valueIndex = 0;
   private int definitionIndex = 0;
@@ -17,10 +17,10 @@ public class RepeatedValueIterator<ReadAs, Repeated, Value>
   public RepeatedValueIterator(
       Iterator<DataPage<ReadAs>> dataPageIterator,
       ParquetSchemaNode schemaNode,
-      Reader<Repeated, Value> reader) {
+      RowReadSpec<Repeated, Value> rowReadSpec) {
     this.dataPageIterator = dataPageIterator;
     this.schemaNode = schemaNode;
-    this.reader = reader;
+    this.rowReadSpec = rowReadSpec;
     if (dataPageIterator.hasNext()) {
       this.dataPage = dataPageIterator.next();
     }
@@ -55,7 +55,7 @@ public class RepeatedValueIterator<ReadAs, Repeated, Value>
 
   @Override
   public Repeated next() {
-    final var values = reader.repeatedBuilder();
+    final var values = rowReadSpec.reader().repeatedBuilder();
     if (dataPage.getDefinitionLevels()[definitionIndex] == schemaNode.getDefinitionLevelMax()) {
       do {
         //noinspection unchecked

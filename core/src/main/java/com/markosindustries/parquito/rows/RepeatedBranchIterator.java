@@ -1,20 +1,21 @@
 package com.markosindustries.parquito.rows;
 
 import com.markosindustries.parquito.ParquetSchemaNode;
-import com.markosindustries.parquito.Reader;
+import com.markosindustries.parquito.RowReadSpec;
 import java.util.Map;
 
 public class RepeatedBranchIterator<Repeated, Value> implements ParquetFieldIterator<Repeated> {
   private final OptionalBranchIterator<Value> optionalBranchIterator;
   private final ParquetSchemaNode schemaNode;
-  private final Reader<Repeated, Value> reader;
+  private final RowReadSpec<Repeated, Value> rowReadSpec;
 
   public RepeatedBranchIterator(
       Map<String, ParquetFieldIterator<?>> childIterators,
       ParquetSchemaNode schemaNode,
-      Reader<Repeated, Value> reader) {
-    this.reader = reader;
-    this.optionalBranchIterator = new OptionalBranchIterator<>(childIterators, schemaNode, reader);
+      RowReadSpec<Repeated, Value> rowReadSpec) {
+    this.rowReadSpec = rowReadSpec;
+    this.optionalBranchIterator =
+        new OptionalBranchIterator<>(childIterators, schemaNode, rowReadSpec);
     this.schemaNode = schemaNode;
   }
 
@@ -35,7 +36,7 @@ public class RepeatedBranchIterator<Repeated, Value> implements ParquetFieldIter
 
   @Override
   public Repeated next() {
-    final var values = reader.repeatedBuilder();
+    final var values = rowReadSpec.reader().repeatedBuilder();
     if (optionalBranchIterator.peekDefinitionLevel() >= schemaNode.getDefinitionLevelMax()) {
       do {
         values.add(optionalBranchIterator.next());
