@@ -17,36 +17,89 @@ public class DeltaBinaryPackedEncoding<ReadAs> implements ParquetEncoding<ReadAs
       final InputStream decompressedPageStream,
       final ColumnChunkReader<ReadAs> columnChunkReader)
       throws IOException {
-    final var readAsClass = columnChunkReader.getColumnType().parquetType().getReadAsClass();
-    if (!(readAsClass.isAssignableFrom(Integer.class)
-        || readAsClass.isAssignableFrom(Long.class))) {
-      throw new UnsupportedOperationException(
-          "Can't use " + DELTA_BINARY_PACKED + " with: " + readAsClass);
-    }
-
     if (expectedValues == 0) {
       return Values.empty();
     }
-    final var values = decode(expectedValues, decompressedPageStream);
-    return index -> readAsClass.cast(values[index]);
+
+    final var readAsClass = columnChunkReader.getColumnType().parquetType().getReadAsClass();
+    if (readAsClass.isAssignableFrom(Integer.class)) {
+      final var values = DeltaBinaryPackedEncoding.decode32(expectedValues, decompressedPageStream);
+      return index -> readAsClass.cast(values[index]);
+    }
+    if (readAsClass.isAssignableFrom(Long.class)) {
+      final var values = DeltaBinaryPackedEncoding.decode64(expectedValues, decompressedPageStream);
+      return index -> readAsClass.cast(values[index]);
+    }
+
+    throw new UnsupportedOperationException(
+        "Can't use " + DELTA_BINARY_PACKED + " with: " + readAsClass);
   }
 
-  public static long[] decode(final int expectedValues, final InputStream decompressedPageStream)
+  public static int[] decode32(final int expectedValues, final InputStream decompressedPageStream)
+      throws IOException {
+    final var values = new int[expectedValues];
+    if (expectedValues == 0) {
+      return values;
+    }
+
+    decodeInto(
+        new TargetArray() {
+          @Override
+          public int length() {
+            return expectedValues;
+          }
+
+          @Override
+          public void set(final int index, final long value) {
+            values[index] = (int) value;
+          }
+        },
+        decompressedPageStream);
+
+    return values;
+  }
+
+  public static long[] decode64(final int expectedValues, final InputStream decompressedPageStream)
       throws IOException {
     final var values = new long[expectedValues];
     if (expectedValues == 0) {
       return values;
     }
 
+    decodeInto(
+        new TargetArray() {
+          @Override
+          public int length() {
+            return expectedValues;
+          }
+
+          @Override
+          public void set(final int index, final long value) {
+            values[index] = value;
+          }
+        },
+        decompressedPageStream);
+
+    return values;
+  }
+
+  interface TargetArray {
+    int length();
+
+    void set(int index, long value);
+  }
+
+  public static void decodeInto(TargetArray targetArray, final InputStream decompressedPageStream)
+      throws IOException {
     final var dataInputStream = new DataInputStream(decompressedPageStream);
     final var valuesPerBlock = Varint.readUnsignedVarInt(dataInputStream);
     final var miniBlocksPerBlock = Varint.readUnsignedVarInt(dataInputStream);
     final var totalValueCount = Varint.readUnsignedVarInt(dataInputStream);
 
-    if (totalValueCount != expectedValues) {
+    if (totalValueCount != targetArray.length()) {
       throw new IllegalArgumentException(
           "Expected "
-              + expectedValues
+              + targetArray.length()
               + " but delta binary encoding block header says "
               + totalValueCount
               + " are present");
@@ -61,7 +114,7 @@ public class DeltaBinaryPackedEncoding<ReadAs> implements ParquetEncoding<ReadAs
 
     final var valuesPerMiniBlock = valuesPerBlock / miniBlocksPerBlock;
     long previousValue = ZigZag.decode(Varint.readUnsignedVarLong(dataInputStream));
-    values[0] = previousValue;
+    targetArray.set(0, previousValue);
 
     final var bitWidthsForBlock = new int[miniBlocksPerBlock];
     for (int valuesSeen = 1; valuesSeen < totalValueCount; ) {
@@ -78,22 +131,21 @@ public class DeltaBinaryPackedEncoding<ReadAs> implements ParquetEncoding<ReadAs
         int availableBits = 0;
 
         for (int index = 0; index < valuesPerMiniBlock; index++, valuesSeen++) {
+          // When the spec says miniblocks are bitpacked - they mean little-endian RLE hybrid
+          // bitpacking, not big-endian legacy bitpacking
           while (availableBits < bitWidth) {
-            buffer <<= 32;
-            buffer |= dataInputStream.readInt();
-            availableBits += 32;
+            buffer |= ((long) dataInputStream.readUnsignedByte()) << availableBits;
+            availableBits += 8;
           }
-
           availableBits -= bitWidth;
 
-          previousValue += minDelta + ((buffer >>> availableBits) & mask);
-          if (valuesSeen < values.length) {
-            values[valuesSeen] = previousValue;
+          if (valuesSeen < targetArray.length()) {
+            previousValue += minDelta + (buffer & mask);
+            buffer >>>= bitWidth;
+            targetArray.set(valuesSeen, previousValue);
           }
         }
       }
     }
-
-    return values;
   }
 }

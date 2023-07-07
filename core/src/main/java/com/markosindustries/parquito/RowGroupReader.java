@@ -5,6 +5,7 @@ import com.markosindustries.parquito.rows.OptionalValueIterator;
 import com.markosindustries.parquito.rows.ParquetFieldIterator;
 import com.markosindustries.parquito.rows.RepeatedBranchIterator;
 import com.markosindustries.parquito.rows.RepeatedValueIterator;
+import com.markosindustries.parquito.rows.RowIterator;
 import com.markosindustries.parquito.types.ColumnType;
 import java.util.Iterator;
 import java.util.Optional;
@@ -17,9 +18,11 @@ import org.apache.parquet.format.SortingColumn;
 
 public class RowGroupReader {
   private final RowGroup rowGroupHeader;
+  private final ParquetSchemaNode.Root schemaRoot;
 
-  public RowGroupReader(final RowGroup rowGroupHeader) {
+  public RowGroupReader(final RowGroup rowGroupHeader, final ParquetSchemaNode.Root schemaRoot) {
     this.rowGroupHeader = rowGroupHeader;
+    this.schemaRoot = schemaRoot;
   }
 
   public RowGroup getHeader() {
@@ -27,40 +30,43 @@ public class RowGroupReader {
   }
 
   public <Repeated, Value> Iterator<Value> getRowIterator(
-      final RowReadSpec<Repeated, Value> rowReadSpec,
-      final ParquetSchemaNode.Root parquetSchemaRoot,
-      final ByteRangeReader byteRangeReader) {
-    return new OptionalBranchIterator<>(
-        parquetSchemaRoot.getChildren().stream()
-            .filter(rowReadSpec::includesChild)
-            .collect(
-                Collectors.toMap(
-                    child -> child,
-                    child -> {
-                      return getRowIterator(
-                          rowReadSpec.forChild(child),
-                          parquetSchemaRoot.getChild(child),
-                          byteRangeReader);
-                    })),
-        parquetSchemaRoot,
-        rowReadSpec);
+      final RowReadSpec<Repeated, Value, ?> rowReadSpec, final ByteRangeReader byteRangeReader) {
+    return new RowIterator<>(
+        new OptionalBranchIterator<>(
+            schemaRoot.getChildren().stream()
+                .filter(rowReadSpec::includesChild)
+                .collect(
+                    Collectors.toMap(
+                        child -> child,
+                        child -> {
+                          return iterateField(
+                              rowReadSpec.forChild(child),
+                              schemaRoot.getChild(child),
+                              byteRangeReader);
+                        })),
+            schemaRoot,
+            rowReadSpec));
   }
 
-  public <Repeated, Value> ParquetFieldIterator<?> getRowIterator(
-      final RowReadSpec<Repeated, Value> rowReadSpec,
+  private <ReadAs, Repeated, Value> ParquetFieldIterator<?> iterateField(
+      final RowReadSpec<Repeated, Value, ReadAs> rowReadSpec,
       final ParquetSchemaNode parquetSchema,
       final ByteRangeReader byteRangeReader) {
     final var maybeColumnChunkReader =
         getColumnChunkReaderForSchemaPath(byteRangeReader, parquetSchema, parquetSchema.getPath());
     if (maybeColumnChunkReader.isPresent()) {
-      return iterateLeaf(rowReadSpec, parquetSchema, maybeColumnChunkReader.get(), byteRangeReader);
+      return iterateLeaf(
+          rowReadSpec,
+          parquetSchema,
+          (ColumnChunkReader<ReadAs>) maybeColumnChunkReader.get(),
+          byteRangeReader);
     } else {
       return iterateBranch(rowReadSpec, parquetSchema, byteRangeReader);
     }
   }
 
   private <ReadAs, Repeated, Value> ParquetFieldIterator<?> iterateLeaf(
-      final RowReadSpec<Repeated, Value> rowReadSpec,
+      final RowReadSpec<Repeated, Value, ReadAs> rowReadSpec,
       final ParquetSchemaNode parquetSchema,
       final ColumnChunkReader<ReadAs> columnChunkReader,
       final ByteRangeReader byteRangeReader) {
@@ -78,7 +84,7 @@ public class RowGroupReader {
   }
 
   private <Repeated, Value> ParquetFieldIterator<?> iterateBranch(
-      final RowReadSpec<Repeated, Value> rowReadSpec,
+      final RowReadSpec<Repeated, Value, ?> rowReadSpec,
       final ParquetSchemaNode parquetSchema,
       final ByteRangeReader byteRangeReader) {
     final var repetitionType =
@@ -94,7 +100,7 @@ public class RowGroupReader {
                     Collectors.toMap(
                         child -> child,
                         child -> {
-                          return getRowIterator(
+                          return iterateField(
                               rowReadSpec.forChild(child),
                               parquetSchema.getChild(child),
                               byteRangeReader);
@@ -110,7 +116,7 @@ public class RowGroupReader {
                     Collectors.toMap(
                         child -> child,
                         child -> {
-                          return getRowIterator(
+                          return iterateField(
                               rowReadSpec.forChild(child),
                               parquetSchema.getChild(child),
                               byteRangeReader);
@@ -122,11 +128,9 @@ public class RowGroupReader {
   }
 
   public Optional<? extends ColumnChunkReader<?>> getColumnChunkReaderForSchemaPath(
-      final ByteRangeReader byteRangeReader,
-      final ParquetSchemaNode.Root schema,
-      final String... schemaPath) {
+      final ByteRangeReader byteRangeReader, final String... schemaPath) {
     return getColumnChunkReaderForSchemaPath(
-        byteRangeReader, schema.getChild(schemaPath), schemaPath);
+        byteRangeReader, schemaRoot.getChild(schemaPath), schemaPath);
   }
 
   private Optional<? extends ColumnChunkReader<?>> getColumnChunkReaderForSchemaPath(
@@ -135,17 +139,9 @@ public class RowGroupReader {
       final String... schemaPath) {
     return getColumnChunkIndexForSchemaPath(schemaPath).stream()
         .mapToObj(
-            columnChunkIndex -> {
-              final var columnChunkHeader = rowGroupHeader.columns.get(columnChunkIndex);
-              final var columnChunkSorting =
-                  rowGroupHeader.isSetSorting_columns()
-                      ? rowGroupHeader.sorting_columns.get(columnChunkIndex)
-                      : new SortingColumn(columnChunkIndex, false, true);
-              final var columnType =
-                  ColumnType.create(columnChunkHeader, columnChunkSorting, columnSchema);
-              return (ColumnChunkReader<?>)
-                  ColumnChunkReader.create(columnChunkHeader, columnType, byteRangeReader);
-            })
+            columnChunkIndex ->
+                ColumnChunkReader.create(
+                    rowGroupHeader, columnChunkIndex, columnSchema, byteRangeReader))
         .findAny();
   }
 
@@ -170,5 +166,21 @@ public class RowGroupReader {
                       .equals(schemaPath[pathElementIndex]));
     }
     return matchingIndices.findAny();
+  }
+
+  public ColumnType<?> getColumnType(final String... schemaPath) {
+    return getColumnChunkIndexForSchemaPath(schemaPath).stream()
+        .mapToObj(
+            columnChunkIndex -> {
+              final var columnChunkHeader = rowGroupHeader.columns.get(columnChunkIndex);
+              final var columnChunkSorting =
+                  rowGroupHeader.isSetSorting_columns()
+                      ? rowGroupHeader.sorting_columns.get(columnChunkIndex)
+                      : new SortingColumn(columnChunkIndex, false, true);
+              return ColumnType.create(
+                  columnChunkHeader, columnChunkSorting, schemaRoot.getChild(schemaPath));
+            })
+        .findAny()
+        .orElseThrow();
   }
 }

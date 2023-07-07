@@ -28,6 +28,7 @@ public abstract class FloatType<ReadAs> extends ParquetType<ReadAs> {
     }
 
     final var floatBuffer = buffer.order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer();
+
     return index -> wrap(floatBuffer.get(index));
   }
 

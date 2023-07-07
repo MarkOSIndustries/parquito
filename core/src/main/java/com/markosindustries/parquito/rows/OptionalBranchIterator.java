@@ -8,7 +8,7 @@ import java.util.Map;
 public class OptionalBranchIterator<Branch> implements ParquetFieldIterator<Branch> {
   private final Map<String, ParquetFieldIterator<?>> childIterators;
   private final ParquetSchemaNode schemaNode;
-  private final RowReadSpec<?, Branch> rowReadSpec;
+  private final RowReadSpec<?, Branch, ?> rowReadSpec;
   private boolean hasNext;
   private int definitionLevel;
   private int repetitionLevel;
@@ -16,7 +16,7 @@ public class OptionalBranchIterator<Branch> implements ParquetFieldIterator<Bran
   public OptionalBranchIterator(
       final Map<String, ParquetFieldIterator<?>> childIterators,
       final ParquetSchemaNode schemaNode,
-      final RowReadSpec<?, Branch> rowReadSpec) {
+      final RowReadSpec<?, Branch, ?> rowReadSpec) {
     this.childIterators = childIterators;
     this.schemaNode = schemaNode;
     this.hasNext = childIterators.values().stream().anyMatch(Iterator::hasNext);
@@ -50,6 +50,23 @@ public class OptionalBranchIterator<Branch> implements ParquetFieldIterator<Bran
   @Override
   public boolean hasNext() {
     return hasNext;
+  }
+
+  @Override
+  public boolean nextRowMatches() {
+    return rowReadSpec
+        .predicate()
+        .branchMatches(child -> childIterators.get(child).nextRowMatches());
+  }
+
+  @Override
+  public void skipNextRow() {
+    for (final var iterator : childIterators.values()) {
+      iterator.skipNextRow();
+      if (!iterator.hasNext()) {
+        hasNext = false;
+      }
+    }
   }
 
   @Override

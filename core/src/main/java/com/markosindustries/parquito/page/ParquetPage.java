@@ -9,5 +9,5 @@ public interface ParquetPage<ReadAs> {
 
   int getNonNullValues();
 
-  ReadAs getValue(int index);
+  Values<ReadAs> getValues();
 }

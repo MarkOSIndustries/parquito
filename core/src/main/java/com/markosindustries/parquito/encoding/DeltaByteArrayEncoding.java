@@ -15,11 +15,8 @@ public class DeltaByteArrayEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
       final ColumnChunkReader<ReadAs> columnChunkReader)
       throws IOException {
     final var prefixLengths =
-        IntEncodings.INT_ENCODING_DELTA_BINARY_PACKED.decode(
-            expectedValues, -1, decompressedPageStream);
-    final var lengths =
-        IntEncodings.INT_ENCODING_DELTA_BINARY_PACKED.decode(
-            expectedValues, -1, decompressedPageStream);
+        DeltaBinaryPackedEncoding.decode32(expectedValues, decompressedPageStream);
+    final var lengths = DeltaBinaryPackedEncoding.decode32(expectedValues, decompressedPageStream);
     final var offsets = new int[lengths.length];
     {
       int offset = 0;
@@ -32,17 +29,23 @@ public class DeltaByteArrayEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
 
     return index -> {
       if (prefixLengths[index] == 0) {
-        return columnChunkReader.read(bytes.slice(offsets[index], lengths[index]));
+        return columnChunkReader.readValue(bytes.slice(offsets[index], lengths[index]));
       }
       if (lengths[index] == 0) {
-        return columnChunkReader.read(bytes.slice(offsets[index - 1], prefixLengths[index]));
+        return columnChunkReader.readValue(bytes.slice(offsets[index - 1], prefixLengths[index]));
       }
-      final var prefix = bytes.slice(offsets[index - 1], prefixLengths[index]);
-      final var suffix = bytes.slice(offsets[index], lengths[index]);
-      final var concat = ByteBuffer.allocate(prefix.capacity() + suffix.capacity());
-      concat.put(prefix);
-      concat.put(suffix);
-      return columnChunkReader.read(concat);
+      final var concat = ByteBuffer.allocate(prefixLengths[index] + lengths[index]);
+      concat.put(prefixLengths[index], bytes, offsets[index], lengths[index]);
+      int prevIndex = index, bytesNeeded = prefixLengths[index];
+      do {
+        prevIndex--;
+        if (bytesNeeded > prefixLengths[prevIndex]) {
+          final var bytesAvailable = bytesNeeded - prefixLengths[prevIndex];
+          concat.put(prefixLengths[prevIndex], bytes, offsets[prevIndex], bytesAvailable);
+          bytesNeeded -= bytesAvailable;
+        }
+      } while (prefixLengths[prevIndex] != 0);
+      return columnChunkReader.readValue(concat);
     };
   }
 }

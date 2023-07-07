@@ -13,6 +13,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.apache.parquet.format.PageHeader;
+import org.apache.parquet.format.RowGroup;
+import org.apache.parquet.format.SortingColumn;
 import org.apache.parquet.format.Util;
 
 public class ColumnChunkReader<ReadAs> {
@@ -78,6 +80,20 @@ public class ColumnChunkReader<ReadAs> {
     return columnChunk;
   }
 
+  public static ColumnChunkReader<?> create(
+      final RowGroup rowGroupHeader,
+      final int columnChunkIndex,
+      final ParquetSchemaNode columnSchema,
+      final ByteRangeReader byteRangeReader) {
+    final var columnChunkHeader = rowGroupHeader.columns.get(columnChunkIndex);
+    final var columnChunkSorting =
+        rowGroupHeader.isSetSorting_columns()
+            ? rowGroupHeader.sorting_columns.get(columnChunkIndex)
+            : new SortingColumn(columnChunkIndex, false, true);
+    final var columnType = ColumnType.create(columnChunkHeader, columnChunkSorting, columnSchema);
+    return ColumnChunkReader.create(columnChunkHeader, columnType, byteRangeReader);
+  }
+
   public org.apache.parquet.format.ColumnChunk getHeader() {
     return header;
   }
@@ -118,16 +134,16 @@ public class ColumnChunkReader<ReadAs> {
         && header.meta_data.statistics.max_value != null;
   }
 
-  public ReadAs read(ByteBuffer byteBuffer) {
+  public ReadAs readValue(ByteBuffer byteBuffer) {
     return columnType.parquetType().readFromByteBuffer(byteBuffer);
   }
 
   public ReadAs getStatsMin() {
-    return read(header.meta_data.statistics.min_value);
+    return readValue(header.meta_data.statistics.min_value);
   }
 
   public ReadAs getStatsMax() {
-    return read(header.meta_data.statistics.max_value);
+    return readValue(header.meta_data.statistics.max_value);
   }
 
   public boolean containsNonNulls() {
@@ -158,8 +174,9 @@ public class ColumnChunkReader<ReadAs> {
 
   private boolean dictionaryContains(final ReadAs value) {
     final var dictionaryPage = getDictionaryPage();
+    final var dictionaryPageValues = dictionaryPage.getValues();
     for (int i = 0; i < dictionaryPage.getNonNullValues(); i++) {
-      if (dictionaryPage.getValue(i).equals(value)) {
+      if (dictionaryPageValues.get(i).equals(value)) {
         return true;
       }
     }
@@ -174,8 +191,9 @@ public class ColumnChunkReader<ReadAs> {
     return dictionaryPage
         .thenApply(
             page -> {
+              final var values = page.getValues();
               return IntStream.range(0, page.getNonNullValues())
-                  .mapToObj(page::getValue)
+                  .mapToObj(values::get)
                   .collect(Collectors.toUnmodifiableSet());
             })
         .join();

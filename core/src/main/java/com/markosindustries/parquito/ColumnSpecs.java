@@ -39,15 +39,7 @@ public final class ColumnSpecs {
     return NONE;
   }
 
-  private static final class Column implements ColumnSpec {
-    private final String[] path;
-    private final int offset;
-
-    public Column(final String[] path, final int offset) {
-      this.path = path;
-      this.offset = offset;
-    }
-
+  private record Column(String[] path, int offset) implements ColumnSpec {
     @Override
     public boolean includesChild(final String child) {
       return path[offset].equals(child);
@@ -72,13 +64,7 @@ public final class ColumnSpecs {
     return ALL;
   }
 
-  private static final class Union implements ColumnSpec {
-    private final ColumnSpec[] columnSpecs;
-
-    public Union(ColumnSpec... columnSpecs) {
-      this.columnSpecs = columnSpecs;
-    }
-
+  private record Union(ColumnSpec... columnSpecs) implements ColumnSpec {
     @Override
     public boolean includesChild(final String child) {
       return Arrays.stream(columnSpecs).anyMatch(columnSpec -> columnSpec.includesChild(child));

@@ -44,7 +44,6 @@ public class RLEIntEncoding implements ParquetIntEncoding {
     }
 
     for (int index = 0; index < expectedValues; ) {
-      //      System.out.println("index " + index + " of " + expectedValues);
       index += decodeNextRun(values, index, bitWidth, dataInput);
     }
 

@@ -1,29 +1,33 @@
 package com.markosindustries.parquito.rows;
 
+import com.markosindustries.parquito.ParquetPredicate;
 import com.markosindustries.parquito.ParquetSchemaNode;
+import com.markosindustries.parquito.Reader;
 import com.markosindustries.parquito.RowReadSpec;
 import com.markosindustries.parquito.page.DataPage;
+import com.markosindustries.parquito.page.PredicateMatcher;
 import java.util.Iterator;
 
 public class RepeatedValueIterator<ReadAs, Repeated, Value>
     implements ParquetFieldIterator<Repeated> {
   private final Iterator<DataPage<ReadAs>> dataPageIterator;
   private final ParquetSchemaNode schemaNode;
-  private final RowReadSpec<Repeated, Value> rowReadSpec;
+  private final Reader<Repeated, Value> reader;
+  private final ParquetPredicate<ReadAs> predicate;
   private DataPage<ReadAs> dataPage = null;
+  private PredicateMatcher dataPageMatcher = null;
   private int valueIndex = 0;
   private int definitionIndex = 0;
 
   public RepeatedValueIterator(
       Iterator<DataPage<ReadAs>> dataPageIterator,
       ParquetSchemaNode schemaNode,
-      RowReadSpec<Repeated, Value> rowReadSpec) {
+      RowReadSpec<Repeated, Value, ReadAs> rowReadSpec) {
     this.dataPageIterator = dataPageIterator;
     this.schemaNode = schemaNode;
-    this.rowReadSpec = rowReadSpec;
-    if (dataPageIterator.hasNext()) {
-      this.dataPage = dataPageIterator.next();
-    }
+    this.reader = rowReadSpec.reader();
+    this.predicate = rowReadSpec.predicate();
+    advancePageIfNecessary();
   }
 
   @Override
@@ -42,9 +46,10 @@ public class RepeatedValueIterator<ReadAs, Repeated, Value>
   }
 
   private void advancePageIfNecessary() {
-    if (definitionIndex == dataPage.getDefinitionLevels().length) {
+    if (dataPage == null || definitionIndex == dataPage.getDefinitionLevels().length) {
       if (dataPageIterator.hasNext()) {
         dataPage = dataPageIterator.next();
+        dataPageMatcher = dataPage.getValues().matcher(predicate);
       } else {
         dataPage = null;
       }
@@ -54,20 +59,45 @@ public class RepeatedValueIterator<ReadAs, Repeated, Value>
   }
 
   @Override
-  public Repeated next() {
-    final var values = rowReadSpec.reader().repeatedBuilder();
-    if (dataPage.getDefinitionLevels()[definitionIndex] == schemaNode.getDefinitionLevelMax()) {
-      do {
-        //noinspection unchecked
-        values.add((Value) dataPage.getValue(valueIndex++));
-        definitionIndex++;
-        advancePageIfNecessary();
-      } while (dataPage != null
-          && dataPage.getRepetitionLevels()[definitionIndex] == schemaNode.getRepetitionLevelMax());
-    } else {
+  public boolean nextRowMatches() {
+    int dIndex = definitionIndex, vIndex = valueIndex;
+    do {
+      if (dataPage.getDefinitionLevels()[dIndex] == schemaNode.getDefinitionLevelMax()) {
+        if (dataPageMatcher.matches(vIndex++)) {
+          return true;
+        }
+      }
+      dIndex++;
+    } while (dIndex < dataPage.getDefinitionLevels().length
+        && dataPage.getRepetitionLevels()[dIndex] != 0);
+
+    return false;
+  }
+
+  @Override
+  public void skipNextRow() {
+    do {
+      if (dataPage.getDefinitionLevels()[definitionIndex] == schemaNode.getDefinitionLevelMax()) {
+        valueIndex++;
+      }
       definitionIndex++;
-      advancePageIfNecessary();
-    }
+    } while (definitionIndex < dataPage.getDefinitionLevels().length
+        && dataPage.getRepetitionLevels()[definitionIndex] != 0);
+    advancePageIfNecessary();
+  }
+
+  @Override
+  public Repeated next() {
+    final var values = reader.repeatedBuilder();
+    do {
+      if (dataPage.getDefinitionLevels()[definitionIndex] == schemaNode.getDefinitionLevelMax()) {
+        //noinspection unchecked
+        values.add((Value) dataPage.getValues().get(valueIndex++));
+      }
+      definitionIndex++;
+    } while (definitionIndex < dataPage.getDefinitionLevels().length
+        && dataPage.getRepetitionLevels()[definitionIndex] == schemaNode.getRepetitionLevelMax());
+    advancePageIfNecessary();
 
     return values.build();
   }

@@ -53,10 +53,10 @@ public class ParquetCompatibilityTests {
               footer -> {
                 final var schema = ParquetSchemaNode.from(footer.schema);
                 for (RowGroup rowGroup : footer.row_groups) {
-                  final var rowGroupReader = new RowGroupReader(rowGroup);
+                  final var rowGroupReader = new RowGroupReader(rowGroup, schema);
                   final var rowIterator =
                       rowGroupReader.getRowIterator(
-                          new RowReadSpec<>(new MapReader()), schema, byteRangeReader);
+                          new RowReadSpec<>(new MapReader()), byteRangeReader);
                   var rows = 0;
                   while (rowIterator.hasNext()) {
                     final var next = rowIterator.next();
@@ -88,10 +88,10 @@ public class ParquetCompatibilityTests {
               footer -> {
                 final var schema = ParquetSchemaNode.from(footer.schema);
                 for (RowGroup rowGroup : footer.row_groups) {
-                  final var rowGroupReader = new RowGroupReader(rowGroup);
+                  final var rowGroupReader = new RowGroupReader(rowGroup, schema);
                   final var rowIterator =
                       rowGroupReader.getRowIterator(
-                          new RowReadSpec<>(new JSONReader()), schema, byteRangeReader);
+                          new RowReadSpec<>(new JSONReader()), byteRangeReader);
                   var rows = 0;
                   while (rowIterator.hasNext()) {
                     final JSONObject next = rowIterator.next();
@@ -117,10 +117,10 @@ public class ParquetCompatibilityTests {
             Example.newBuilder()
                 .setSomeChild(
                     ExampleChild.newBuilder()
-                        .setSomeString("str")
+                        .setSomeString("stra")
                         .addAllSomeStrings(List.of("str1", "str2"))
-                        .setSomeInt32(Integer.MAX_VALUE - 872634)
-                        .setSomeInt64(Integer.MAX_VALUE + 872634L)
+                        .setSomeInt32(Integer.MAX_VALUE - 465231)
+                        .setSomeInt64(Integer.MAX_VALUE + 465231L)
                         .setSomeFloat(Float.MAX_VALUE - 328746.23462F)
                         .setSomeDouble(Float.MAX_VALUE + 328746.23462D)
                         .setSomeBinary(ByteString.copyFromUtf8("just some bytes")))
@@ -138,7 +138,7 @@ public class ParquetCompatibilityTests {
             Example.newBuilder()
                 .setSomeChild(
                     ExampleChild.newBuilder()
-                        .setSomeString("str")
+                        .setSomeString("strb")
                         .addAllSomeStrings(List.of("str1", "str2"))
                         .setSomeInt32(Integer.MAX_VALUE - 872634)
                         .setSomeInt64(Integer.MAX_VALUE + 872634L)
@@ -159,10 +159,10 @@ public class ParquetCompatibilityTests {
             Example.newBuilder()
                 .setSomeChild(
                     ExampleChild.newBuilder()
-                        .setSomeString("str")
+                        .setSomeString("strc")
                         .addAllSomeStrings(List.of("str1", "str2"))
-                        .setSomeInt32(Integer.MAX_VALUE - 872634)
-                        .setSomeInt64(Integer.MAX_VALUE + 872634L)
+                        .setSomeInt32(Integer.MAX_VALUE - 974456)
+                        .setSomeInt64(Integer.MAX_VALUE + 974456L)
                         .setSomeFloat(Float.MAX_VALUE - 102987.23462F)
                         .setSomeDouble(Float.MAX_VALUE + 102987.23462D)
                         .setSomeBinary(ByteString.copyFromUtf8("just some bytes")))
@@ -186,11 +186,125 @@ public class ParquetCompatibilityTests {
               footer -> {
                 final var schema = ParquetSchemaNode.from(footer.schema);
                 for (RowGroup rowGroup : footer.row_groups) {
-                  final var rowGroupReader = new RowGroupReader(rowGroup);
+                  final var rowGroupReader = new RowGroupReader(rowGroup, schema);
+
                   final var rowIterator =
                       rowGroupReader.getRowIterator(
                           new RowReadSpec<>(new ProtobufReader<Example>(Example::newBuilder)),
-                          schema,
+                          byteRangeReader);
+                  var rows = 0;
+                  while (rowIterator.hasNext()) {
+                    final Example next = rowIterator.next();
+                    Assertions.assertEquals(expectedProtobufs.get(rows), next);
+                    rows++;
+                  }
+                  Assertions.assertEquals(expectedProtobufs.size(), rows);
+                }
+              })
+          .join();
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("writerConfigCombinations")
+  public void canFilterUsingPredicatePushdown(
+      CompressionCodecName codecName, ParquetProperties.WriterVersion writerVersion)
+      throws IOException {
+    final var inputProtobufs =
+        List.of(
+            Example.newBuilder()
+                .setSomeChild(
+                    ExampleChild.newBuilder()
+                        .setSomeString("stra")
+                        .addAllSomeStrings(List.of("str1", "str2"))
+                        .setSomeInt32(Integer.MAX_VALUE - 465231)
+                        .setSomeInt64(Integer.MAX_VALUE + 465231L)
+                        .setSomeFloat(Float.MAX_VALUE - 328746.23462F)
+                        .setSomeDouble(Float.MAX_VALUE + 328746.23462D)
+                        .setSomeBinary(ByteString.copyFromUtf8("just some bytes")))
+                .addAllSomeRepeated(
+                    List.of(
+                        Example.ExampleRepeated.newBuilder()
+                            .setSomeString("strrr1")
+                            .setSomeEnum(ExampleEnum.EXAMPLE_ENUM_TWO)
+                            .build(),
+                        Example.ExampleRepeated.newBuilder()
+                            .setSomeString("strrr2")
+                            .setSomeEnum(ExampleEnum.EXAMPLE_ENUM_ONE)
+                            .build()))
+                .build(),
+            Example.newBuilder()
+                .setSomeChild(
+                    ExampleChild.newBuilder()
+                        .setSomeString("strb")
+                        .addAllSomeStrings(List.of("str1", "str2"))
+                        .setSomeInt32(Integer.MAX_VALUE - 872634)
+                        .setSomeInt64(Integer.MAX_VALUE + 872634L)
+                        .setSomeFloat(Float.MAX_VALUE - 9837465.23462F)
+                        .setSomeDouble(Float.MAX_VALUE + 9837465.23462D)
+                        .setSomeBinary(ByteString.copyFromUtf8("just some bytes")))
+                .addAllSomeRepeated(
+                    List.of(
+                        Example.ExampleRepeated.newBuilder()
+                            .setSomeString("strrr1")
+                            .setSomeEnum(ExampleEnum.EXAMPLE_ENUM_TWO)
+                            .build(),
+                        Example.ExampleRepeated.newBuilder()
+                            .setSomeString("strrr2")
+                            .setSomeEnum(ExampleEnum.EXAMPLE_ENUM_ONE)
+                            .build()))
+                .build(),
+            Example.newBuilder()
+                .setSomeChild(
+                    ExampleChild.newBuilder()
+                        .setSomeString("strc")
+                        .addAllSomeStrings(List.of("str1", "str2"))
+                        .setSomeInt32(Integer.MAX_VALUE - 974456)
+                        .setSomeInt64(Integer.MAX_VALUE + 974456L)
+                        .setSomeFloat(Float.MAX_VALUE - 102987.23462F)
+                        .setSomeDouble(Float.MAX_VALUE + 102987.23462D)
+                        .setSomeBinary(ByteString.copyFromUtf8("just some bytes")))
+                .addAllSomeRepeated(
+                    List.of(
+                        Example.ExampleRepeated.newBuilder()
+                            .setSomeString("strrr1")
+                            .setSomeEnum(ExampleEnum.EXAMPLE_ENUM_TWO)
+                            .build(),
+                        Example.ExampleRepeated.newBuilder()
+                            .setSomeString("strrr2")
+                            .setSomeEnum(ExampleEnum.EXAMPLE_ENUM_ONE)
+                            .build()))
+                .build(),
+            Example.newBuilder().build());
+    final var expectedProtobufs =
+        inputProtobufs.stream()
+            .filter(
+                p ->
+                    p.getSomeChild().getSomeInt32() == Integer.MAX_VALUE - 974456
+                        && p.getSomeChild().getSomeString().compareTo("str") > 0)
+            .toList();
+
+    final var file = generateFileUsingApacheHadoop(inputProtobufs, codecName, writerVersion);
+    try (final var byteRangeReader = new FileByteRangeReader(file)) {
+      ParquetFooter.read(byteRangeReader)
+          .thenAccept(
+              footer -> {
+                final var schema = ParquetSchemaNode.from(footer.schema);
+                for (RowGroup rowGroup : footer.row_groups) {
+                  final var rowGroupReader = new RowGroupReader(rowGroup, schema);
+
+                  final var rowIterator =
+                      rowGroupReader.getRowIterator(
+                          new RowReadSpec<>(
+                              new ProtobufReader<Example>(Example::newBuilder),
+                              ParquetPredicates.intersection(
+                                  ParquetPredicates.equals(
+                                      rowGroupReader,
+                                      Integer.MAX_VALUE - 974456,
+                                      "some_child",
+                                      "some_int32"),
+                                  ParquetPredicates.greaterThan(
+                                      rowGroupReader, "str", "some_child", "some_string"))),
                           byteRangeReader);
                   var rows = 0;
                   while (rowIterator.hasNext()) {
@@ -221,10 +335,10 @@ public class ParquetCompatibilityTests {
                 final var schema = ParquetSchemaNode.from(footer.schema);
 
                 for (RowGroup rowGroup : footer.row_groups) {
-                  final var rowGroupReader = new RowGroupReader(rowGroup);
+                  final var rowGroupReader = new RowGroupReader(rowGroup, schema);
                   final var columnChunkReader =
                       rowGroupReader
-                          .getColumnChunkReaderForSchemaPath(byteRangeReader, schema, "some_string")
+                          .getColumnChunkReaderForSchemaPath(byteRangeReader, "some_string")
                           .orElseThrow();
                   Assertions.assertTrue(columnChunkReader.mightContainObject("str"));
                 }
@@ -252,10 +366,10 @@ public class ParquetCompatibilityTests {
                 final var schema = ParquetSchemaNode.from(footer.schema);
 
                 for (RowGroup rowGroup : footer.row_groups) {
-                  final var rowGroupReader = new RowGroupReader(rowGroup);
+                  final var rowGroupReader = new RowGroupReader(rowGroup, schema);
                   final var columnChunkReader =
                       rowGroupReader
-                          .getColumnChunkReaderForSchemaPath(byteRangeReader, schema, "some_string")
+                          .getColumnChunkReaderForSchemaPath(byteRangeReader, "some_string")
                           .orElseThrow();
                   Assertions.assertFalse(columnChunkReader.mightContainObject("str"));
                   Assertions.assertTrue(columnChunkReader.mightContainObject("stonks"));

@@ -7,12 +7,12 @@ import java.util.Map;
 public class RepeatedBranchIterator<Repeated, Value> implements ParquetFieldIterator<Repeated> {
   private final OptionalBranchIterator<Value> optionalBranchIterator;
   private final ParquetSchemaNode schemaNode;
-  private final RowReadSpec<Repeated, Value> rowReadSpec;
+  private final RowReadSpec<Repeated, Value, ?> rowReadSpec;
 
   public RepeatedBranchIterator(
       Map<String, ParquetFieldIterator<?>> childIterators,
       ParquetSchemaNode schemaNode,
-      RowReadSpec<Repeated, Value> rowReadSpec) {
+      RowReadSpec<Repeated, Value, ?> rowReadSpec) {
     this.rowReadSpec = rowReadSpec;
     this.optionalBranchIterator =
         new OptionalBranchIterator<>(childIterators, schemaNode, rowReadSpec);
@@ -32,6 +32,16 @@ public class RepeatedBranchIterator<Repeated, Value> implements ParquetFieldIter
   @Override
   public boolean hasNext() {
     return optionalBranchIterator.hasNext();
+  }
+
+  @Override
+  public boolean nextRowMatches() {
+    return optionalBranchIterator.nextRowMatches();
+  }
+
+  @Override
+  public void skipNextRow() {
+    optionalBranchIterator.skipNextRow();
   }
 
   @Override

@@ -90,7 +90,7 @@ public class DataPageV2<ReadAs> implements DataPage<ReadAs> {
   }
 
   @Override
-  public ReadAs getValue(final int index) {
-    return values.get(index);
+  public Values<ReadAs> getValues() {
+    return values;
   }
 }

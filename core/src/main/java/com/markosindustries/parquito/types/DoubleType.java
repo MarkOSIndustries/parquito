@@ -28,6 +28,7 @@ public abstract class DoubleType<ReadAs> extends ParquetType<ReadAs> {
     }
 
     final var doubleBuffer = buffer.order(ByteOrder.LITTLE_ENDIAN).asDoubleBuffer();
+
     return index -> wrap(doubleBuffer.get(index));
   }
 
