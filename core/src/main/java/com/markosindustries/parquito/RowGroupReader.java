@@ -168,7 +168,7 @@ public class RowGroupReader {
     return matchingIndices.findAny();
   }
 
-  public ColumnType<?> getColumnType(final String... schemaPath) {
+  public Optional<? extends ColumnType<?>> getColumnType(final String... schemaPath) {
     return getColumnChunkIndexForSchemaPath(schemaPath).stream()
         .mapToObj(
             columnChunkIndex -> {
@@ -180,7 +180,6 @@ public class RowGroupReader {
               return ColumnType.create(
                   columnChunkHeader, columnChunkSorting, schemaRoot.getChild(schemaPath));
             })
-        .findAny()
-        .orElseThrow();
+        .findAny();
   }
 }

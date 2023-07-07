@@ -22,7 +22,7 @@ public class ParquetPredicates {
 
   public static ParquetPredicate<?> equals(
       RowGroupReader rowGroupReader, Object comparator, String... schemaPath) {
-    final var columnType = rowGroupReader.getColumnType(schemaPath);
+    final var columnType = rowGroupReader.getColumnType(schemaPath).orElseThrow();
     return equals(comparator, columnType, schemaPath);
   }
 
@@ -33,7 +33,7 @@ public class ParquetPredicates {
 
   public static ParquetPredicate<?> greaterThan(
       RowGroupReader rowGroupReader, Object comparator, String... schemaPath) {
-    final var columnType = rowGroupReader.getColumnType(schemaPath);
+    final var columnType = rowGroupReader.getColumnType(schemaPath).orElseThrow();
     return greaterThan(comparator, columnType, schemaPath);
   }
 
@@ -45,7 +45,7 @@ public class ParquetPredicates {
 
   public static ParquetPredicate<?> greaterThanOrEqual(
       RowGroupReader rowGroupReader, Object comparator, String... schemaPath) {
-    final var columnType = rowGroupReader.getColumnType(schemaPath);
+    final var columnType = rowGroupReader.getColumnType(schemaPath).orElseThrow();
     return greaterThanOrEqual(comparator, columnType, schemaPath);
   }
 
@@ -56,7 +56,7 @@ public class ParquetPredicates {
 
   public static ParquetPredicate<?> lessThan(
       RowGroupReader rowGroupReader, Object comparator, String... schemaPath) {
-    final var columnType = rowGroupReader.getColumnType(schemaPath);
+    final var columnType = rowGroupReader.getColumnType(schemaPath).orElseThrow();
     return lessThan(comparator, columnType, schemaPath);
   }
 
@@ -67,7 +67,7 @@ public class ParquetPredicates {
 
   public static ParquetPredicate<?> lessThanOrEqual(
       RowGroupReader rowGroupReader, Object comparator, String... schemaPath) {
-    final var columnType = rowGroupReader.getColumnType(schemaPath);
+    final var columnType = rowGroupReader.getColumnType(schemaPath).orElseThrow();
     return lessThanOrEqual(comparator, columnType, schemaPath);
   }
 }
