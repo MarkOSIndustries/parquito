@@ -201,19 +201,17 @@ public interface ParquetPredicate<ReadAs> {
     }
 
     protected int compare(ReadAs value) {
-      System.out.println(
-          "Comparing "
-              + value
-              + " to "
-              + comparator
-              + " yields "
-              + columnType.compare(value, comparator));
       return columnType.compare(value, comparator);
     }
 
     @Override
     public boolean branchMatches(final Function<String, Boolean> childMatchesNextRow) {
-      return false;
+      for (final String child : includedChildren) {
+        if (childMatchesNextRow.apply(child)) {
+          return true;
+        }
+      }
+      return includedChildren.isEmpty();
     }
   }
 
