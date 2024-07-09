@@ -12,8 +12,10 @@ jar {
   }
 }
 
-targetCompatibility = 17
-sourceCompatibility = 17
+java {
+  targetCompatibility = javaVersion
+  sourceCompatibility = javaVersion
+}
 
 tasks.withType(JavaCompile) {
   options.compilerArgs << '-Xlint:unchecked'

@@ -206,7 +206,7 @@ public interface ParquetPredicate<ReadAs> {
 
     @Override
     public boolean branchMatches(final Function<String, Boolean> childMatchesNextRow) {
-      if(path.length > offset) {
+      if (path.length > offset) {
         return childMatchesNextRow.apply(path[offset]);
       }
       return true;

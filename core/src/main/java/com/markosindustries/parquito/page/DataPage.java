@@ -15,8 +15,8 @@ public interface DataPage<ReadAs> extends ParquetPage<ReadAs> {
       return switch (pageHeader.type) {
         case DATA_PAGE -> new DataPageV1<ReadAs>(pageHeader, columnChunkReader, pageBuffer);
         case DATA_PAGE_V2 -> new DataPageV2<ReadAs>(pageHeader, columnChunkReader, pageBuffer);
-        default -> throw new IllegalArgumentException(
-            "Unsupported data page type: " + pageHeader.type);
+        default ->
+            throw new IllegalArgumentException("Unsupported data page type: " + pageHeader.type);
       };
     } catch (IOException e) {
       throw new ParquetIOException(e);

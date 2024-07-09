@@ -11,4 +11,8 @@
     <!-- These typically don't play nicely with composing mutable objects together -->
     <Bug pattern="EI_EXPOSE_REP2" />
   </Match>
+  <Match>
+    <!-- This makes a bunch of noise when throwing in constructors, which isn't relevant unless you're using Finalizers -->
+    <Bug pattern="CT_CONSTRUCTOR_THROW" />
+  </Match>
 </FindBugsFilter>

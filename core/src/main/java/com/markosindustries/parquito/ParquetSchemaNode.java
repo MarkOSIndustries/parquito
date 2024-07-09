@@ -63,8 +63,9 @@ public class ParquetSchemaNode {
           this.repetitionLevelMax = repetitionLevelMax + 1;
           this.definitionLevelMax = definitionLevelMax + 1;
         }
-        default -> throw new IllegalArgumentException(
-            "Unsupported repetition_type: " + element.repetition_type);
+        default ->
+            throw new IllegalArgumentException(
+                "Unsupported repetition_type: " + element.repetition_type);
       }
     }
 
@@ -144,6 +145,7 @@ public class ParquetSchemaNode {
   public int getTypeLength(String... schemaPath) {
     return getChild(schemaPath).element.type_length;
   }
+
   //
   //  public <ReadAs> RequiredColumnAccessor<ReadAs>
   // getRequiredColumnAccessor(String... schemaPath) {

@@ -18,8 +18,8 @@ public interface IntEncodings {
       case BIT_PACKED -> INT_ENCODING_BIT_PACKED;
       case DELTA_BINARY_PACKED -> INT_ENCODING_DELTA_BINARY_PACKED;
 
-      default -> throw new UnsupportedOperationException(
-          "Unsupported integer encoding: " + encoding);
+      default ->
+          throw new UnsupportedOperationException("Unsupported integer encoding: " + encoding);
     };
   }
 }
