@@ -1,5 +1,6 @@
 package com.markosindustries.parquito;
 
+import com.markosindustries.parquito.bloomfilter.BloomFilter;
 import com.markosindustries.parquito.page.DataPage;
 import com.markosindustries.parquito.page.DictionaryPage;
 import com.markosindustries.parquito.types.ColumnType;
@@ -12,25 +13,30 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import org.apache.parquet.format.BloomFilterHeader;
 import org.apache.parquet.format.PageHeader;
 import org.apache.parquet.format.RowGroup;
 import org.apache.parquet.format.SortingColumn;
 import org.apache.parquet.format.Util;
 
 public class ColumnChunkReader<ReadAs> {
+  private static final int BLOOM_FILTER_HEADER_SIZE = 18;
   private final org.apache.parquet.format.ColumnChunk header;
   private final ColumnType<ReadAs> columnType;
   private final CompletableFuture<DictionaryPage<ReadAs>> dictionaryPage;
+  private final CompletableFuture<BloomFilter> bloomFilter;
   private final long dataPageCompressedBytes;
 
   private ColumnChunkReader(
       final org.apache.parquet.format.ColumnChunk header,
       final ColumnType<ReadAs> columnType,
       final CompletableFuture<DictionaryPage<ReadAs>> dictionaryPage,
+      final CompletableFuture<BloomFilter> bloomFilter,
       final long dataPageCompressedBytes) {
     this.header = header;
     this.columnType = columnType;
     this.dictionaryPage = dictionaryPage;
+    this.bloomFilter = bloomFilter;
     this.dataPageCompressedBytes = dataPageCompressedBytes;
   }
 
@@ -46,11 +52,33 @@ public class ColumnChunkReader<ReadAs> {
             : 0;
 
     final var dictionaryPageFuture = new CompletableFuture<DictionaryPage<ReadAs>>();
+    final var bloomFilterFuture =
+        (columnChunkHeader.meta_data.isSetBloom_filter_offset())
+            ? byteRangeReader
+                .readAsInputStream(
+                    columnChunkHeader.meta_data.bloom_filter_offset, BLOOM_FILTER_HEADER_SIZE)
+                .thenCompose(
+                    bloomHeaderInputStream -> {
+                      try (bloomHeaderInputStream) {
+                        final BloomFilterHeader bloomFilterHeader =
+                            Util.readBloomFilterHeader(bloomHeaderInputStream);
+                        return byteRangeReader
+                            .readAsBuffer(
+                                columnChunkHeader.meta_data.bloom_filter_offset
+                                    + BLOOM_FILTER_HEADER_SIZE,
+                                bloomFilterHeader.numBytes)
+                            .thenApply(bitset -> BloomFilter.from(bloomFilterHeader, bitset));
+                      } catch (IOException e) {
+                        throw new RuntimeException(e);
+                      }
+                    })
+            : CompletableFuture.<BloomFilter>completedFuture(null);
     final var columnChunk =
         new ColumnChunkReader<ReadAs>(
             columnChunkHeader,
             type,
             dictionaryPageFuture,
+            bloomFilterFuture,
             columnChunkHeader.meta_data.total_compressed_size - dictionarySize);
     if (columnChunkHeader.meta_data.isSetDictionary_page_offset()) {
       byteRangeReader
@@ -106,6 +134,10 @@ public class ColumnChunkReader<ReadAs> {
     return dictionaryPage.join();
   }
 
+  public BloomFilter getBloomFilter() {
+    return bloomFilter.join();
+  }
+
   public boolean mightContainObject(Object value) {
     final var readAsClass = columnType.parquetType().getReadAsClass();
     if (readAsClass.isInstance(value)) {
@@ -159,17 +191,8 @@ public class ColumnChunkReader<ReadAs> {
   }
 
   private boolean bloomFilterMightContain(final ReadAs value) {
-    //    try(final var bloomInputStream =
-    // byteRangeReader.readAsInputStream(columnChunk.meta_data.bloom_filter_offset,
-    // (int)(byteRangeReader.getTotalBytesAvailable()-columnChunk.meta_data.bloom_filter_offset))) {
-    //      final BloomFilterHeader bloomFilterHeader =
-    // Util.readBloomFilterHeader(bloomInputStream);
-    //      bloomFilterHeader.numBytes
-    return true;
-    //      new BlockSplitBloomFilter
-    //    } catch (IOException e) {
-    //      throw new RuntimeException(e);
-    //    }
+    final var bloomFilter = getBloomFilter();
+    return bloomFilter.mightContain(value);
   }
 
   private boolean dictionaryContains(final ReadAs value) {

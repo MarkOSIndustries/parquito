@@ -16,18 +16,7 @@ import org.apache.parquet.format.FieldRepetitionType;
 import org.apache.parquet.format.RowGroup;
 import org.apache.parquet.format.SortingColumn;
 
-public class RowGroupReader {
-  private final RowGroup rowGroupHeader;
-  private final ParquetSchemaNode.Root schemaRoot;
-
-  public RowGroupReader(final RowGroup rowGroupHeader, final ParquetSchemaNode.Root schemaRoot) {
-    this.rowGroupHeader = rowGroupHeader;
-    this.schemaRoot = schemaRoot;
-  }
-
-  public RowGroup getHeader() {
-    return rowGroupHeader;
-  }
+public record RowGroupReader(RowGroup rowGroupHeader, ParquetSchemaNode.Root schemaRoot) {
 
   public <Repeated, Value> Iterator<Value> getRowIterator(
       final RowReadSpec<Repeated, Value, ?> rowReadSpec, final ByteRangeReader byteRangeReader) {

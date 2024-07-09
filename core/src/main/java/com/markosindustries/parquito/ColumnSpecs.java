@@ -15,7 +15,7 @@ public final class ColumnSpecs {
     }
   }
 
-  public static final All ALL = new All();
+  private static final All ALL = new All();
 
   public static ColumnSpec all() {
     return ALL;
@@ -33,7 +33,7 @@ public final class ColumnSpecs {
     }
   }
 
-  public static final None NONE = new None();
+  private static final None NONE = new None();
 
   public static ColumnSpec none() {
     return NONE;

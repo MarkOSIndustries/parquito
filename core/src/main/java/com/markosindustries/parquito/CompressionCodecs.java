@@ -2,7 +2,6 @@ package com.markosindustries.parquito;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.UnsupportedEncodingException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.zip.GZIPInputStream;
@@ -33,7 +32,7 @@ public final class CompressionCodecs {
         }
       };
 
-  public static void register(
+  public static synchronized void register(
       CompressionCodec compressionCodec, StreamDecompressor streamDecompressor) {
     REGISTERED_CODECS.put(compressionCodec, streamDecompressor);
   }
@@ -42,8 +41,13 @@ public final class CompressionCodecs {
       throws IOException {
     final var decompressor = REGISTERED_CODECS.get(compressionCodec);
     if (decompressor == null) {
-      throw new UnsupportedEncodingException(
-          "Use CompressionCodecs.register to add support for codec " + compressionCodec);
+      throw new UnsupportedOperationException(
+          "Use "
+              + CompressionCodecs.class.getName()
+              + ".register() to add support for "
+              + CompressionCodec.class.getName()
+              + " "
+              + compressionCodec);
     }
     return decompressor.decompress(inputStream);
   }

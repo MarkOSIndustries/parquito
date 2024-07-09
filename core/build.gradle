@@ -5,21 +5,13 @@ plugins {
 
 dependencies {
   api group: 'org.apache.parquet', name: 'parquet-format-structures', version: '1.12.2'
-  api group: 'org.xerial.snappy', name: 'snappy-java', version: '1.1.8.4'
+  api group: 'org.xerial.snappy', name: 'snappy-java', version: '1.1.10.4'
   api group: 'org.anarres.lzo', name: 'lzo-core', version: '1.0.6'
   api group: 'org.brotli', name: 'dec', version: '0.1.2'
   api group: 'org.lz4', name: 'lz4-java', version: '1.8.0'
-
-  //    api group: 'net.openhft', name: 'zero-allocation-hashing', version: '0.16'
+  api group: 'net.openhft', name: 'zero-allocation-hashing', version: '0.26ea0'
 
   //    api group: 'org.roaringbitmap', name: 'RoaringBitmap', version: '0.9.3'
-
-  // TODO split into a separate parquito-protobuf lib
-
-  // TODO split into a separate parquito-json lib
-
-  // TODO remove
-  implementation project(':schemas')
 
   // I think this will be useful when trying to decide whether to use dictionary encoding for a given column chunk on write...
   // specifically, the LinearCounting implementation (or HyperLogLog for cardinalities greater than 10^9, but that seems less likely)
