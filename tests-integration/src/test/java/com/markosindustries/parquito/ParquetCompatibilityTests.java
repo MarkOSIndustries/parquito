@@ -2,6 +2,7 @@ package com.markosindustries.parquito;
 
 import static org.apache.parquet.hadoop.ParquetFileWriter.Mode.OVERWRITE;
 
+import com.alibaba.fastjson2.JSONObject;
 import com.google.protobuf.ByteString;
 import com.markosindustries.parquito.filesys.SimpleOutputFile;
 import com.markosindustries.parquito.json.JSONReader;
@@ -17,7 +18,6 @@ import org.apache.parquet.column.ParquetProperties;
 import org.apache.parquet.format.RowGroup;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.proto.ProtoParquetWriter;
-import org.json.JSONObject;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;

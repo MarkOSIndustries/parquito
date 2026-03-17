@@ -1,7 +1,7 @@
 package com.markosindustries.parquito.json;
 
+import com.alibaba.fastjson2.JSONObject;
 import com.markosindustries.parquito.rows.BranchBuilder;
-import org.json.JSONObject;
 
 class JSONBranchBuilder implements BranchBuilder<JSONObject> {
   final JSONObject result = new JSONObject();

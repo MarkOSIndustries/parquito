@@ -1,10 +1,10 @@
 package com.markosindustries.parquito.json;
 
+import com.alibaba.fastjson2.JSONArray;
+import com.alibaba.fastjson2.JSONObject;
 import com.markosindustries.parquito.Reader;
 import com.markosindustries.parquito.rows.BranchBuilder;
 import com.markosindustries.parquito.rows.RepeatedBuilder;
-import org.json.JSONArray;
-import org.json.JSONObject;
 
 public class JSONReader implements Reader<JSONArray, JSONObject> {
   @Override
