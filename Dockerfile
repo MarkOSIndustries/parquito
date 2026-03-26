@@ -11,4 +11,4 @@ RUN chmod +x ./gradlew
 RUN ./gradlew --version
 
 COPY . .
-RUN ./gradlew -Pversion_string=$VERSION clean installDist --parallel
+RUN ./gradlew -Pversion_string=$VERSION clean build test --parallel
