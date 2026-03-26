@@ -9,7 +9,7 @@ COMMIT_SHA=$(git rev-parse $VERSION) || die "You haven't set up the git release 
 [[ "${COMMIT_SHA}" == "$(git rev-parse HEAD)" ]] || die "Check out the tagged commit first."
 [[ -z $(git status --short) ]] || die "Working directory is dirty"
 
-docker build -f Dockerfile --target build_env \
+docker build --progress plain -f Dockerfile --target build_env \
   --build-arg VERSION="${VERSION}" \
   -t parquito-build-env:${VERSION} \
   .
