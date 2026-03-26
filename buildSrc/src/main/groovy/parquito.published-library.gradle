@@ -3,6 +3,7 @@ plugins {
   id 'java-library'
   id 'maven-publish'
   id 'signing'
+  id 'com.gradleup.nmcp'
 }
 
 java {
@@ -47,16 +48,6 @@ publishing {
           connection = 'scm:git:git://github.com/MarkOSIndustries/parquito.git'
           url = 'https://github.com/MarkOSIndustries/parquito'
         }
-      }
-    }
-  }
-  repositories {
-    maven {
-      name = "OSSRH"
-      url = "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
-      credentials {
-        username = System.getenv("OSSRH_USERNAME")
-        password = System.getenv("OSSRH_PASSWORD")
       }
     }
   }
