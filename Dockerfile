@@ -1,5 +1,5 @@
 # Building
-FROM eclipse-temurin:17.0.18_8-jdk as build_env
+FROM eclipse-temurin:21.0.3_9-jdk as build_env
 
 ARG VERSION
 
