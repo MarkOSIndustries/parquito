@@ -57,7 +57,7 @@ public class ColumnChunkReader<ReadAs> {
             ? byteRangeReader
                 .readAsInputStream(
                     columnChunkHeader.meta_data.bloom_filter_offset, BLOOM_FILTER_HEADER_SIZE)
-                .thenCompose(
+                .thenComposeAsync(
                     bloomHeaderInputStream -> {
                       try (bloomHeaderInputStream) {
                         final BloomFilterHeader bloomFilterHeader =
@@ -67,11 +67,14 @@ public class ColumnChunkReader<ReadAs> {
                                 columnChunkHeader.meta_data.bloom_filter_offset
                                     + BLOOM_FILTER_HEADER_SIZE,
                                 bloomFilterHeader.numBytes)
-                            .thenApply(bitset -> BloomFilter.from(bloomFilterHeader, bitset));
+                            .thenApplyAsync(
+                                bitset -> BloomFilter.from(bloomFilterHeader, bitset),
+                                Concurrency.DEFAULT_EXECUTOR);
                       } catch (IOException e) {
                         throw new RuntimeException(e);
                       }
-                    })
+                    },
+                    Concurrency.DEFAULT_EXECUTOR)
             : CompletableFuture.<BloomFilter>completedFuture(null);
     final var columnChunk =
         new ColumnChunkReader<ReadAs>(
@@ -83,7 +86,7 @@ public class ColumnChunkReader<ReadAs> {
     if (columnChunkHeader.meta_data.isSetDictionary_page_offset()) {
       byteRangeReader
           .readAsBuffer(columnChunkHeader.meta_data.dictionary_page_offset, (int) dictionarySize)
-          .thenApply(
+          .thenApplyAsync(
               dictionaryBuffer -> {
                 try {
                   final var dictionaryStream = new ByteBufferInputStream(dictionaryBuffer);
@@ -95,15 +98,17 @@ public class ColumnChunkReader<ReadAs> {
                 } catch (IOException e) {
                   throw new ParquetIOException(e);
                 }
-              })
-          .whenComplete(
+              },
+              Concurrency.DEFAULT_EXECUTOR)
+          .whenCompleteAsync(
               (dictionaryPage, throwable) -> {
                 if (throwable != null) {
                   dictionaryPageFuture.completeExceptionally(throwable);
                 } else {
                   dictionaryPageFuture.complete(dictionaryPage);
                 }
-              });
+              },
+              Concurrency.DEFAULT_EXECUTOR);
     }
     return columnChunk;
   }
@@ -212,20 +217,21 @@ public class ColumnChunkReader<ReadAs> {
       return Collections.emptySet();
     }
     return dictionaryPage
-        .thenApply(
+        .thenApplyAsync(
             page -> {
               final var values = page.getValues();
               return IntStream.range(0, page.getNonNullValues())
                   .mapToObj(values::get)
                   .collect(Collectors.toUnmodifiableSet());
-            })
+            },
+            Concurrency.DEFAULT_EXECUTOR)
         .join();
   }
 
   public CompletableFuture<Iterator<DataPage<ReadAs>>> readPages(ByteRangeReader byteRangeReader) {
     return byteRangeReader
         .readAsBuffer(header.file_offset, (int) dataPageCompressedBytes)
-        .thenApply(
+        .thenApplyAsync(
             chunkDataBuffer -> {
               return new Iterator<DataPage<ReadAs>>() {
                 private final ByteBufferInputStream chunkDataBufferStream =
@@ -251,7 +257,8 @@ public class ColumnChunkReader<ReadAs> {
                   return parquetPage;
                 }
               };
-            });
+            },
+            Concurrency.DEFAULT_EXECUTOR);
   }
 
   static PageHeader readPageHeader(InputStream inputStream) {

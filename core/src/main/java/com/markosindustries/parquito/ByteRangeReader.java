@@ -34,21 +34,25 @@ public interface ByteRangeReader extends AutoCloseable {
           } catch (IOException ioException) {
             throw new ParquetIOException(ioException);
           }
-        });
+        },
+        Concurrency.DEFAULT_EXECUTOR);
   }
 
   default CompletableFuture<ByteBuffer> readAsBuffer(long startByteOffset, int bytesToRetrieve) {
     return readUntilFull(startByteOffset, ByteBuffer.allocate(bytesToRetrieve))
-        .thenApply(
+        .thenApplyAsync(
             buffer -> {
               buffer.flip();
               return buffer;
-            });
+            },
+            Concurrency.DEFAULT_EXECUTOR);
   }
 
   default CompletableFuture<InputStream> readAsInputStream(
       long startByteOffset, int bytesToRetrieve) {
     return readAsBuffer(startByteOffset, bytesToRetrieve)
-        .thenApply(buffer -> new ByteArrayInputStream(buffer.array(), 0, bytesToRetrieve));
+        .thenApplyAsync(
+            buffer -> new ByteArrayInputStream(buffer.array(), 0, bytesToRetrieve),
+            Concurrency.DEFAULT_EXECUTOR);
   }
 }

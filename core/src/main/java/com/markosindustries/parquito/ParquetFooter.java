@@ -24,7 +24,7 @@ public class ParquetFooter {
       final var footerSizeAndMagicBuffer = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
       return byteRangeReader
           .readUntilFull(footerSizeAndMagicBufferOffset, footerSizeAndMagicBuffer)
-          .thenCompose(
+          .thenComposeAsync(
               unused -> {
                 footerSizeAndMagicBuffer.flip();
                 final var footerSize = footerSizeAndMagicBuffer.getInt();
@@ -38,8 +38,9 @@ public class ParquetFooter {
 
                 return byteRangeReader
                     .readAsInputStream(footerSizeAndMagicBufferOffset - footerSize, footerSize)
-                    .thenApply(ParquetFooter::readFileMetaData);
-              });
+                    .thenApplyAsync(ParquetFooter::readFileMetaData, Concurrency.DEFAULT_EXECUTOR);
+              },
+              Concurrency.DEFAULT_EXECUTOR);
     } catch (IOException e) {
       return CompletableFuture.failedFuture(e);
     }
@@ -60,7 +61,8 @@ public class ParquetFooter {
           } catch (IOException e) {
             throw new ParquetIOException(e);
           }
-        });
+        },
+        Concurrency.DEFAULT_EXECUTOR);
   }
 
   static FileMetaData readFileMetaData(InputStream inputStream) {
