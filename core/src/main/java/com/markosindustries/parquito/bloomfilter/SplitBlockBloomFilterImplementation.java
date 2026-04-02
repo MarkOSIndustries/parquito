@@ -13,7 +13,7 @@ public class SplitBlockBloomFilterImplementation implements BloomFilterImplement
 
   private final Block[] blocks;
 
-  public SplitBlockBloomFilterImplementation(ByteBuffer bitset) {
+  public SplitBlockBloomFilterImplementation(final ByteBuffer bitset) {
     this.bitset = bitset.order(ByteOrder.LITTLE_ENDIAN);
     this.bitsetAsIntBuffer = this.bitset.asIntBuffer();
     if ((bitsetAsIntBuffer.limit() % Block.WORDS_IN_A_BLOCK) != 0) {
@@ -29,7 +29,7 @@ public class SplitBlockBloomFilterImplementation implements BloomFilterImplement
   }
 
   @Override
-  public boolean mightContain(long hash) {
+  public boolean mightContain(final long hash) {
     final var hashTopBits = hash >>> 32;
     final var blockIndex = (int) ((hashTopBits * ((long) blocks.length)) >>> 32);
 
@@ -37,7 +37,7 @@ public class SplitBlockBloomFilterImplementation implements BloomFilterImplement
   }
 
   @Override
-  public void insert(long hash) {
+  public void insert(final long hash) {
     final var hashTopBits = hash >>> 32;
     final var blockIndex = (int) ((hashTopBits * ((long) blocks.length)) >>> 32);
 

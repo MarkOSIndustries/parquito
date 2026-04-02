@@ -7,8 +7,10 @@ import com.markosindustries.parquito.types.ColumnType;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -143,25 +145,34 @@ public class ColumnChunkReader<ReadAs> {
     return bloomFilter.join();
   }
 
-  public boolean mightContainObject(Object value) {
+  public boolean mightContainAnyObjects(Collection<Object> values) {
+    final var readAsClass = columnType.parquetType().getReadAsClass();
+    return mightContainAny(
+        values.stream().filter(readAsClass::isInstance).map(readAsClass::cast).toList());
+  }
+
+  public boolean mightContainObject(final Object value) {
     final var readAsClass = columnType.parquetType().getReadAsClass();
     if (readAsClass.isInstance(value)) {
-      return mightContain(readAsClass.cast(value));
+      return mightContainAny(List.of(readAsClass.cast(value)));
     }
     return false;
   }
 
-  public boolean mightContain(ReadAs value) {
+  public boolean mightContainAny(final Collection<ReadAs> values) {
     if (hasRangeStats()
-        && (columnType.compare(getStatsMin(), value) > 0
-            || columnType.compare(getStatsMax(), value) < 0)) {
+        && (values.stream()
+            .anyMatch(
+                value ->
+                    columnType.compare(getStatsMin(), value) > 0
+                        || columnType.compare(getStatsMax(), value) < 0))) {
       return false;
     }
-    if (hasBloomFilter() && !bloomFilterMightContain(value)) {
+    if (hasBloomFilter() && !bloomFilterMightContainAny(values)) {
       return false;
     }
-    if (hasDictionary() && !dictionaryContains(value)) {
-      return false;
+    if (hasDictionary()) {
+      return dictionaryContainsAny(values);
     }
     return containsNonNulls();
   }
@@ -195,16 +206,16 @@ public class ColumnChunkReader<ReadAs> {
     return header.meta_data.isSetDictionary_page_offset();
   }
 
-  private boolean bloomFilterMightContain(final ReadAs value) {
+  private boolean bloomFilterMightContainAny(final Collection<ReadAs> values) {
     final var bloomFilter = getBloomFilter();
-    return bloomFilter.mightContain(value);
+    return bloomFilter.mightContainAny(values);
   }
 
-  private boolean dictionaryContains(final ReadAs value) {
+  private boolean dictionaryContainsAny(final Collection<ReadAs> values) {
     final var dictionaryPage = getDictionaryPage();
     final var dictionaryPageValues = dictionaryPage.getValues();
     for (int i = 0; i < dictionaryPage.getNonNullValues(); i++) {
-      if (dictionaryPageValues.get(i).equals(value)) {
+      if (values.stream().anyMatch(dictionaryPageValues.get(i)::equals)) {
         return true;
       }
     }

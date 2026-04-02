@@ -46,7 +46,9 @@ public class ParquetCompatibilityTests {
         generateFileUsingApacheHadoop(
             List.of(Example.newBuilder().build(), Example.newBuilder().build()),
             codecName,
-            writerVersion);
+            writerVersion,
+            List.of(),
+            List.of());
     try (final var byteRangeReader = new FileByteRangeReader(file)) {
       ParquetFooter.read(byteRangeReader)
           .thenAccept(
@@ -81,7 +83,9 @@ public class ParquetCompatibilityTests {
         generateFileUsingApacheHadoop(
             List.of(Example.newBuilder().build(), Example.newBuilder().build()),
             codecName,
-            writerVersion);
+            writerVersion,
+            List.of(),
+            List.of());
     try (final var byteRangeReader = new FileByteRangeReader(file)) {
       ParquetFooter.read(byteRangeReader)
           .thenAccept(
@@ -179,7 +183,9 @@ public class ParquetCompatibilityTests {
                 .build(),
             Example.newBuilder().build());
 
-    final var file = generateFileUsingApacheHadoop(expectedProtobufs, codecName, writerVersion);
+    final var file =
+        generateFileUsingApacheHadoop(
+            expectedProtobufs, codecName, writerVersion, List.of(), List.of());
     try (final var byteRangeReader = new FileByteRangeReader(file)) {
       ParquetFooter.read(byteRangeReader)
           .thenAccept(
@@ -284,7 +290,9 @@ public class ParquetCompatibilityTests {
                         && p.getSomeChild().getSomeString().compareTo("str") > 0)
             .toList();
 
-    final var file = generateFileUsingApacheHadoop(inputProtobufs, codecName, writerVersion);
+    final var file =
+        generateFileUsingApacheHadoop(
+            inputProtobufs, codecName, writerVersion, List.of(), List.of());
     try (final var byteRangeReader = new FileByteRangeReader(file)) {
       ParquetFooter.read(byteRangeReader)
           .thenAccept(
@@ -327,7 +335,9 @@ public class ParquetCompatibilityTests {
                 Example.newBuilder().setSomeString("styx").build(),
                 Example.newBuilder().setSomeString("stab").build()),
             CompressionCodecName.SNAPPY,
-            ParquetProperties.WriterVersion.PARQUET_1_0);
+            ParquetProperties.WriterVersion.PARQUET_1_0,
+            List.of(),
+            List.of());
     try (final var byteRangeReader = new FileByteRangeReader(file)) {
       ParquetFooter.read(byteRangeReader)
           .thenAccept(
@@ -341,6 +351,7 @@ public class ParquetCompatibilityTests {
                           .getColumnChunkReaderForSchemaPath(byteRangeReader, "some_string")
                           .orElseThrow();
                   Assertions.assertTrue(columnChunkReader.mightContainObject("str"));
+                  Assertions.assertFalse(columnChunkReader.mightContainObject("slab"));
                 }
               })
           .join();
@@ -358,7 +369,8 @@ public class ParquetCompatibilityTests {
                 Example.newBuilder().setSomeString("stab").build()),
             CompressionCodecName.SNAPPY,
             ParquetProperties.WriterVersion.PARQUET_1_0,
-            "some_string");
+            List.of("some_string"),
+            List.of());
     try (final var byteRangeReader = new FileByteRangeReader(file)) {
       ParquetFooter.read(byteRangeReader)
           .thenAccept(
@@ -373,6 +385,47 @@ public class ParquetCompatibilityTests {
                           .orElseThrow();
                   Assertions.assertFalse(columnChunkReader.mightContainObject("str"));
                   Assertions.assertTrue(columnChunkReader.mightContainObject("stonks"));
+                  Assertions.assertTrue(
+                      columnChunkReader.mightContainAnyObjects(List.of("str", "stonks")));
+                  Assertions.assertFalse(
+                      columnChunkReader.mightContainAnyObjects(List.of("str", "strut")));
+                }
+              })
+          .join();
+    }
+  }
+
+  @Test
+  public void canCheckForValuePresenceUsingStatsAndBloomFilter() throws IOException {
+    final var file =
+        generateFileUsingApacheHadoop(
+            List.of(
+                Example.newBuilder().setSomeString("styx").build(),
+                Example.newBuilder().setSomeString("stonks").build(),
+                Example.newBuilder().setSomeString("styx").build(),
+                Example.newBuilder().setSomeString("stab").build()),
+            CompressionCodecName.SNAPPY,
+            ParquetProperties.WriterVersion.PARQUET_1_0,
+            List.of(),
+            List.of("some_string"));
+    try (final var byteRangeReader = new FileByteRangeReader(file)) {
+      ParquetFooter.read(byteRangeReader)
+          .thenAccept(
+              footer -> {
+                final var schema = ParquetSchemaNode.from(footer.schema);
+
+                for (RowGroup rowGroup : footer.row_groups) {
+                  final var rowGroupReader = new RowGroupReader(rowGroup, schema);
+                  final var columnChunkReader =
+                      rowGroupReader
+                          .getColumnChunkReaderForSchemaPath(byteRangeReader, "some_string")
+                          .orElseThrow();
+                  Assertions.assertFalse(columnChunkReader.mightContainObject("str"));
+                  Assertions.assertTrue(columnChunkReader.mightContainObject("stonks"));
+                  Assertions.assertTrue(
+                      columnChunkReader.mightContainAnyObjects(List.of("str", "stonks")));
+                  Assertions.assertFalse(
+                      columnChunkReader.mightContainAnyObjects(List.of("str", "strut")));
                 }
               })
           .join();
@@ -383,7 +436,8 @@ public class ParquetCompatibilityTests {
       List<Example> rows,
       CompressionCodecName codecName,
       final ParquetProperties.WriterVersion writerVersion,
-      String... dictionaryColumnPaths)
+      List<String> dictionaryColumnPaths,
+      List<String> bloomFilterColumnPaths)
       throws IOException {
     final File tempFile = File.createTempFile("integration-test", ".parquet");
     tempFile.deleteOnExit();
@@ -396,6 +450,9 @@ public class ParquetCompatibilityTests {
             .withWriterVersion(writerVersion);
     for (final String dictionaryColumnPath : dictionaryColumnPaths) {
       writerBuilder.withDictionaryEncoding(dictionaryColumnPath, true);
+    }
+    for (final String bloomFilterColumnPath : bloomFilterColumnPaths) {
+      writerBuilder.withBloomFilterEnabled(bloomFilterColumnPath, true);
     }
 
     try (final var writer = writerBuilder.build()) {
