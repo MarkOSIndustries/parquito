@@ -52,7 +52,13 @@ public interface ByteRangeReader extends AutoCloseable {
       long startByteOffset, int bytesToRetrieve) {
     return readAsBuffer(startByteOffset, bytesToRetrieve)
         .thenApplyAsync(
-            buffer -> new ByteArrayInputStream(buffer.array(), 0, bytesToRetrieve),
+            buffer -> {
+              if (buffer.hasArray()) {
+                return new ByteArrayInputStream(buffer.array(), 0, bytesToRetrieve);
+              } else {
+                return new ByteBufferInputStream(buffer);
+              }
+            },
             Concurrency.DEFAULT_EXECUTOR);
   }
 }
