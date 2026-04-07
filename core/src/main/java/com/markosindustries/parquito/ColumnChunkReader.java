@@ -162,7 +162,7 @@ public class ColumnChunkReader<ReadAs> {
   public boolean mightContainAny(final Collection<ReadAs> values) {
     if (hasRangeStats()
         && (values.stream()
-            .anyMatch(
+            .allMatch(
                 value ->
                     columnType.compare(getStatsMin(), value) > 0
                         || columnType.compare(getStatsMax(), value) < 0))) {
