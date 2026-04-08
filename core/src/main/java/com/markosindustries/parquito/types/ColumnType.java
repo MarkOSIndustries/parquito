@@ -16,7 +16,7 @@ public record ColumnType<ReadAs>(
     return create(
         columnChunkHeader,
         sortingColumnHeader,
-        schema.getChild(columnChunkHeader.meta_data.path_in_schema));
+        schema.getChild(schema.parsePathElements(columnChunkHeader.meta_data.path_in_schema)));
   }
 
   public static ColumnType<?> create(

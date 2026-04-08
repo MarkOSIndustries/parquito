@@ -1,7 +1,5 @@
 package com.markosindustries.parquito;
 
-import java.util.List;
-
 public record RowReadSpec<Repeated, Value, ReadAs>(
     Reader<Repeated, Value> reader, ParquetPredicate<ReadAs> predicate, ColumnSpec columnSpec) {
   public RowReadSpec(Reader<Repeated, Value> reader) {
@@ -16,36 +14,14 @@ public record RowReadSpec<Repeated, Value, ReadAs>(
     this(reader, ParquetPredicates.all(), columnSpec);
   }
 
-  public RowReadSpec<?, ?, ?> forChild(final String child) {
+  public RowReadSpec<?, ?, ?> forChild(final int childFieldId) {
     return new RowReadSpec<>(
-        reader.forChild(child), predicate.forChild(child), columnSpec.forChild(child));
+        reader.forChild(childFieldId),
+        predicate.forChild(childFieldId),
+        columnSpec.forChild(childFieldId));
   }
 
-  public boolean includesChild(final String child) {
-    return predicate.includesChild(child) || columnSpec.includesChild(child);
-  }
-
-  public boolean rowPredicateIncludesPath(final List<String> path) {
-    ParquetPredicate<?> currentPredicate = predicate;
-    for (final String child : path) {
-      if (currentPredicate.includesChild(child)) {
-        currentPredicate = currentPredicate.forChild(child);
-      } else {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  public boolean columnSpecIncludesPath(final List<String> path) {
-    ColumnSpec currentColumnSpec = columnSpec;
-    for (final String child : path) {
-      if (currentColumnSpec.includesChild(child)) {
-        currentColumnSpec = currentColumnSpec.forChild(child);
-      } else {
-        return false;
-      }
-    }
-    return true;
+  public boolean includesChild(final int childFieldId) {
+    return predicate.includesChild(childFieldId) || columnSpec.includesChild(childFieldId);
   }
 }

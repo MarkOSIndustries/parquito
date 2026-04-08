@@ -8,14 +8,20 @@ import java.util.List;
 import java.util.Map;
 
 public class MapReader implements Reader<List<Map<String, Object>>, Map<String, Object>> {
+  private final ParquetSchemaNode parquetSchemaNode;
+
+  public MapReader(final ParquetSchemaNode parquetSchemaNode) {
+    this.parquetSchemaNode = parquetSchemaNode;
+  }
+
   @Override
-  public Reader<?, ?> forChild(final String child) {
+  public Reader<?, ?> forChild(final int childFieldId) {
     return this;
   }
 
   @Override
   public BranchBuilder<Map<String, Object>> branchBuilder() {
-    return new MapBranchBuilder();
+    return new MapBranchBuilder(parquetSchemaNode);
   }
 
   @Override
@@ -25,10 +31,15 @@ public class MapReader implements Reader<List<Map<String, Object>>, Map<String, 
 
   private static class MapBranchBuilder implements BranchBuilder<Map<String, Object>> {
     private final Map<String, Object> map = new HashMap<>();
+    private final ParquetSchemaNode parquetSchemaNode1;
+
+    public MapBranchBuilder(final ParquetSchemaNode parquetSchemaNode) {
+      parquetSchemaNode1 = parquetSchemaNode;
+    }
 
     @Override
-    public void put(final String key, final Object value) {
-      map.put(key, value);
+    public void put(final int fieldId, final Object value) {
+      map.put(parquetSchemaNode1.getChild(fieldId).getElement().name, value);
     }
 
     @Override

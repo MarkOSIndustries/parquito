@@ -10,31 +10,17 @@ import com.markosindustries.parquito.types.ColumnType;
 import java.util.Iterator;
 import java.util.Optional;
 import java.util.OptionalInt;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.apache.parquet.format.FieldRepetitionType;
 import org.apache.parquet.format.RowGroup;
 import org.apache.parquet.format.SortingColumn;
 
 public record RowGroupReader(RowGroup rowGroupHeader, ParquetSchemaNode.Root schemaRoot) {
-
   public <Repeated, Value> Iterator<Value> getRowIterator(
       final RowReadSpec<Repeated, Value, ?> rowReadSpec, final ByteRangeReader byteRangeReader) {
+    final var parquetFieldIterators = makeFieldIterators(rowReadSpec, schemaRoot, byteRangeReader);
     return new RowIterator<>(
-        new OptionalBranchIterator<>(
-            schemaRoot.getChildren().stream()
-                .filter(rowReadSpec::includesChild)
-                .collect(
-                    Collectors.toMap(
-                        child -> child,
-                        child -> {
-                          return iterateField(
-                              rowReadSpec.forChild(child),
-                              schemaRoot.getChild(child),
-                              byteRangeReader);
-                        })),
-            schemaRoot,
-            rowReadSpec));
+        new OptionalBranchIterator<>(parquetFieldIterators, schemaRoot, rowReadSpec));
   }
 
   private <ReadAs, Repeated, Value> ParquetFieldIterator<?> iterateField(
@@ -80,53 +66,43 @@ public record RowGroupReader(RowGroup rowGroupHeader, ParquetSchemaNode.Root sch
         parquetSchema.getRepetitionType() != null
             ? parquetSchema.getRepetitionType()
             : FieldRepetitionType.REQUIRED;
+    final var parquetFieldIterators =
+        makeFieldIterators(rowReadSpec, parquetSchema, byteRangeReader);
     return switch (repetitionType) {
-      case REQUIRED, OPTIONAL -> {
-        yield new OptionalBranchIterator<>(
-            parquetSchema.getChildren().stream()
-                .filter(rowReadSpec::includesChild)
-                .collect(
-                    Collectors.toMap(
-                        child -> child,
-                        child -> {
-                          return iterateField(
-                              rowReadSpec.forChild(child),
-                              parquetSchema.getChild(child),
-                              byteRangeReader);
-                        })),
-            parquetSchema,
-            rowReadSpec);
-      }
-      case REPEATED -> {
-        yield new RepeatedBranchIterator<>(
-            parquetSchema.getChildren().stream()
-                .filter(rowReadSpec::includesChild)
-                .collect(
-                    Collectors.toMap(
-                        child -> child,
-                        child -> {
-                          return iterateField(
-                              rowReadSpec.forChild(child),
-                              parquetSchema.getChild(child),
-                              byteRangeReader);
-                        })),
-            parquetSchema,
-            rowReadSpec);
-      }
+      case REQUIRED, OPTIONAL ->
+          new OptionalBranchIterator<>(parquetFieldIterators, parquetSchema, rowReadSpec);
+      case REPEATED ->
+          new RepeatedBranchIterator<>(parquetFieldIterators, parquetSchema, rowReadSpec);
     };
   }
 
+  private <Repeated, Value> SparseArrayIndexMap<ParquetFieldIterator<?>> makeFieldIterators(
+      final RowReadSpec<Repeated, Value, ?> rowReadSpec,
+      final ParquetSchemaNode parquetSchema,
+      final ByteRangeReader byteRangeReader) {
+    return SparseArrayIndexMap.from(
+        parquetSchema.getChildFieldIds(),
+        rowReadSpec::includesChild,
+        childFieldId -> childFieldId,
+        childFieldId ->
+            iterateField(
+                rowReadSpec.forChild(childFieldId),
+                parquetSchema.getChild(childFieldId),
+                byteRangeReader),
+        ParquetFieldIterator<?>[]::new);
+  }
+
   public Optional<? extends ColumnChunkReader<?>> getColumnChunkReaderForSchemaPath(
-      final ByteRangeReader byteRangeReader, final String... schemaPath) {
+      final ByteRangeReader byteRangeReader, final ParquetSchemaPath parquetSchemaPath) {
     return getColumnChunkReaderForSchemaPath(
-        byteRangeReader, schemaRoot.getChild(schemaPath), schemaPath);
+        byteRangeReader, schemaRoot.getChild(parquetSchemaPath), parquetSchemaPath);
   }
 
   private Optional<? extends ColumnChunkReader<?>> getColumnChunkReaderForSchemaPath(
       final ByteRangeReader byteRangeReader,
       final ParquetSchemaNode columnSchema,
-      final String... schemaPath) {
-    return getColumnChunkIndexForSchemaPath(schemaPath).stream()
+      final ParquetSchemaPath parquetSchemaPath) {
+    return getColumnChunkIndexForSchemaPath(parquetSchemaPath).stream()
         .mapToObj(
             columnChunkIndex ->
                 ColumnChunkReader.create(
@@ -134,14 +110,14 @@ public record RowGroupReader(RowGroup rowGroupHeader, ParquetSchemaNode.Root sch
         .findAny();
   }
 
-  public OptionalInt getColumnChunkIndexForSchemaPath(final String... schemaPath) {
+  public OptionalInt getColumnChunkIndexForSchemaPath(final ParquetSchemaPath parquetSchemaPath) {
     var matchingIndices =
         IntStream.range(0, rowGroupHeader.columns.size())
             .filter(
                 index ->
                     rowGroupHeader.columns.get(index).meta_data.path_in_schema.size()
-                        == schemaPath.length);
-    for (int i = 0; i < schemaPath.length; i++) {
+                        == parquetSchemaPath.path.length);
+    for (int i = 0; i < parquetSchemaPath.path.length; i++) {
       final var pathElementIndex = i;
       matchingIndices =
           matchingIndices.filter(
@@ -152,13 +128,14 @@ public record RowGroupReader(RowGroup rowGroupHeader, ParquetSchemaNode.Root sch
                       .meta_data
                       .path_in_schema
                       .get(pathElementIndex)
-                      .equals(schemaPath[pathElementIndex]));
+                      .equals(parquetSchemaPath.path[pathElementIndex].name));
     }
     return matchingIndices.findAny();
   }
 
-  public Optional<? extends ColumnType<?>> getColumnType(final String... schemaPath) {
-    return getColumnChunkIndexForSchemaPath(schemaPath).stream()
+  public Optional<? extends ColumnType<?>> getColumnType(
+      final ParquetSchemaPath parquetSchemaPath) {
+    return getColumnChunkIndexForSchemaPath(parquetSchemaPath).stream()
         .mapToObj(
             columnChunkIndex -> {
               final var columnChunkHeader = rowGroupHeader.columns.get(columnChunkIndex);
@@ -167,7 +144,7 @@ public record RowGroupReader(RowGroup rowGroupHeader, ParquetSchemaNode.Root sch
                       ? rowGroupHeader.sorting_columns.get(columnChunkIndex)
                       : new SortingColumn(columnChunkIndex, false, true);
               return ColumnType.create(
-                  columnChunkHeader, columnChunkSorting, schemaRoot.getChild(schemaPath));
+                  columnChunkHeader, columnChunkSorting, schemaRoot.getChild(parquetSchemaPath));
             })
         .findAny();
   }

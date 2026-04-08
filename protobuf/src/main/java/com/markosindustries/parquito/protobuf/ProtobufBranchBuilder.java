@@ -3,26 +3,27 @@ package com.markosindustries.parquito.protobuf;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.Message;
+import com.markosindustries.parquito.SparseArrayIndexMap;
 import com.markosindustries.parquito.rows.BranchBuilder;
 import java.nio.ByteBuffer;
-import java.util.Map;
 
 class ProtobufBranchBuilder<M extends Message> implements BranchBuilder<M> {
   private final Message.Builder builder;
-  private final Map<String, Descriptors.FieldDescriptor> fields;
+  private final SparseArrayIndexMap<Descriptors.FieldDescriptor> fields;
 
   public ProtobufBranchBuilder(
-      final Message.Builder builder, final Map<String, Descriptors.FieldDescriptor> fields) {
+      final Message.Builder builder,
+      final SparseArrayIndexMap<Descriptors.FieldDescriptor> fields) {
     this.builder = builder;
     this.fields = fields;
   }
 
   @Override
-  public void put(final String key, final Object value) {
+  public void put(final int childFieldId, final Object value) {
     if (value == null) {
       return;
     }
-    final var field = fields.get(key);
+    final var field = fields.get(childFieldId);
     Object pbExpectedValue = mapToProtobuf(field, value);
     builder.setField(field, pbExpectedValue);
   }

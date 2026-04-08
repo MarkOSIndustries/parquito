@@ -58,7 +58,7 @@ public class ParquetCompatibilityTests {
                   final var rowGroupReader = new RowGroupReader(rowGroup, schema);
                   final var rowIterator =
                       rowGroupReader.getRowIterator(
-                          new RowReadSpec<>(new MapReader()), byteRangeReader);
+                          new RowReadSpec<>(new MapReader(schema)), byteRangeReader);
                   var rows = 0;
                   while (rowIterator.hasNext()) {
                     final var next = rowIterator.next();
@@ -95,12 +95,12 @@ public class ParquetCompatibilityTests {
                   final var rowGroupReader = new RowGroupReader(rowGroup, schema);
                   final var rowIterator =
                       rowGroupReader.getRowIterator(
-                          new RowReadSpec<>(new JSONReader()), byteRangeReader);
+                          new RowReadSpec<>(new JSONReader(schema)), byteRangeReader);
                   var rows = 0;
                   while (rowIterator.hasNext()) {
                     final JSONObject next = rowIterator.next();
                     Assertions.assertEquals(
-                        "{\"some_map\":[],\"some_repeated\":[],\"some_string\":\"\"}",
+                        "{\"some_string\":\"\",\"some_repeated\":[],\"some_map\":[]}",
                         next.toString());
                     rows++;
                   }
@@ -191,13 +191,13 @@ public class ParquetCompatibilityTests {
           .thenAccept(
               footer -> {
                 final var schema = ParquetSchemaNode.from(footer.schema);
+                final var rowReadSpec =
+                    new RowReadSpec<>(new ProtobufReader<Example>(Example::newBuilder, schema));
                 for (RowGroup rowGroup : footer.row_groups) {
                   final var rowGroupReader = new RowGroupReader(rowGroup, schema);
 
                   final var rowIterator =
-                      rowGroupReader.getRowIterator(
-                          new RowReadSpec<>(new ProtobufReader<Example>(Example::newBuilder)),
-                          byteRangeReader);
+                      rowGroupReader.getRowIterator(rowReadSpec, byteRangeReader);
                   var rows = 0;
                   while (rowIterator.hasNext()) {
                     final Example next = rowIterator.next();
@@ -304,15 +304,16 @@ public class ParquetCompatibilityTests {
                   final var rowIterator =
                       rowGroupReader.getRowIterator(
                           new RowReadSpec<>(
-                              new ProtobufReader<Example>(Example::newBuilder),
+                              new ProtobufReader<Example>(Example::newBuilder, schema),
                               ParquetPredicates.intersection(
                                   ParquetPredicates.equals(
                                       rowGroupReader,
                                       Integer.MAX_VALUE - 974456,
-                                      "some_child",
-                                      "some_int32"),
+                                      schema.parsePathElements("some_child", "some_int32")),
                                   ParquetPredicates.greaterThan(
-                                      rowGroupReader, "str", "some_child", "some_string"))),
+                                      rowGroupReader,
+                                      "str",
+                                      schema.parsePathElements("some_child", "some_string")))),
                           byteRangeReader);
                   var rows = 0;
                   while (rowIterator.hasNext()) {
@@ -348,7 +349,8 @@ public class ParquetCompatibilityTests {
                   final var rowGroupReader = new RowGroupReader(rowGroup, schema);
                   final var columnChunkReader =
                       rowGroupReader
-                          .getColumnChunkReaderForSchemaPath(byteRangeReader, "some_string")
+                          .getColumnChunkReaderForSchemaPath(
+                              byteRangeReader, schema.parseDotSeparatedPath("some_string"))
                           .orElseThrow();
                   Assertions.assertTrue(columnChunkReader.mightContainObject("str"));
                   Assertions.assertFalse(columnChunkReader.mightContainObject("slab"));
@@ -381,7 +383,8 @@ public class ParquetCompatibilityTests {
                   final var rowGroupReader = new RowGroupReader(rowGroup, schema);
                   final var columnChunkReader =
                       rowGroupReader
-                          .getColumnChunkReaderForSchemaPath(byteRangeReader, "some_string")
+                          .getColumnChunkReaderForSchemaPath(
+                              byteRangeReader, schema.parseDotSeparatedPath("some_string"))
                           .orElseThrow();
                   Assertions.assertFalse(columnChunkReader.mightContainObject("str"));
                   Assertions.assertTrue(columnChunkReader.mightContainObject("stonks"));
@@ -418,7 +421,8 @@ public class ParquetCompatibilityTests {
                   final var rowGroupReader = new RowGroupReader(rowGroup, schema);
                   final var columnChunkReader =
                       rowGroupReader
-                          .getColumnChunkReaderForSchemaPath(byteRangeReader, "some_string")
+                          .getColumnChunkReaderForSchemaPath(
+                              byteRangeReader, schema.parseDotSeparatedPath("some_string"))
                           .orElseThrow();
                   Assertions.assertFalse(columnChunkReader.mightContainObject("str"));
                   Assertions.assertTrue(columnChunkReader.mightContainObject("stonks"));

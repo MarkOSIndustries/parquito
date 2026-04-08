@@ -1,7 +1,7 @@
 package com.markosindustries.parquito;
 
 public interface ColumnSpec {
-  boolean includesChild(String child);
+  boolean includesChild(int childFieldId);
 
-  ColumnSpec forChild(String child);
+  ColumnSpec forChild(int childFieldId);
 }

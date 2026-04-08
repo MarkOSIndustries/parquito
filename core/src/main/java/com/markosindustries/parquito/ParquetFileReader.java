@@ -1,13 +1,13 @@
 package com.markosindustries.parquito;
 
-import org.apache.parquet.format.FileMetaData;
-
-public class ParquetFileReader {
-  private final FileMetaData footer;
+public class ParquetFileReader<ReadAs, Value, Repeated> {
   private final ParquetSchemaNode.Root schemaRoot;
+  private final RowReadSpec<Repeated, Value, ReadAs> rowReadSpec;
 
-  public ParquetFileReader(FileMetaData footer) {
-    this.footer = footer;
-    this.schemaRoot = ParquetSchemaNode.from(footer.schema);
+  public ParquetFileReader(
+      final ParquetSchemaNode.Root schemaRoot,
+      final RowReadSpec<Repeated, Value, ReadAs> rowReadSpec) {
+    this.schemaRoot = schemaRoot;
+    this.rowReadSpec = rowReadSpec;
   }
 }

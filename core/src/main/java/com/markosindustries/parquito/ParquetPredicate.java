@@ -4,19 +4,17 @@ import static com.markosindustries.parquito.ParquetPredicates.all;
 
 import com.markosindustries.parquito.types.ColumnType;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
+import java.util.BitSet;
+import java.util.function.IntPredicate;
 
 public interface ParquetPredicate<ReadAs> {
-  Set<String> includedChildren();
+  BitSet includedChildren();
 
-  default boolean includesChild(final String child) {
-    return includedChildren().contains(child);
+  default boolean includesChild(final int childFieldId) {
+    return includedChildren().get(childFieldId);
   }
 
-  ParquetPredicate<?> forChild(final String child);
+  ParquetPredicate<?> forChild(final int childFieldId);
 
   default boolean objectMatches(final Object value) {
     //noinspection unchecked
@@ -25,21 +23,23 @@ public interface ParquetPredicate<ReadAs> {
 
   boolean valueMatches(final ReadAs value);
 
-  boolean branchMatches(final Function<String, Boolean> childMatchesNextRow);
+  boolean branchMatches(final IntPredicate childMatchesNextRow);
 
   class All<ReadAs> implements ParquetPredicate<ReadAs> {
+    private static final BitSet EMPTY_BITSET = new BitSet();
+
     @Override
-    public Set<String> includedChildren() {
-      return Collections.emptySet();
+    public BitSet includedChildren() {
+      return EMPTY_BITSET;
     }
 
     @Override
-    public boolean includesChild(final String child) {
+    public boolean includesChild(final int childFieldId) {
       return false;
     }
 
     @Override
-    public ParquetPredicate<?> forChild(final String child) {
+    public ParquetPredicate<?> forChild(final int childFieldId) {
       return this;
     }
 
@@ -49,34 +49,34 @@ public interface ParquetPredicate<ReadAs> {
     }
 
     @Override
-    public boolean branchMatches(final Function<String, Boolean> childMatchesNextRow) {
+    public boolean branchMatches(final IntPredicate childMatchesNextRow) {
       return true;
     }
   }
 
   class Union implements ParquetPredicate<Object> {
     private final ParquetPredicate<?>[] predicates;
-    private final Set<String> includedChildren;
+    private final BitSet includedChildren;
 
     public Union(ParquetPredicate<?>... predicates) {
       this.predicates = predicates;
-      this.includedChildren =
-          Arrays.stream(predicates)
-              .flatMap(p -> p.includedChildren().stream())
-              .collect(Collectors.toUnmodifiableSet());
+      this.includedChildren = new BitSet();
+      for (final var predicate : predicates) {
+        includedChildren.or(predicate.includedChildren());
+      }
     }
 
     @Override
-    public Set<String> includedChildren() {
+    public BitSet includedChildren() {
       return includedChildren;
     }
 
     @Override
-    public ParquetPredicate<?> forChild(final String child) {
+    public ParquetPredicate<?> forChild(final int childFieldId) {
       final var childPredicates =
           Arrays.stream(predicates)
-              .filter(predicates -> predicates.includesChild(child))
-              .map(predicates -> predicates.forChild(child))
+              .filter(predicate -> predicate.includesChild(childFieldId))
+              .map(predicate -> predicate.forChild(childFieldId))
               .toArray(ParquetPredicate[]::new);
       if (childPredicates.length > 0) {
         return new Union(childPredicates);
@@ -95,39 +95,34 @@ public interface ParquetPredicate<ReadAs> {
     }
 
     @Override
-    public boolean branchMatches(final Function<String, Boolean> childMatchesNextRow) {
-      for (final String child : includedChildren) {
-        if (childMatchesNextRow.apply(child)) {
-          return true;
-        }
-      }
-      return includedChildren.isEmpty();
+    public boolean branchMatches(final IntPredicate childMatchesNextRow) {
+      return includedChildren.stream().anyMatch(childMatchesNextRow) || includedChildren.isEmpty();
     }
   }
 
   class Intersection implements ParquetPredicate<Object> {
     private final ParquetPredicate<?>[] predicates;
-    private final Set<String> includedChildren;
+    private final BitSet includedChildren;
 
     public Intersection(ParquetPredicate<?>... predicates) {
       this.predicates = predicates;
-      this.includedChildren =
-          Arrays.stream(predicates)
-              .flatMap(p -> p.includedChildren().stream())
-              .collect(Collectors.toUnmodifiableSet());
+      this.includedChildren = new BitSet();
+      for (final var predicate : predicates) {
+        includedChildren.or(predicate.includedChildren());
+      }
     }
 
     @Override
-    public Set<String> includedChildren() {
+    public BitSet includedChildren() {
       return includedChildren;
     }
 
     @Override
-    public ParquetPredicate<?> forChild(final String child) {
+    public ParquetPredicate<?> forChild(final int childFieldId) {
       final var childPredicates =
           Arrays.stream(predicates)
-              .filter(predicates -> predicates.includesChild(child))
-              .map(predicates -> predicates.forChild(child))
+              .filter(predicate -> predicate.includesChild(childFieldId))
+              .map(predicate -> predicate.forChild(childFieldId))
               .toArray(ParquetPredicate[]::new);
       if (childPredicates.length > 0) {
         return new Intersection(childPredicates);
@@ -146,13 +141,8 @@ public interface ParquetPredicate<ReadAs> {
     }
 
     @Override
-    public boolean branchMatches(final Function<String, Boolean> childMatchesNextRow) {
-      for (final String child : includedChildren) {
-        if (!childMatchesNextRow.apply(child)) {
-          return false;
-        }
-      }
-      return true;
+    public boolean branchMatches(final IntPredicate childMatchesNextRow) {
+      return includedChildren.stream().allMatch(childMatchesNextRow);
     }
   }
 
@@ -161,40 +151,46 @@ public interface ParquetPredicate<ReadAs> {
     private final LeafConstructor<ReadAs, L> constructor;
     private final ReadAs comparator;
     private final int offset;
-    private final String[] path;
-    private final Set<String> includedChildren;
+    private final ParquetSchemaPath schemaPath;
+    private final BitSet includedChildren;
 
     @FunctionalInterface
     interface LeafConstructor<ReadAs, L> {
-      L construct(ReadAs comparator, ColumnType<ReadAs> columnType, String[] path, int offset);
+      L construct(
+          final ReadAs comparator,
+          final ColumnType<ReadAs> columnType,
+          final ParquetSchemaPath schemaPath,
+          final int offset);
     }
 
-    protected Leaf(
-        LeafConstructor<ReadAs, L> constructor,
-        ReadAs comparator,
-        ColumnType<ReadAs> columnType,
-        String[] path,
-        int offset) {
+    Leaf(
+        final LeafConstructor<ReadAs, L> constructor,
+        final ReadAs comparator,
+        final ColumnType<ReadAs> columnType,
+        final ParquetSchemaPath schemaPath,
+        final int offset) {
       this.constructor = constructor;
       this.comparator = comparator;
       this.columnType = columnType;
       this.offset = offset;
-      this.path = path;
-      this.includedChildren =
-          path.length > offset ? Collections.singleton(path[offset]) : Collections.emptySet();
+      this.schemaPath = schemaPath;
+      this.includedChildren = new BitSet();
+      if (schemaPath.path.length > offset) {
+        includedChildren.set(schemaPath.path[offset].field_id);
+      }
     }
 
-    public Set<String> includedChildren() {
+    public BitSet includedChildren() {
       return includedChildren;
     }
 
     @Override
-    public ParquetPredicate<?> forChild(final String child) {
-      if (!includesChild(child)) {
+    public ParquetPredicate<?> forChild(final int childFieldId) {
+      if (!includesChild(childFieldId)) {
         return all();
       }
-      if (path.length > offset) {
-        return constructor.construct(comparator, columnType, path, offset + 1);
+      if (schemaPath.path.length > offset) {
+        return constructor.construct(comparator, columnType, schemaPath, offset + 1);
       }
 
       return all();
@@ -205,9 +201,9 @@ public interface ParquetPredicate<ReadAs> {
     }
 
     @Override
-    public boolean branchMatches(final Function<String, Boolean> childMatchesNextRow) {
-      if (path.length > offset) {
-        return childMatchesNextRow.apply(path[offset]);
+    public boolean branchMatches(final IntPredicate childMatchesNextRow) {
+      if (schemaPath.path.length > offset) {
+        return childMatchesNextRow.test(schemaPath.path[offset].field_id);
       }
       return true;
     }
@@ -215,8 +211,11 @@ public interface ParquetPredicate<ReadAs> {
 
   class Equals<ReadAs> extends Leaf<ReadAs, Equals<ReadAs>> {
     public Equals(
-        final ReadAs comparator, final ColumnType<ReadAs> columnType, String[] path, int offset) {
-      super(Equals::new, comparator, columnType, path, offset);
+        final ReadAs comparator,
+        final ColumnType<ReadAs> columnType,
+        ParquetSchemaPath schemaPath,
+        int offset) {
+      super(Equals::new, comparator, columnType, schemaPath, offset);
     }
 
     @Override
@@ -227,8 +226,11 @@ public interface ParquetPredicate<ReadAs> {
 
   class GreaterThan<ReadAs> extends Leaf<ReadAs, GreaterThan<ReadAs>> {
     public GreaterThan(
-        final ReadAs comparator, final ColumnType<ReadAs> columnType, String[] path, int offset) {
-      super(GreaterThan::new, comparator, columnType, path, offset);
+        final ReadAs comparator,
+        final ColumnType<ReadAs> columnType,
+        ParquetSchemaPath schemaPath,
+        int offset) {
+      super(GreaterThan::new, comparator, columnType, schemaPath, offset);
     }
 
     @Override
@@ -239,8 +241,11 @@ public interface ParquetPredicate<ReadAs> {
 
   class GreaterThanOrEqual<ReadAs> extends Leaf<ReadAs, GreaterThanOrEqual<ReadAs>> {
     public GreaterThanOrEqual(
-        final ReadAs comparator, final ColumnType<ReadAs> columnType, String[] path, int offset) {
-      super(GreaterThanOrEqual::new, comparator, columnType, path, offset);
+        final ReadAs comparator,
+        final ColumnType<ReadAs> columnType,
+        ParquetSchemaPath schemaPath,
+        int offset) {
+      super(GreaterThanOrEqual::new, comparator, columnType, schemaPath, offset);
     }
 
     @Override
@@ -251,8 +256,11 @@ public interface ParquetPredicate<ReadAs> {
 
   class LessThan<ReadAs> extends Leaf<ReadAs, LessThan<ReadAs>> {
     public LessThan(
-        final ReadAs comparator, final ColumnType<ReadAs> columnType, String[] path, int offset) {
-      super(LessThan::new, comparator, columnType, path, offset);
+        final ReadAs comparator,
+        final ColumnType<ReadAs> columnType,
+        ParquetSchemaPath schemaPath,
+        int offset) {
+      super(LessThan::new, comparator, columnType, schemaPath, offset);
     }
 
     @Override
@@ -263,8 +271,11 @@ public interface ParquetPredicate<ReadAs> {
 
   class LessThanOrEqual<ReadAs> extends Leaf<ReadAs, LessThanOrEqual<ReadAs>> {
     public LessThanOrEqual(
-        final ReadAs comparator, final ColumnType<ReadAs> columnType, String[] path, int offset) {
-      super(LessThanOrEqual::new, comparator, columnType, path, offset);
+        final ReadAs comparator,
+        final ColumnType<ReadAs> columnType,
+        ParquetSchemaPath schemaPath,
+        int offset) {
+      super(LessThanOrEqual::new, comparator, columnType, schemaPath, offset);
     }
 
     @Override

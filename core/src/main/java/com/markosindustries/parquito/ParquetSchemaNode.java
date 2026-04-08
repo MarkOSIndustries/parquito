@@ -15,6 +15,8 @@ public class ParquetSchemaNode {
   private final ParquetSchemaNode parent;
   private final SchemaElement element;
   private final Map<String, ParquetSchemaNode> childrenByName;
+  private final SparseArrayIndexMap<ParquetSchemaNode> childrenByFieldId;
+  private final Set<Integer> childFieldIds;
   private final int nodeCount;
   private final int repetitionLevelMax;
   private final int definitionLevelMax;
@@ -27,6 +29,18 @@ public class ParquetSchemaNode {
         final int repetitionLevelMax,
         final int definitionLevelMax) {
       super(null, element, remainder, repetitionLevelMax, definitionLevelMax);
+    }
+
+    public ParquetSchemaPath parsePathElements(List<String> path) {
+      return ParquetSchemaPath.parsePathElements(this, path);
+    }
+
+    public ParquetSchemaPath parsePathElements(String... path) {
+      return ParquetSchemaPath.parsePathElements(this, path);
+    }
+
+    public ParquetSchemaPath parseDotSeparatedPath(String dotSeparatedPath) {
+      return ParquetSchemaPath.parseDotSeparatedPath(this, dotSeparatedPath);
     }
   }
 
@@ -75,7 +89,7 @@ public class ParquetSchemaNode {
       final var nextChild =
           new ParquetSchemaNode(
               this,
-              remaining.get(0),
+              remaining.getFirst(),
               remaining.subList(1, remaining.size()),
               this.repetitionLevelMax,
               this.definitionLevelMax);
@@ -85,6 +99,10 @@ public class ParquetSchemaNode {
     this.childrenByName =
         children.stream()
             .collect(Collectors.toUnmodifiableMap(c -> c.element.name, Function.identity()));
+    this.childrenByFieldId =
+        SparseArrayIndexMap.from(children, c -> c.element.field_id, ParquetSchemaNode[]::new);
+    this.childFieldIds =
+        children.stream().map(c -> c.element.field_id).collect(Collectors.toUnmodifiableSet());
     this.nodeCount = 1 + children.stream().mapToInt(child -> child.nodeCount).sum();
   }
 
@@ -92,34 +110,34 @@ public class ParquetSchemaNode {
     return element;
   }
 
-  public String[] getPath() {
-    final var path = new ArrayList<>();
+  public ParquetSchemaPath getPath() {
+    final var path = new ArrayList<SchemaElement>();
     ParquetSchemaNode current = this;
     while (!(current instanceof Root)) {
-      path.add(0, current.element.name);
+      path.addFirst(current.element);
       current = current.parent;
     }
-    return path.toArray(String[]::new);
+    return new ParquetSchemaPath(path.toArray(SchemaElement[]::new));
   }
 
-  public ParquetSchemaNode getChild(Iterable<String> schemaPath) {
+  public ParquetSchemaNode getChildByName(String name) {
+    return this.childrenByName.get(name);
+  }
+
+  public ParquetSchemaNode getChild(int childFieldId) {
+    return this.childrenByFieldId.get(childFieldId);
+  }
+
+  public ParquetSchemaNode getChild(final ParquetSchemaPath parquetSchemaPath) {
     var current = this;
-    for (final String name : schemaPath) {
-      current = current.childrenByName.get(name);
+    for (final var element : parquetSchemaPath.path) {
+      current = current.childrenByFieldId.get(element.field_id);
     }
     return current;
   }
 
-  public ParquetSchemaNode getChild(String... schemaPath) {
-    var current = this;
-    for (final String name : schemaPath) {
-      current = current.childrenByName.get(name);
-    }
-    return current;
-  }
-
-  public Set<String> getChildren() {
-    return childrenByName.keySet();
+  public Set<Integer> getChildFieldIds() {
+    return childFieldIds;
   }
 
   public int getRepetitionLevelMax() {
@@ -130,20 +148,20 @@ public class ParquetSchemaNode {
     return definitionLevelMax;
   }
 
-  public FieldRepetitionType getRepetitionType(String... schemaPath) {
-    return getChild(schemaPath).element.repetition_type;
+  public FieldRepetitionType getRepetitionType() {
+    return element.repetition_type;
   }
 
-  public ConvertedType getConvertedType(String... schemaPath) {
-    return getChild(schemaPath).element.converted_type;
+  public ConvertedType getConvertedType() {
+    return element.converted_type;
   }
 
-  public LogicalType getLogicalType(String... schemaPath) {
-    return getChild(schemaPath).element.logicalType;
+  public LogicalType getLogicalType() {
+    return element.logicalType;
   }
 
-  public int getTypeLength(String... schemaPath) {
-    return getChild(schemaPath).element.type_length;
+  public int getTypeLength() {
+    return element.type_length;
   }
 
   //
@@ -167,8 +185,9 @@ public class ParquetSchemaNode {
     return "ParquetSchema{"
         + "element="
         + element
-        + ", childrenByName="
-        + childrenByName.values().stream()
+        + ", childrenByFieldId="
+        + childrenByFieldId
+            .valuesStream()
             .map(ParquetSchemaNode::toString)
             .collect(Collectors.joining(", ", "[", "]"))
         + ", nodeCount="

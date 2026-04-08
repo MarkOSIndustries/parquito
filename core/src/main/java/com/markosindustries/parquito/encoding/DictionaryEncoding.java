@@ -6,9 +6,7 @@ import com.markosindustries.parquito.page.PredicateMatcher;
 import com.markosindustries.parquito.page.Values;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
+import java.util.BitSet;
 
 public class DictionaryEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
   @Override
@@ -32,17 +30,23 @@ public class DictionaryEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
 
       @Override
       public PredicateMatcher matcher(final ParquetPredicate<ReadAs> predicate) {
+        if (predicate instanceof ParquetPredicate.All<ReadAs>) {
+          return index -> true;
+        }
+
         final var dictionaryPage = columnChunkReader.getDictionaryPage();
         final var dictionaryPageValues = dictionaryPage.getValues();
-        final Set<Integer> matchingDictionaryIndices =
-            IntStream.range(0, dictionaryPage.getTotalValues())
-                .filter(
-                    dictionaryIndex ->
-                        predicate.valueMatches(dictionaryPageValues.get(dictionaryIndex)))
-                .boxed()
-                .collect(Collectors.toSet());
 
-        return index -> matchingDictionaryIndices.contains(dictionaryIndices[index]);
+        final var matchingDictionaryIndices = new BitSet(dictionaryPage.getTotalValues());
+        for (var dictionaryIndex = 0;
+            dictionaryIndex < dictionaryPage.getTotalValues();
+            dictionaryIndex++) {
+          if (predicate.valueMatches(dictionaryPageValues.get(dictionaryIndex))) {
+            matchingDictionaryIndices.set(dictionaryIndex);
+          }
+        }
+
+        return index -> matchingDictionaryIndices.get(dictionaryIndices[index]);
       }
     };
   }
