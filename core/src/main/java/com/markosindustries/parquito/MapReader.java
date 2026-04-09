@@ -15,7 +15,7 @@ public class MapReader implements Reader<List<Map<String, Object>>, Map<String, 
   }
 
   @Override
-  public Reader<?, ?> forChild(final int childFieldId) {
+  public Reader<?, ?> forChild(final int childFieldIndex) {
     return this;
   }
 
@@ -38,8 +38,8 @@ public class MapReader implements Reader<List<Map<String, Object>>, Map<String, 
     }
 
     @Override
-    public void put(final int fieldId, final Object value) {
-      map.put(parquetSchemaNode1.getChild(fieldId).getElement().name, value);
+    public void put(final int fieldIndex, final Object value) {
+      map.put(parquetSchemaNode1.getChildAtIndex(fieldIndex).getElement().name, value);
     }
 
     @Override

@@ -10,11 +10,11 @@ import java.util.function.IntPredicate;
 public interface ParquetPredicate<ReadAs> {
   BitSet includedChildren();
 
-  default boolean includesChild(final int childFieldId) {
-    return includedChildren().get(childFieldId);
+  default boolean includesChild(final int childFieldIndex) {
+    return includedChildren().get(childFieldIndex);
   }
 
-  ParquetPredicate<?> forChild(final int childFieldId);
+  ParquetPredicate<?> forChild(final int childFieldIndex);
 
   default boolean objectMatches(final Object value) {
     //noinspection unchecked
@@ -34,12 +34,12 @@ public interface ParquetPredicate<ReadAs> {
     }
 
     @Override
-    public boolean includesChild(final int childFieldId) {
+    public boolean includesChild(final int childFieldIndex) {
       return false;
     }
 
     @Override
-    public ParquetPredicate<?> forChild(final int childFieldId) {
+    public ParquetPredicate<?> forChild(final int childFieldIndex) {
       return this;
     }
 
@@ -72,11 +72,11 @@ public interface ParquetPredicate<ReadAs> {
     }
 
     @Override
-    public ParquetPredicate<?> forChild(final int childFieldId) {
+    public ParquetPredicate<?> forChild(final int childFieldIndex) {
       final var childPredicates =
           Arrays.stream(predicates)
-              .filter(predicate -> predicate.includesChild(childFieldId))
-              .map(predicate -> predicate.forChild(childFieldId))
+              .filter(predicate -> predicate.includesChild(childFieldIndex))
+              .map(predicate -> predicate.forChild(childFieldIndex))
               .toArray(ParquetPredicate[]::new);
       if (childPredicates.length > 0) {
         return new Union(childPredicates);
@@ -118,11 +118,11 @@ public interface ParquetPredicate<ReadAs> {
     }
 
     @Override
-    public ParquetPredicate<?> forChild(final int childFieldId) {
+    public ParquetPredicate<?> forChild(final int childFieldIndex) {
       final var childPredicates =
           Arrays.stream(predicates)
-              .filter(predicate -> predicate.includesChild(childFieldId))
-              .map(predicate -> predicate.forChild(childFieldId))
+              .filter(predicate -> predicate.includesChild(childFieldIndex))
+              .map(predicate -> predicate.forChild(childFieldIndex))
               .toArray(ParquetPredicate[]::new);
       if (childPredicates.length > 0) {
         return new Intersection(childPredicates);
@@ -176,7 +176,7 @@ public interface ParquetPredicate<ReadAs> {
       this.schemaPath = schemaPath;
       this.includedChildren = new BitSet();
       if (schemaPath.path.length > offset) {
-        includedChildren.set(schemaPath.path[offset].field_id);
+        includedChildren.set(schemaPath.pathAsFieldIndices[offset]);
       }
     }
 
@@ -185,8 +185,8 @@ public interface ParquetPredicate<ReadAs> {
     }
 
     @Override
-    public ParquetPredicate<?> forChild(final int childFieldId) {
-      if (!includesChild(childFieldId)) {
+    public ParquetPredicate<?> forChild(final int childFieldIndex) {
+      if (!includesChild(childFieldIndex)) {
         return all();
       }
       if (schemaPath.path.length > offset) {
@@ -203,7 +203,7 @@ public interface ParquetPredicate<ReadAs> {
     @Override
     public boolean branchMatches(final IntPredicate childMatchesNextRow) {
       if (schemaPath.path.length > offset) {
-        return childMatchesNextRow.test(schemaPath.path[offset].field_id);
+        return childMatchesNextRow.test(schemaPath.pathAsFieldIndices[offset]);
       }
       return true;
     }

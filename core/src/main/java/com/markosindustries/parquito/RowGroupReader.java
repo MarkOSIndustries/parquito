@@ -76,20 +76,20 @@ public record RowGroupReader(RowGroup rowGroupHeader, ParquetSchemaNode.Root sch
     };
   }
 
-  private <Repeated, Value> SparseArrayIndexMap<ParquetFieldIterator<?>> makeFieldIterators(
+  private <Repeated, Value> ParquetFieldIterator<?>[] makeFieldIterators(
       final RowReadSpec<Repeated, Value, ?> rowReadSpec,
       final ParquetSchemaNode parquetSchema,
       final ByteRangeReader byteRangeReader) {
-    return SparseArrayIndexMap.from(
-        parquetSchema.getChildFieldIds(),
-        rowReadSpec::includesChild,
-        childFieldId -> childFieldId,
-        childFieldId ->
-            iterateField(
-                rowReadSpec.forChild(childFieldId),
-                parquetSchema.getChild(childFieldId),
-                byteRangeReader),
-        ParquetFieldIterator<?>[]::new);
+    final var iterators = new ParquetFieldIterator<?>[parquetSchema.getChildren().length];
+    for (var index = 0; index < parquetSchema.getChildren().length; index++) {
+      if (!rowReadSpec.includesChild(index)) {
+        continue;
+      }
+      iterators[index] =
+          iterateField(
+              rowReadSpec.forChild(index), parquetSchema.getChildAtIndex(index), byteRangeReader);
+    }
+    return iterators;
   }
 
   public Optional<? extends ColumnChunkReader<?>> getColumnChunkReaderForSchemaPath(

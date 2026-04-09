@@ -2,11 +2,9 @@ package com.markosindustries.parquito.rows;
 
 import com.markosindustries.parquito.ParquetSchemaNode;
 import com.markosindustries.parquito.RowReadSpec;
-import com.markosindustries.parquito.SparseArrayIndexMap;
-import java.util.Iterator;
 
 public class OptionalBranchIterator<Branch> implements ParquetFieldIterator<Branch> {
-  private final SparseArrayIndexMap<ParquetFieldIterator<?>> childIterators;
+  private final ParquetFieldIterator<?>[] childIterators;
   private final ParquetSchemaNode schemaNode;
   private final RowReadSpec<?, Branch, ?> rowReadSpec;
   private boolean hasNext;
@@ -14,28 +12,19 @@ public class OptionalBranchIterator<Branch> implements ParquetFieldIterator<Bran
   private int repetitionLevel;
 
   public OptionalBranchIterator(
-      final SparseArrayIndexMap<ParquetFieldIterator<?>> childIterators,
+      final ParquetFieldIterator<?>[] childIterators,
       final ParquetSchemaNode schemaNode,
       final RowReadSpec<?, Branch, ?> rowReadSpec) {
     this.childIterators = childIterators;
     this.schemaNode = schemaNode;
-    this.hasNext = childIterators.valuesStream().anyMatch(Iterator::hasNext);
-    this.definitionLevel =
-        hasNext
-            ? childIterators
-                .valuesStream()
-                .mapToInt(ParquetFieldIterator::peekDefinitionLevel)
-                .max()
-                .orElseThrow()
-            : 0;
-    this.repetitionLevel =
-        hasNext
-            ? childIterators
-                .valuesStream()
-                .mapToInt(ParquetFieldIterator::peekRepetitionLevel)
-                .max()
-                .orElseThrow()
-            : 0;
+    this.hasNext = false;
+    this.definitionLevel = 0;
+    this.repetitionLevel = 0;
+    for (final var childIterator : childIterators) {
+      hasNext = hasNext || childIterator.hasNext();
+      definitionLevel = Math.max(definitionLevel, childIterator.peekDefinitionLevel());
+      repetitionLevel = Math.max(repetitionLevel, childIterator.peekRepetitionLevel());
+    }
     this.rowReadSpec = rowReadSpec;
   }
 
@@ -56,17 +45,14 @@ public class OptionalBranchIterator<Branch> implements ParquetFieldIterator<Bran
 
   @Override
   public boolean nextRowMatches() {
-    return rowReadSpec
-        .predicate()
-        .branchMatches(child -> childIterators.get(child).nextRowMatches());
+    return rowReadSpec.predicate().branchMatches(child -> childIterators[child].nextRowMatches());
   }
 
   @Override
   public void skipNextRow() {
-    for (final var childFieldId : childIterators.indexes()) {
-      final var iterator = childIterators.get(childFieldId);
-      iterator.skipNextRow();
-      if (!iterator.hasNext()) {
+    for (final var childIterator : childIterators) {
+      childIterator.skipNextRow();
+      if (!childIterator.hasNext()) {
         hasNext = false;
       }
     }
@@ -78,11 +64,11 @@ public class OptionalBranchIterator<Branch> implements ParquetFieldIterator<Bran
     final var result = isNull ? null : rowReadSpec.reader().branchBuilder();
     definitionLevel = 0;
     repetitionLevel = 0;
-    for (final var childFieldId : childIterators.indexes()) {
-      final var iterator = childIterators.get(childFieldId);
+    for (var childIndex = 0; childIndex < childIterators.length; childIndex++) {
+      final var iterator = childIterators[childIndex];
       final var next = iterator.next();
       if (!isNull) {
-        result.put(childFieldId, next);
+        result.put(childIndex, next);
       }
       if (iterator.hasNext()) {
         definitionLevel = Math.max(definitionLevel, iterator.peekDefinitionLevel());

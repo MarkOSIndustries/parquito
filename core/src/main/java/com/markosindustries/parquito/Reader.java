@@ -4,7 +4,7 @@ import com.markosindustries.parquito.rows.BranchBuilder;
 import com.markosindustries.parquito.rows.RepeatedBuilder;
 
 public interface Reader<Collection, Value> {
-  Reader<?, ?> forChild(int childFieldId);
+  Reader<?, ?> forChild(int childFieldIndex);
 
   BranchBuilder<Value> branchBuilder();
 

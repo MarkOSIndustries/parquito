@@ -1,7 +1,7 @@
 package com.markosindustries.parquito.rows;
 
 public interface BranchBuilder<Branch> {
-  void put(int childFieldId, Object value);
+  void put(int childFieldIndex, Object value);
 
   Branch build();
 }

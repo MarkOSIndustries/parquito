@@ -14,14 +14,14 @@ public record RowReadSpec<Repeated, Value, ReadAs>(
     this(reader, ParquetPredicates.all(), columnSpec);
   }
 
-  public RowReadSpec<?, ?, ?> forChild(final int childFieldId) {
+  public RowReadSpec<?, ?, ?> forChild(final int childFieldIndex) {
     return new RowReadSpec<>(
-        reader.forChild(childFieldId),
-        predicate.forChild(childFieldId),
-        columnSpec.forChild(childFieldId));
+        reader.forChild(childFieldIndex),
+        predicate.forChild(childFieldIndex),
+        columnSpec.forChild(childFieldIndex));
   }
 
-  public boolean includesChild(final int childFieldId) {
-    return predicate.includesChild(childFieldId) || columnSpec.includesChild(childFieldId);
+  public boolean includesChild(final int childFieldIndex) {
+    return predicate.includesChild(childFieldIndex) || columnSpec.includesChild(childFieldIndex);
   }
 }

@@ -13,6 +13,7 @@ import com.markosindustries.parquito.schemas.ExampleEnum;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 import org.apache.parquet.column.ParquetProperties;
 import org.apache.parquet.format.RowGroup;
@@ -138,6 +139,18 @@ public class ParquetCompatibilityTests {
                             .setSomeString("strrr2")
                             .setSomeEnum(ExampleEnum.EXAMPLE_ENUM_ONE)
                             .build()))
+                .putAllSomeMap(
+                    Map.of(
+                        123L,
+                            ExampleChild.newBuilder()
+                                .setSomeString("strx")
+                                .addAllSomeStrings(List.of("str1", "str2"))
+                                .build(),
+                        456L,
+                            ExampleChild.newBuilder()
+                                .setSomeString("stry")
+                                .addAllSomeStrings(List.of("str1", "str2"))
+                                .build()))
                 .build(),
             Example.newBuilder()
                 .setSomeChild(

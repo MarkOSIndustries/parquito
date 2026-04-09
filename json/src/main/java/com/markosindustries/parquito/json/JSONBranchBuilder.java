@@ -9,13 +9,13 @@ class JSONBranchBuilder implements BranchBuilder<JSONObject> {
   private final ParquetSchemaNode parquetSchemaNode;
 
   public JSONBranchBuilder(final ParquetSchemaNode parquetSchemaNode) {
-    this.result = new JSONObject(parquetSchemaNode.getChildFieldIds().size());
+    this.result = new JSONObject(parquetSchemaNode.getChildren().length);
     this.parquetSchemaNode = parquetSchemaNode;
   }
 
   @Override
-  public void put(final int fieldId, final Object value) {
-    result.put(parquetSchemaNode.getChild(fieldId).getElement().name, value);
+  public void put(final int fieldIndex, final Object value) {
+    result.put(parquetSchemaNode.getChildAtIndex(fieldIndex).getElement().name, value);
   }
 
   @Override

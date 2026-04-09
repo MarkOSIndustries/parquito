@@ -2,7 +2,6 @@ package com.markosindustries.parquito.rows;
 
 import com.markosindustries.parquito.ParquetSchemaNode;
 import com.markosindustries.parquito.RowReadSpec;
-import com.markosindustries.parquito.SparseArrayIndexMap;
 
 public class RepeatedBranchIterator<Repeated, Value> implements ParquetFieldIterator<Repeated> {
   private final OptionalBranchIterator<Value> optionalBranchIterator;
@@ -10,7 +9,7 @@ public class RepeatedBranchIterator<Repeated, Value> implements ParquetFieldIter
   private final RowReadSpec<Repeated, Value, ?> rowReadSpec;
 
   public RepeatedBranchIterator(
-      SparseArrayIndexMap<ParquetFieldIterator<?>> childIterators,
+      ParquetFieldIterator<?>[] childIterators,
       ParquetSchemaNode schemaNode,
       RowReadSpec<Repeated, Value, ?> rowReadSpec) {
     this.rowReadSpec = rowReadSpec;

@@ -1,11 +1,15 @@
 package com.markosindustries.parquito;
 
+import static java.util.stream.Collectors.toMap;
+
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.OptionalInt;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.apache.parquet.format.ConvertedType;
 import org.apache.parquet.format.FieldRepetitionType;
 import org.apache.parquet.format.LogicalType;
@@ -13,10 +17,10 @@ import org.apache.parquet.format.SchemaElement;
 
 public class ParquetSchemaNode {
   private final ParquetSchemaNode parent;
+  private final int indexInParent;
   private final SchemaElement element;
-  private final Map<String, ParquetSchemaNode> childrenByName;
-  private final SparseArrayIndexMap<ParquetSchemaNode> childrenByFieldId;
-  private final Set<Integer> childFieldIds;
+  private final ParquetSchemaNode[] children;
+  private final Map<String, Integer> childIndicesByName;
   private final int nodeCount;
   private final int repetitionLevelMax;
   private final int definitionLevelMax;
@@ -28,7 +32,7 @@ public class ParquetSchemaNode {
         final List<SchemaElement> remainder,
         final int repetitionLevelMax,
         final int definitionLevelMax) {
-      super(null, element, remainder, repetitionLevelMax, definitionLevelMax);
+      super(null, -1, element, remainder, repetitionLevelMax, definitionLevelMax);
     }
 
     public ParquetSchemaPath parsePathElements(List<String> path) {
@@ -53,11 +57,13 @@ public class ParquetSchemaNode {
 
   protected ParquetSchemaNode(
       ParquetSchemaNode parent,
+      int indexInParent,
       SchemaElement element,
       List<SchemaElement> remainder,
       int repetitionLevelMax,
       int definitionLevelMax) {
     this.parent = parent;
+    this.indexInParent = indexInParent;
     this.element = element;
 
     if (!element.isSetRepetition_type()) {
@@ -89,6 +95,7 @@ public class ParquetSchemaNode {
       final var nextChild =
           new ParquetSchemaNode(
               this,
+              i,
               remaining.getFirst(),
               remaining.subList(1, remaining.size()),
               this.repetitionLevelMax,
@@ -96,13 +103,11 @@ public class ParquetSchemaNode {
       remaining = remaining.subList(nextChild.nodeCount, remaining.size());
       children.add(nextChild);
     }
-    this.childrenByName =
-        children.stream()
-            .collect(Collectors.toUnmodifiableMap(c -> c.element.name, Function.identity()));
-    this.childrenByFieldId =
-        SparseArrayIndexMap.from(children, c -> c.element.field_id, ParquetSchemaNode[]::new);
-    this.childFieldIds =
-        children.stream().map(c -> c.element.field_id).collect(Collectors.toUnmodifiableSet());
+    this.children = children.toArray(ParquetSchemaNode[]::new);
+    this.childIndicesByName =
+        IntStream.range(0, this.children.length)
+            .boxed()
+            .collect(toMap(index -> this.children[index].element.name, Function.identity()));
     this.nodeCount = 1 + children.stream().mapToInt(child -> child.nodeCount).sum();
   }
 
@@ -111,33 +116,40 @@ public class ParquetSchemaNode {
   }
 
   public ParquetSchemaPath getPath() {
+    final var indices = new ArrayList<Integer>();
     final var path = new ArrayList<SchemaElement>();
     ParquetSchemaNode current = this;
     while (!(current instanceof Root)) {
+      indices.addFirst(current.indexInParent);
       path.addFirst(current.element);
       current = current.parent;
     }
-    return new ParquetSchemaPath(path.toArray(SchemaElement[]::new));
+    return new ParquetSchemaPath(
+        indices.stream().mapToInt(i -> i).toArray(), path.toArray(SchemaElement[]::new));
   }
 
-  public ParquetSchemaNode getChildByName(String name) {
-    return this.childrenByName.get(name);
+  public ParquetSchemaNode[] getChildren() {
+    return this.children;
   }
 
-  public ParquetSchemaNode getChild(int childFieldId) {
-    return this.childrenByFieldId.get(childFieldId);
+  public ParquetSchemaNode getChildAtIndex(int childFieldIndex) {
+    return this.children[childFieldIndex];
+  }
+
+  public OptionalInt findIndexOfChildByName(final String name) {
+    final var boxed = this.childIndicesByName.get(name);
+    if (boxed == null) {
+      return OptionalInt.empty();
+    }
+    return OptionalInt.of(boxed);
   }
 
   public ParquetSchemaNode getChild(final ParquetSchemaPath parquetSchemaPath) {
     var current = this;
-    for (final var element : parquetSchemaPath.path) {
-      current = current.childrenByFieldId.get(element.field_id);
+    for (final var index : parquetSchemaPath.pathAsFieldIndices) {
+      current = current.children[index];
     }
     return current;
-  }
-
-  public Set<Integer> getChildFieldIds() {
-    return childFieldIds;
   }
 
   public int getRepetitionLevelMax() {
@@ -185,9 +197,8 @@ public class ParquetSchemaNode {
     return "ParquetSchema{"
         + "element="
         + element
-        + ", childrenByFieldId="
-        + childrenByFieldId
-            .valuesStream()
+        + ", children="
+        + Arrays.stream(children)
             .map(ParquetSchemaNode::toString)
             .collect(Collectors.joining(", ", "[", "]"))
         + ", nodeCount="

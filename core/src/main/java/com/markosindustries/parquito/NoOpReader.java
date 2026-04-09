@@ -9,7 +9,7 @@ public class NoOpReader implements Reader<Void, Void> {
   private NoOpReader() {}
 
   @Override
-  public Reader<?, ?> forChild(final int childFieldId) {
+  public Reader<?, ?> forChild(final int childFieldIndex) {
     return this;
   }
 
@@ -25,7 +25,7 @@ public class NoOpReader implements Reader<Void, Void> {
 
   private static class NullBranchBuilder implements BranchBuilder<Void> {
     @Override
-    public void put(final int fieldId, final Object value) {}
+    public void put(final int fieldIndex, final Object value) {}
 
     @Override
     public Void build() {
