@@ -8,6 +8,8 @@ dependencies {
   testImplementation project(':protobuf')
   testImplementation project(':schemas')
 
+  testImplementation 'com.google.guava:guava:33.5.0-jre'
+
   // Pull in the Apache Parquet libraries for compatibility testing
   testImplementation ("org.apache.parquet:parquet-hadoop:${parquet_version}") {
     exclude group: 'org.apache.hadoop'

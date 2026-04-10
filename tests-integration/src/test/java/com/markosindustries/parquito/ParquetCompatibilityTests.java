@@ -3,6 +3,7 @@ package com.markosindustries.parquito;
 import static org.apache.parquet.hadoop.ParquetFileWriter.Mode.OVERWRITE;
 
 import com.alibaba.fastjson2.JSONObject;
+import com.google.common.collect.Lists;
 import com.google.protobuf.ByteString;
 import com.markosindustries.parquito.filesys.SimpleOutputFile;
 import com.markosindustries.parquito.json.JSONReader;
@@ -15,10 +16,12 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.column.ParquetProperties;
 import org.apache.parquet.format.RowGroup;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.proto.ProtoParquetWriter;
+import org.apache.parquet.proto.ProtoWriteSupport;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -27,27 +30,34 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 public class ParquetCompatibilityTests {
   private static Stream<Arguments> writerConfigCombinations() {
-    return Stream.of(
-        Arguments.of(
-            CompressionCodecName.UNCOMPRESSED, ParquetProperties.WriterVersion.PARQUET_1_0),
-        Arguments.of(CompressionCodecName.SNAPPY, ParquetProperties.WriterVersion.PARQUET_1_0),
-        Arguments.of(CompressionCodecName.GZIP, ParquetProperties.WriterVersion.PARQUET_1_0),
-        Arguments.of(
-            CompressionCodecName.UNCOMPRESSED, ParquetProperties.WriterVersion.PARQUET_2_0),
-        Arguments.of(CompressionCodecName.SNAPPY, ParquetProperties.WriterVersion.PARQUET_2_0),
-        Arguments.of(CompressionCodecName.GZIP, ParquetProperties.WriterVersion.PARQUET_2_0));
+    final var compressionCodecs =
+        List.of(
+            CompressionCodecName.UNCOMPRESSED,
+            CompressionCodecName.SNAPPY,
+            CompressionCodecName.GZIP);
+    final var writerVersions =
+        List.of(
+            ParquetProperties.WriterVersion.PARQUET_1_0,
+            ParquetProperties.WriterVersion.PARQUET_2_0);
+    final var specsComplaint = List.of(true, false);
+
+    return Lists.cartesianProduct(compressionCodecs, writerVersions, specsComplaint).stream()
+        .map(args -> Arguments.of(args.toArray()));
   }
 
   @ParameterizedTest
   @MethodSource("writerConfigCombinations")
   public void canReadAFileAsMap(
-      CompressionCodecName codecName, ParquetProperties.WriterVersion writerVersion)
+      CompressionCodecName codecName,
+      ParquetProperties.WriterVersion writerVersion,
+      boolean parquetSpecsCompliant)
       throws IOException {
     final var file =
         generateFileUsingApacheHadoop(
             List.of(Example.newBuilder().build(), Example.newBuilder().build()),
             codecName,
             writerVersion,
+            parquetSpecsCompliant,
             List.of(),
             List.of());
     try (final var byteRangeReader = new FileByteRangeReader(file)) {
@@ -78,15 +88,23 @@ public class ParquetCompatibilityTests {
   @ParameterizedTest
   @MethodSource("writerConfigCombinations")
   public void canReadAFileAsJson(
-      CompressionCodecName codecName, ParquetProperties.WriterVersion writerVersion)
+      CompressionCodecName codecName,
+      ParquetProperties.WriterVersion writerVersion,
+      boolean parquetSpecsCompliant)
       throws IOException {
     final var file =
         generateFileUsingApacheHadoop(
             List.of(Example.newBuilder().build(), Example.newBuilder().build()),
             codecName,
             writerVersion,
+            parquetSpecsCompliant,
             List.of(),
             List.of());
+    // In specs compliant mode, the schema is able to represent the absense of a map or a list
+    final var expectedJson =
+        parquetSpecsCompliant
+            ? "{\"some_string\":\"\"}"
+            : "{\"some_string\":\"\",\"some_repeated\":[],\"some_map\":[]}";
     try (final var byteRangeReader = new FileByteRangeReader(file)) {
       ParquetFooter.read(byteRangeReader)
           .thenAccept(
@@ -100,9 +118,7 @@ public class ParquetCompatibilityTests {
                   var rows = 0;
                   while (rowIterator.hasNext()) {
                     final JSONObject next = rowIterator.next();
-                    Assertions.assertEquals(
-                        "{\"some_string\":\"\",\"some_repeated\":[],\"some_map\":[]}",
-                        next.toString());
+                    Assertions.assertEquals(expectedJson, next.toString());
                     rows++;
                   }
                   Assertions.assertEquals(2, rows);
@@ -115,7 +131,9 @@ public class ParquetCompatibilityTests {
   @ParameterizedTest
   @MethodSource("writerConfigCombinations")
   public void canReadAFileAsProtobuf(
-      CompressionCodecName codecName, ParquetProperties.WriterVersion writerVersion)
+      CompressionCodecName codecName,
+      ParquetProperties.WriterVersion writerVersion,
+      boolean parquetSpecsCompliant)
       throws IOException {
     final var expectedProtobufs =
         List.of(
@@ -198,7 +216,12 @@ public class ParquetCompatibilityTests {
 
     final var file =
         generateFileUsingApacheHadoop(
-            expectedProtobufs, codecName, writerVersion, List.of(), List.of());
+            expectedProtobufs,
+            codecName,
+            writerVersion,
+            parquetSpecsCompliant,
+            List.of(),
+            List.of());
     try (final var byteRangeReader = new FileByteRangeReader(file)) {
       ParquetFooter.read(byteRangeReader)
           .thenAccept(
@@ -227,7 +250,9 @@ public class ParquetCompatibilityTests {
   @ParameterizedTest
   @MethodSource("writerConfigCombinations")
   public void canFilterUsingPredicatePushdown(
-      CompressionCodecName codecName, ParquetProperties.WriterVersion writerVersion)
+      CompressionCodecName codecName,
+      ParquetProperties.WriterVersion writerVersion,
+      boolean parquetSpecsCompliant)
       throws IOException {
     final var inputProtobufs =
         List.of(
@@ -305,7 +330,7 @@ public class ParquetCompatibilityTests {
 
     final var file =
         generateFileUsingApacheHadoop(
-            inputProtobufs, codecName, writerVersion, List.of(), List.of());
+            inputProtobufs, codecName, writerVersion, parquetSpecsCompliant, List.of(), List.of());
     try (final var byteRangeReader = new FileByteRangeReader(file)) {
       ParquetFooter.read(byteRangeReader)
           .thenAccept(
@@ -350,6 +375,7 @@ public class ParquetCompatibilityTests {
                 Example.newBuilder().setSomeString("stab").build()),
             CompressionCodecName.SNAPPY,
             ParquetProperties.WriterVersion.PARQUET_1_0,
+            true,
             List.of(),
             List.of());
     try (final var byteRangeReader = new FileByteRangeReader(file)) {
@@ -384,6 +410,7 @@ public class ParquetCompatibilityTests {
                 Example.newBuilder().setSomeString("stab").build()),
             CompressionCodecName.SNAPPY,
             ParquetProperties.WriterVersion.PARQUET_1_0,
+            true,
             List.of("some_string"),
             List.of());
     try (final var byteRangeReader = new FileByteRangeReader(file)) {
@@ -422,6 +449,7 @@ public class ParquetCompatibilityTests {
                 Example.newBuilder().setSomeString("stab").build()),
             CompressionCodecName.SNAPPY,
             ParquetProperties.WriterVersion.PARQUET_1_0,
+            true,
             List.of(),
             List.of("some_string"));
     try (final var byteRangeReader = new FileByteRangeReader(file)) {
@@ -450,17 +478,24 @@ public class ParquetCompatibilityTests {
   }
 
   private static File generateFileUsingApacheHadoop(
-      List<Example> rows,
-      CompressionCodecName codecName,
+      final List<Example> rows,
+      final CompressionCodecName codecName,
       final ParquetProperties.WriterVersion writerVersion,
-      List<String> dictionaryColumnPaths,
-      List<String> bloomFilterColumnPaths)
+      final boolean parquetSpecsCompliant,
+      final List<String> dictionaryColumnPaths,
+      final List<String> bloomFilterColumnPaths)
       throws IOException {
     final File tempFile = File.createTempFile("integration-test", ".parquet");
     tempFile.deleteOnExit();
 
+    final var conf = new Configuration();
+    if (parquetSpecsCompliant) {
+      ProtoWriteSupport.setWriteSpecsCompliant(conf, true);
+    }
+
     final var writerBuilder =
         ProtoParquetWriter.<Example>builder(new SimpleOutputFile(tempFile))
+            .withConf(conf)
             .withMessage(Example.class)
             .withCompressionCodec(codecName)
             .withWriteMode(OVERWRITE)

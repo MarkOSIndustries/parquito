@@ -11,6 +11,7 @@ import com.markosindustries.parquito.rows.RepeatedBuilder;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Supplier;
+import org.apache.parquet.format.ConvertedType;
 
 public class ProtobufReader<M extends Message> implements Reader<List<M>, M> {
   private final Supplier<Message.Builder> newBuilder;
@@ -39,12 +40,31 @@ public class ProtobufReader<M extends Message> implements Reader<List<M>, M> {
           childIndex -> {
             fieldsByChildIndex[childIndex] = field;
             fieldReadersByChildIndex[childIndex] =
-                field.getType() == Descriptors.FieldDescriptor.Type.MESSAGE
-                    ? new ProtobufReader<>(
-                        () -> builder.newBuilderForField(field),
-                        parquetSchemaNode.getChildAtIndex(childIndex))
-                    : ProtobufLeafReader.INSTANCE;
+                determineAppropriateReader(
+                    field,
+                    parquetSchemaNode.getChildAtIndex(childIndex),
+                    () -> builder.newBuilderForField(field));
           });
+    }
+  }
+
+  private static Reader<?, ?> determineAppropriateReader(
+      final Descriptors.FieldDescriptor field,
+      final ParquetSchemaNode childSchemaNode,
+      Supplier<Message.Builder> newBuilder) {
+    final var isMessage = field.getType() == Descriptors.FieldDescriptor.Type.MESSAGE;
+    if (field.isRepeated() && childSchemaNode.getConvertedType() == ConvertedType.LIST) {
+      // Repeated but not LIST would imply legacy style without the 3 layer list structure
+      return isMessage
+          ? ProtobufListReader.forMessage(newBuilder, childSchemaNode)
+          : ProtobufListReader.forLeaf(childSchemaNode);
+    } else if (field.isMapField() && childSchemaNode.getConvertedType() == ConvertedType.MAP) {
+      // MapField but not MAP would imply legacy style without the 3 layer map structure
+      return new ProtobufMapReader<>(newBuilder, childSchemaNode);
+    } else if (isMessage) {
+      return new ProtobufReader<>(newBuilder, childSchemaNode);
+    } else {
+      return ProtobufLeafReader.INSTANCE;
     }
   }
 
