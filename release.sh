@@ -5,10 +5,6 @@ die() { echo "$*" 1>&2 ; exit 1; }
 echo $1 | grep -E -q '^([0-9]+).([0-9]+).([0-9]+)$' || die "Version must be of the form N.N.N, $1 provided"
 VERSION=$1
 
-COMMIT_SHA=$(git rev-parse $VERSION) || die "You haven't set up the git release tag yet."
-[[ "${COMMIT_SHA}" == "$(git rev-parse HEAD)" ]] || die "Check out the tagged commit first."
-[[ -z $(git status --short) ]] || die "Working directory is dirty"
-
 docker build --progress plain -f Dockerfile --target build_env \
   --build-arg VERSION="${VERSION}" \
   -t parquito-build-env:${VERSION} \
@@ -19,6 +15,10 @@ if [[ $@ =~ "--push-maven" ]]; then
   [[ -v OSSRH_PASSWORD ]] || die "OSSRH_PASSWORD is not set"
   [[ -v GPG_KEYID ]] || die "GPG_KEYID is not set"
   [[ -v GPG_PASSWORD ]] || die "GPG_PASSWORD is not set"
+
+  COMMIT_SHA=$(git rev-parse $VERSION) || die "You haven't set up the git release tag yet."
+  [[ "${COMMIT_SHA}" == "$(git rev-parse HEAD)" ]] || die "Check out the tagged commit first."
+  [[ -z $(git status --short) ]] || die "Working directory is dirty"
 
   docker run \
     -v ~/.gnupg/secring.gpg:/secrets/.gnupg/secring.gpg \
