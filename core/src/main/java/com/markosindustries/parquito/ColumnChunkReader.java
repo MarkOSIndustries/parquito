@@ -1,8 +1,8 @@
 package com.markosindustries.parquito;
 
 import com.markosindustries.parquito.bloomfilter.BloomFilter;
-import com.markosindustries.parquito.page.DataPage;
-import com.markosindustries.parquito.page.DictionaryPage;
+import com.markosindustries.parquito.page.DataPageReader;
+import com.markosindustries.parquito.page.DictionaryPageReader;
 import com.markosindustries.parquito.types.ColumnType;
 import java.io.IOException;
 import java.io.InputStream;
@@ -25,14 +25,14 @@ public class ColumnChunkReader<ReadAs> {
   private static final int BLOOM_FILTER_HEADER_SIZE = 18;
   private final org.apache.parquet.format.ColumnChunk header;
   private final ColumnType<ReadAs> columnType;
-  private final CompletableFuture<DictionaryPage<ReadAs>> dictionaryPage;
+  private final CompletableFuture<DictionaryPageReader<ReadAs>> dictionaryPage;
   private final CompletableFuture<BloomFilter> bloomFilter;
   private final long dataPageCompressedBytes;
 
   private ColumnChunkReader(
       final org.apache.parquet.format.ColumnChunk header,
       final ColumnType<ReadAs> columnType,
-      final CompletableFuture<DictionaryPage<ReadAs>> dictionaryPage,
+      final CompletableFuture<DictionaryPageReader<ReadAs>> dictionaryPage,
       final CompletableFuture<BloomFilter> bloomFilter,
       final long dataPageCompressedBytes) {
     this.header = header;
@@ -53,7 +53,7 @@ public class ColumnChunkReader<ReadAs> {
             ? (columnChunkHeader.file_offset - columnChunkHeader.meta_data.dictionary_page_offset)
             : 0;
 
-    final var dictionaryPageFuture = new CompletableFuture<DictionaryPage<ReadAs>>();
+    final var dictionaryPageFuture = new CompletableFuture<DictionaryPageReader<ReadAs>>();
     final var bloomFilterFuture =
         (columnChunkHeader.meta_data.isSetBloom_filter_offset())
             ? byteRangeReader
@@ -93,7 +93,7 @@ public class ColumnChunkReader<ReadAs> {
                 try {
                   final var dictionaryStream = new ByteBufferInputStream(dictionaryBuffer);
                   final var dictionaryPageHeader = Util.readPageHeader(dictionaryStream);
-                  return new DictionaryPage<ReadAs>(
+                  return new DictionaryPageReader<ReadAs>(
                       dictionaryPageHeader,
                       columnChunk,
                       dictionaryStream.readAsBufferView(dictionaryPageHeader.compressed_page_size));
@@ -103,11 +103,11 @@ public class ColumnChunkReader<ReadAs> {
               },
               Concurrency.DEFAULT_EXECUTOR)
           .whenCompleteAsync(
-              (dictionaryPage, throwable) -> {
+              (dictionaryPageReader, throwable) -> {
                 if (throwable != null) {
                   dictionaryPageFuture.completeExceptionally(throwable);
                 } else {
-                  dictionaryPageFuture.complete(dictionaryPage);
+                  dictionaryPageFuture.complete(dictionaryPageReader);
                 }
               },
               Concurrency.DEFAULT_EXECUTOR);
@@ -141,7 +141,7 @@ public class ColumnChunkReader<ReadAs> {
     return columnType;
   }
 
-  public DictionaryPage<ReadAs> getDictionaryPage() {
+  public DictionaryPageReader<ReadAs> getDictionaryPage() {
     return dictionaryPage.join();
   }
 
@@ -243,12 +243,13 @@ public class ColumnChunkReader<ReadAs> {
         .join();
   }
 
-  public CompletableFuture<Iterator<DataPage<ReadAs>>> readPages(ByteRangeReader byteRangeReader) {
+  public CompletableFuture<Iterator<DataPageReader<ReadAs>>> readPages(
+      ByteRangeReader byteRangeReader) {
     return byteRangeReader
         .readAsBuffer(header.file_offset, (int) dataPageCompressedBytes)
         .thenApplyAsync(
             chunkDataBuffer -> {
-              return new Iterator<DataPage<ReadAs>>() {
+              return new Iterator<DataPageReader<ReadAs>>() {
                 private final ByteBufferInputStream chunkDataBufferStream =
                     new ByteBufferInputStream(chunkDataBuffer);
                 private int valuesFound = 0;
@@ -259,12 +260,12 @@ public class ColumnChunkReader<ReadAs> {
                 }
 
                 @Override
-                public DataPage<ReadAs> next() {
+                public DataPageReader<ReadAs> next() {
                   final var pageHeader = ColumnChunkReader.readPageHeader(chunkDataBufferStream);
                   // TODO - CRC with
                   //     import java.util.zip.CRC32;
                   final var parquetPage =
-                      DataPage.create(
+                      DataPageReader.create(
                           ColumnChunkReader.this,
                           pageHeader,
                           chunkDataBufferStream.readAsBufferView(pageHeader.compressed_page_size));

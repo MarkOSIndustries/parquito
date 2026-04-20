@@ -4,23 +4,23 @@ import com.markosindustries.parquito.ParquetPredicate;
 import com.markosindustries.parquito.ParquetSchemaNode;
 import com.markosindustries.parquito.Reader;
 import com.markosindustries.parquito.RowReadSpec;
-import com.markosindustries.parquito.page.DataPage;
+import com.markosindustries.parquito.page.DataPageReader;
 import com.markosindustries.parquito.page.PredicateMatcher;
 import java.util.Iterator;
 
 public class RepeatedValueIterator<ReadAs, Repeated, Value>
     implements ParquetFieldIterator<Repeated> {
-  private final Iterator<DataPage<ReadAs>> dataPageIterator;
+  private final Iterator<DataPageReader<ReadAs>> dataPageIterator;
   private final ParquetSchemaNode schemaNode;
   private final Reader<Repeated, Value> reader;
   private final ParquetPredicate<ReadAs> predicate;
-  private DataPage<ReadAs> dataPage = null;
+  private DataPageReader<ReadAs> dataPage = null;
   private PredicateMatcher dataPageMatcher = null;
   private int valueIndex = 0;
   private int definitionIndex = 0;
 
   public RepeatedValueIterator(
-      Iterator<DataPage<ReadAs>> dataPageIterator,
+      Iterator<DataPageReader<ReadAs>> dataPageIterator,
       ParquetSchemaNode schemaNode,
       RowReadSpec<Repeated, Value, ReadAs> rowReadSpec) {
     this.dataPageIterator = dataPageIterator;

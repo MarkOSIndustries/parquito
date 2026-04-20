@@ -12,7 +12,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import org.apache.parquet.format.PageHeader;
 
-public class DataPageV2<ReadAs> implements DataPage<ReadAs> {
+public class DataPageV2Reader<ReadAs> implements DataPageReader<ReadAs> {
   private final int[] repetitionLevels;
   private final int[] definitionLevels;
   private final PageHeader pageHeader;
@@ -20,7 +20,7 @@ public class DataPageV2<ReadAs> implements DataPage<ReadAs> {
   private final int nonNullValues;
   private final Values<ReadAs> values;
 
-  protected DataPageV2(
+  protected DataPageV2Reader(
       final PageHeader pageHeader,
       final ColumnChunkReader<ReadAs> columnChunkReader,
       final ByteBuffer pageBuffer)

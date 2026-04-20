@@ -10,7 +10,7 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import org.apache.parquet.format.PageHeader;
 
-public class DataPageV1<ReadAs> implements DataPage<ReadAs> {
+public class DataPageV1Reader<ReadAs> implements DataPageReader<ReadAs> {
   private final int[] repetitionLevels;
   private final int[] definitionLevels;
   private final PageHeader pageHeader;
@@ -18,7 +18,7 @@ public class DataPageV1<ReadAs> implements DataPage<ReadAs> {
   private final int nonNullValues;
   private final Values<ReadAs> values;
 
-  protected DataPageV1(
+  protected DataPageV1Reader(
       final PageHeader pageHeader,
       final ColumnChunkReader<ReadAs> columnChunkReader,
       final ByteBuffer pageBuffer)

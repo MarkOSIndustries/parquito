@@ -9,11 +9,11 @@ import java.nio.ByteBuffer;
 import org.apache.parquet.format.Encoding;
 import org.apache.parquet.format.PageHeader;
 
-public class DictionaryPage<ReadAs> implements ParquetPage<ReadAs> {
+public class DictionaryPageReader<ReadAs> implements ParquetPageReader<ReadAs> {
   private final PageHeader pageHeader;
   private final Values<ReadAs> values;
 
-  public DictionaryPage(
+  public DictionaryPageReader(
       final PageHeader pageHeader,
       final ColumnChunkReader<ReadAs> columnChunkReader,
       final ByteBuffer pageBuffer)

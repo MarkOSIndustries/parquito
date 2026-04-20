@@ -1,26 +1,16 @@
 package com.markosindustries.parquito;
 
-import static com.markosindustries.parquito.encoding.IntEncodings.INT_ENCODING_RLE_WITHOUT_LENGTH_HEADER;
-
-import com.markosindustries.parquito.encoding.Encodings;
-import com.markosindustries.parquito.encoding.IntEncodings;
+import com.markosindustries.parquito.page.DataPageWriter;
 import com.markosindustries.parquito.types.ColumnType;
-import it.unimi.dsi.fastutil.ints.IntArrayList;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Objects;
 import java.util.SortedSet;
 import org.apache.parquet.format.ColumnChunk;
 import org.apache.parquet.format.ColumnMetaData;
-import org.apache.parquet.format.CompressionCodec;
-import org.apache.parquet.format.DataPageHeaderV2;
-import org.apache.parquet.format.Encoding;
-import org.apache.parquet.format.PageHeader;
 import org.apache.parquet.format.PageType;
 import org.apache.parquet.format.Statistics;
-import org.apache.parquet.format.Util;
 
 public class ColumnChunkWriter<ReadAs> {
   private final ColumnMetaData columnMetaData;
@@ -28,9 +18,7 @@ public class ColumnChunkWriter<ReadAs> {
   private final int leafDefinitionLevel;
   private final int leafRepetitionLevel;
 
-  private final ArrayList<ReadAs> values;
-  private final IntArrayList definitionLevels;
-  private final IntArrayList repetitionLevels;
+  private DataPageWriter<ReadAs> dataPageWriter;
   private int groupDefinitionLevel;
   private int groupRepetitionLevel;
   private ColumnChunk header;
@@ -45,9 +33,6 @@ public class ColumnChunkWriter<ReadAs> {
     this.columnType = columnType;
     this.leafDefinitionLevel = columnType.schemaNode().getDefinitionLevelMax();
     this.leafRepetitionLevel = columnType.schemaNode().getRepetitionLevelMax();
-    this.values = new ArrayList<>();
-    this.definitionLevels = new IntArrayList();
-    this.repetitionLevels = new IntArrayList();
     startNewChunk();
   }
 
@@ -57,9 +42,7 @@ public class ColumnChunkWriter<ReadAs> {
   }
 
   private void startNewChunk() {
-    this.values.clear();
-    this.definitionLevels.clear();
-    this.repetitionLevels.clear();
+    this.dataPageWriter = DataPageWriter.create(this, PageType.DATA_PAGE_V2);
     this.groupDefinitionLevel = 0;
     this.groupRepetitionLevel = 0;
     this.header = makeHeader();
@@ -88,20 +71,13 @@ public class ColumnChunkWriter<ReadAs> {
   }
 
   public void accumulateNull(final ParquetSchemaNode parquetSchemaNode) {
-    this.header.meta_data.num_values++;
-    this.header.meta_data.statistics.null_count++;
-    this.header.meta_data.statistics.setNull_countIsSet(true);
-
-    this.definitionLevels.add(parquetSchemaNode.getDefinitionLevelMax());
-    this.repetitionLevels.add(groupRepetitionLevel);
+    dataPageWriter.addNull(groupRepetitionLevel, parquetSchemaNode.getDefinitionLevelMax());
     groupRepetitionLevel = parquetSchemaNode.getRepetitionLevelMax();
   }
 
   public void accumulateValue(final ReadAs value) {
-    this.header.meta_data.num_values++;
-    this.values.add(Objects.requireNonNull(value));
-    this.definitionLevels.add(leafDefinitionLevel);
-    this.repetitionLevels.add(groupRepetitionLevel);
+    dataPageWriter.addValue(
+        Objects.requireNonNull(value), groupRepetitionLevel, leafDefinitionLevel);
     groupRepetitionLevel = leafRepetitionLevel;
 
     if (minValue == null || columnType.compare(minValue, value) > 0) {
@@ -126,53 +102,14 @@ public class ColumnChunkWriter<ReadAs> {
       this.header.meta_data.statistics.setMax_value(maxBuffer);
     }
 
-    // TODO refactor and split this stuff into DataPageWriter type classes
-    //  Write a data page with definition levels, repetition levels, and values in whatever encoding
-    final var pageOutputBufferStream = new ByteBufferOutputStream();
-
-    // TODO - drive this off the schema node type and maybe something about value cardinality,
-    // ordering, etc
-    final Encoding selectedEncoding = Encoding.PLAIN;
-
-    final var compressedPageOutputStream = new ByteCountingOutputStream(pageOutputBufferStream);
-    final var uncompressedPageOutputStream =
-        new ByteCountingOutputStream(
-            CompressionCodecs.compress(header.meta_data.codec, compressedPageOutputStream));
-
-    INT_ENCODING_RLE_WITHOUT_LENGTH_HEADER.encode(
-        repetitionLevels,
-        IntEncodings.bitWidth(getColumnType().schemaNode().getRepetitionLevelMax()),
-        uncompressedPageOutputStream);
-    INT_ENCODING_RLE_WITHOUT_LENGTH_HEADER.encode(
-        definitionLevels,
-        IntEncodings.bitWidth(getColumnType().schemaNode().getDefinitionLevelMax()),
-        uncompressedPageOutputStream);
-
-    Encodings.<ReadAs>getEncoding(header.meta_data.encodings.getFirst())
-        .encode(values, uncompressedPageOutputStream, this);
-
-    final var pageHeader =
-        new PageHeader(
-            PageType.DATA_PAGE_V2,
-            uncompressedPageOutputStream.getBytesWritten(),
-            compressedPageOutputStream.getBytesWritten());
-    // TODO - we could look at counting rows... seems expensive with current structure though
-    // TODO - separate pages from column chunks - allow multiple smaller pages
-    pageHeader.data_page_header_v2 =
-        new DataPageHeaderV2()
-            .setNum_values((int) header.meta_data.num_values)
-            .setNum_nulls((int) header.meta_data.statistics.null_count)
-            .setIs_compressed(!header.meta_data.codec.equals(CompressionCodec.UNCOMPRESSED))
-            .setEncoding(selectedEncoding);
-
-    // We need to count the uncompressed bytes written for the page header
-    final var outputCountingStream = new ByteCountingOutputStream(outputStream);
-    Util.writePageHeader(pageHeader, outputCountingStream);
-    header.meta_data.setTotal_compressed_size(
-        outputCountingStream.getBytesWritten() + pageHeader.compressed_page_size);
-    header.meta_data.setTotal_uncompressed_size(
-        outputCountingStream.getBytesWritten() + pageHeader.uncompressed_page_size);
-    pageOutputBufferStream.writeTo(outputStream);
+    final var countingOutputStream = new ByteCountingOutputStream(outputStream);
+    final var pageHeader = dataPageWriter.writePage(this.header.meta_data, countingOutputStream);
+    this.header.meta_data.total_compressed_size += countingOutputStream.getBytesWritten();
+    this.header.meta_data.total_uncompressed_size +=
+        countingOutputStream.getBytesWritten()
+            + (pageHeader.uncompressed_page_size - pageHeader.compressed_page_size);
+    this.header.meta_data.num_values += dataPageWriter.getNumValues(pageHeader);
+    this.header.meta_data.statistics.null_count += dataPageWriter.getNumNulls(pageHeader);
 
     final var result = header;
     header = makeHeader();
@@ -182,6 +119,12 @@ public class ColumnChunkWriter<ReadAs> {
 
   private ColumnChunk makeHeader() {
     return new ColumnChunk()
-        .setMeta_data(columnMetaData.deepCopy().setNum_values(0).setStatistics(new Statistics()));
+        .setMeta_data(
+            columnMetaData
+                .deepCopy()
+                .setTotal_compressed_size(0)
+                .setTotal_uncompressed_size(0)
+                .setNum_values(0)
+                .setStatistics(new Statistics().setNull_count(0)));
   }
 }
