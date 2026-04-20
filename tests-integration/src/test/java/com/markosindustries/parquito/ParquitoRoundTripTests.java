@@ -1,5 +1,7 @@
 package com.markosindustries.parquito;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import com.google.common.collect.Lists;
 import com.google.protobuf.ByteString;
 import com.markosindustries.parquito.protobuf.ProtobufParquetConfig;
@@ -31,7 +33,7 @@ public class ParquitoRoundTripTests {
   @ParameterizedTest
   @MethodSource("writerConfigCombinations")
   public void writeProtobufsThenReadThem(CompressionCodec compressionCodec) throws Exception {
-    final var inputProtobufs =
+    final var expectedProtobufs =
         List.of(
             Example.newBuilder()
                 .setSomeChild(
@@ -107,7 +109,7 @@ public class ParquitoRoundTripTests {
                 /* TODO - config for where to keep unique values? eg: disk/heap*/ ),
             ProtobufWriter.<Example>fromDescriptor(
                 Example.getDescriptor(), new ProtobufParquetConfig(true)))) {
-      writer.write(inputProtobufs.iterator());
+      writer.write(expectedProtobufs.iterator());
     }
 
     outputStream.writeTo(
@@ -119,6 +121,7 @@ public class ParquitoRoundTripTests {
               footer -> {
                 final var schema = ParquetSchemaNode.from(footer.schema);
 
+                var rowIndex = 0;
                 for (RowGroup rowGroup : footer.row_groups) {
                   final var rowGroupReader = new RowGroupReader(rowGroup, schema);
                   final var rowIterator =
@@ -127,9 +130,13 @@ public class ParquitoRoundTripTests {
                           byteRangeReader);
                   while (rowIterator.hasNext()) {
                     final var row = rowIterator.next();
-                    System.err.println(row.toString());
+                    System.err.println("Row " + rowIndex + ": " + row);
+                    assertEquals(
+                        expectedProtobufs.get(rowIndex), row, "Row " + rowIndex + " did not match");
+                    rowIndex++;
                   }
                 }
+                assertEquals(expectedProtobufs.size(), rowIndex, "Row count did not match");
               })
           .join();
     }
