@@ -3,6 +3,7 @@ package com.markosindustries.parquito.page;
 import static com.markosindustries.parquito.encoding.IntEncodings.INT_ENCODING_RLE_WITHOUT_LENGTH_HEADER;
 
 import com.markosindustries.parquito.ByteBufferInputStream;
+import com.markosindustries.parquito.ByteCountingInputStream;
 import com.markosindustries.parquito.ColumnChunkReader;
 import com.markosindustries.parquito.CompressionCodecs;
 import com.markosindustries.parquito.encoding.Encodings;
@@ -26,7 +27,7 @@ public class DataPageV2<ReadAs> implements DataPage<ReadAs> {
       throws IOException {
     this.pageHeader = pageHeader;
 
-    final var pageStream = new ByteBufferInputStream(pageBuffer);
+    final var pageStream = new ByteCountingInputStream(new ByteBufferInputStream(pageBuffer));
 
     this.repetitionLevels =
         INT_ENCODING_RLE_WITHOUT_LENGTH_HEADER.decode(
@@ -40,6 +41,8 @@ public class DataPageV2<ReadAs> implements DataPage<ReadAs> {
             IntEncodings.bitWidth(
                 columnChunkReader.getColumnType().schemaNode().getDefinitionLevelMax()),
             pageStream);
+
+    final var bytesInLevels = pageStream.getBytesRead();
 
     this.totalValues = pageHeader.data_page_header_v2.num_values;
     this.nonNullValues =
@@ -55,10 +58,10 @@ public class DataPageV2<ReadAs> implements DataPage<ReadAs> {
               : CompressionCodecs.decompress(
                   columnChunkReader.getHeader().meta_data.codec, pageStream);
       this.values =
-          Encodings.<ReadAs>getDecoder(pageHeader.data_page_header_v2.encoding)
+          Encodings.<ReadAs>getEncoding(pageHeader.data_page_header_v2.encoding)
               .decode(
                   nonNullValues,
-                  pageHeader.uncompressed_page_size,
+                  pageHeader.uncompressed_page_size - bytesInLevels,
                   decompressedPageStream,
                   columnChunkReader);
     }

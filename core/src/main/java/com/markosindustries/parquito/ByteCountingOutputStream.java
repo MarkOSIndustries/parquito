@@ -2,6 +2,7 @@ package com.markosindustries.parquito;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import javax.annotation.Nonnull;
 
 public class ByteCountingOutputStream extends OutputStream {
   private final OutputStream outputStream;
@@ -23,13 +24,13 @@ public class ByteCountingOutputStream extends OutputStream {
   }
 
   @Override
-  public void write(final byte[] b) throws IOException {
+  public void write(final @Nonnull byte[] b) throws IOException {
     outputStream.write(b);
     bytesWritten += b.length;
   }
 
   @Override
-  public void write(final byte[] b, final int off, final int len) throws IOException {
+  public void write(final @Nonnull byte[] b, final int off, final int len) throws IOException {
     outputStream.write(b, off, len);
     bytesWritten += len;
   }

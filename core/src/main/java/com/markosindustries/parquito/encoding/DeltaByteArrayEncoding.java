@@ -1,10 +1,13 @@
 package com.markosindustries.parquito.encoding;
 
 import com.markosindustries.parquito.ColumnChunkReader;
+import com.markosindustries.parquito.ColumnChunkWriter;
 import com.markosindustries.parquito.page.Values;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.util.List;
 
 public class DeltaByteArrayEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
   @Override
@@ -47,5 +50,14 @@ public class DeltaByteArrayEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
       } while (prefixLengths[prevIndex] != 0);
       return columnChunkReader.readValue(concat);
     };
+  }
+
+  @Override
+  public void encode(
+      final List<ReadAs> values,
+      final OutputStream uncompressedPageStream,
+      final ColumnChunkWriter<ReadAs> columnChunkWriter)
+      throws IOException {
+    throw new UnsupportedOperationException("Not implemented yet");
   }
 }

@@ -2,11 +2,11 @@ package com.markosindustries.parquito.encoding;
 
 public class Maths {
   static int intMaskLowerBits(int bits) {
-    return 0xFFFFFFFF >>> (32 - bits);
+    return ~(0xFFFFFFFF << bits);
   }
 
   static long longMaskLowerBits(int bits) {
-    return 0xFFFFFFFFFFFFFFFFL >>> (64 - bits);
+    return ~(0xFFFFFFFFFFFFFFFFL << bits);
   }
 
   static int floorDivPow2(int dividend, int divisorPowerOf2) {
@@ -40,4 +40,16 @@ public class Maths {
   static long remainderDivPow2(long dividend, int divisorPowerOf2) {
     return dividend & ((1L << divisorPowerOf2) - 1);
   }
+
+  public static int bitWidth(int value) {
+    return BITS_PER_INT - Integer.numberOfLeadingZeros(value);
+  }
+
+  public static int bitWidth(long value) {
+    return BITS_PER_LONG - Long.numberOfLeadingZeros(value);
+  }
+
+  public static final byte BITS_PER_BYTE = 8;
+  public static final byte BITS_PER_INT = 32;
+  public static final byte BITS_PER_LONG = 64;
 }

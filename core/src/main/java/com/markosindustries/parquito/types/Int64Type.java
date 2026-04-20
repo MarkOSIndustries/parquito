@@ -4,10 +4,12 @@ import com.markosindustries.parquito.page.Values;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import org.apache.parquet.format.LogicalType;
 
 public abstract class Int64Type<ReadAs> extends ParquetType<ReadAs> {
@@ -38,7 +40,32 @@ public abstract class Int64Type<ReadAs> extends ParquetType<ReadAs> {
     return wrap(byteBuffer.order(ByteOrder.LITTLE_ENDIAN).asLongBuffer().get(0));
   }
 
+  @Override
+  public void writePlainPage(final List<ReadAs> values, final OutputStream outputStream)
+      throws IOException {
+    final var requiredBytes = values.size() * 8;
+    final var buffer = ByteBuffer.allocate(requiredBytes);
+    final var longBuffer = buffer.order(ByteOrder.LITTLE_ENDIAN).asLongBuffer();
+    longBuffer.position(0);
+    for (final var value : values) {
+      longBuffer.put(unwrap(value));
+    }
+    outputStream.write(buffer.array());
+  }
+
+  @Override
+  public int getRequiredBytesToWrite(final ReadAs value) {
+    return 8;
+  }
+
+  @Override
+  public void writeToByteBuffer(final ReadAs value, final ByteBuffer byteBuffer) {
+    byteBuffer.order(ByteOrder.LITTLE_ENDIAN).asLongBuffer().put(unwrap(value));
+  }
+
   protected abstract ReadAs wrap(final long value);
+
+  protected abstract long unwrap(final ReadAs value);
 
   static int unsignedLongComparison(final Long o1, final Long o2) {
     final int top63Cmp = Long.compare(o1 >>> 1, o2 >>> 1);
@@ -56,6 +83,11 @@ public abstract class Int64Type<ReadAs> extends ParquetType<ReadAs> {
         }
 
         @Override
+        protected long unwrap(final Long value) {
+          return value;
+        }
+
+        @Override
         public int compare(final Long o1, final Long o2) {
           return o1.compareTo(o2);
         }
@@ -65,6 +97,11 @@ public abstract class Int64Type<ReadAs> extends ParquetType<ReadAs> {
       new Int64Type<Long>(Long.class) {
         @Override
         protected Long wrap(final long value) {
+          return value;
+        }
+
+        @Override
+        protected long unwrap(final Long value) {
           return value;
         }
 
@@ -81,6 +118,11 @@ public abstract class Int64Type<ReadAs> extends ParquetType<ReadAs> {
         }
 
         @Override
+        protected long unwrap(final Duration value) {
+          return value.toMillis();
+        }
+
+        @Override
         public int compare(final Duration o1, final Duration o2) {
           return o1.compareTo(o2);
         }
@@ -90,6 +132,11 @@ public abstract class Int64Type<ReadAs> extends ParquetType<ReadAs> {
         @Override
         protected Duration wrap(final long value) {
           return Duration.ofNanos(value * 1_000);
+        }
+
+        @Override
+        protected long unwrap(final Duration value) {
+          return (value.getSeconds() * 1_000_000L) + (Math.floorDiv(value.getNano(), 1_000L));
         }
 
         @Override
@@ -105,6 +152,11 @@ public abstract class Int64Type<ReadAs> extends ParquetType<ReadAs> {
         }
 
         @Override
+        protected long unwrap(final Duration value) {
+          return value.toNanos();
+        }
+
+        @Override
         public int compare(final Duration o1, final Duration o2) {
           return o1.compareTo(o2);
         }
@@ -117,6 +169,11 @@ public abstract class Int64Type<ReadAs> extends ParquetType<ReadAs> {
         }
 
         @Override
+        protected long unwrap(final Instant value) {
+          return value.toEpochMilli();
+        }
+
+        @Override
         public int compare(final Instant o1, final Instant o2) {
           return o1.compareTo(o2);
         }
@@ -125,8 +182,13 @@ public abstract class Int64Type<ReadAs> extends ParquetType<ReadAs> {
       new Int64Type<Instant>(Instant.class) {
         @Override
         protected Instant wrap(final long value) {
-          final var epochSeconds = Math.floorDiv(value, 1_000_000);
-          return Instant.ofEpochSecond(epochSeconds, value - (epochSeconds * 1_000_000));
+          final var epochSeconds = Math.floorDiv(value, 1_000_000L);
+          return Instant.ofEpochSecond(epochSeconds, value - (epochSeconds * 1_000_000L));
+        }
+
+        @Override
+        protected long unwrap(final Instant value) {
+          return (value.getEpochSecond() * 1_000_000L) + Math.floorDiv(value.getNano(), 1_000L);
         }
 
         @Override
@@ -138,8 +200,13 @@ public abstract class Int64Type<ReadAs> extends ParquetType<ReadAs> {
       new Int64Type<Instant>(Instant.class) {
         @Override
         protected Instant wrap(final long value) {
-          final var epochSeconds = Math.floorDiv(value, 1_000_000_000);
-          return Instant.ofEpochSecond(epochSeconds, value - (epochSeconds * 1_000_000_000));
+          final var epochSeconds = Math.floorDiv(value, 1_000_000_000L);
+          return Instant.ofEpochSecond(epochSeconds, value - (epochSeconds * 1_000_000_000L));
+        }
+
+        @Override
+        protected long unwrap(final Instant value) {
+          return (value.getEpochSecond() * 1_000_000_000L) + value.getNano();
         }
 
         @Override

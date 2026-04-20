@@ -4,10 +4,15 @@ import static org.apache.parquet.format.Encoding.DELTA_BINARY_PACKED;
 
 import com.clearspring.analytics.util.Varint;
 import com.markosindustries.parquito.ColumnChunkReader;
+import com.markosindustries.parquito.ColumnChunkWriter;
+import com.markosindustries.parquito.arrays.FastArray;
 import com.markosindustries.parquito.page.Values;
 import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.List;
 
 public class DeltaBinaryPackedEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
   @Override
@@ -42,19 +47,7 @@ public class DeltaBinaryPackedEncoding<ReadAs> implements ParquetEncoding<ReadAs
       return values;
     }
 
-    decodeInto(
-        new TargetArray() {
-          @Override
-          public int length() {
-            return expectedValues;
-          }
-
-          @Override
-          public void set(final int index, final long value) {
-            values[index] = (int) value;
-          }
-        },
-        decompressedPageStream);
+    decodeInto(FastArray.wrap(values), decompressedPageStream);
 
     return values;
   }
@@ -66,30 +59,12 @@ public class DeltaBinaryPackedEncoding<ReadAs> implements ParquetEncoding<ReadAs
       return values;
     }
 
-    decodeInto(
-        new TargetArray() {
-          @Override
-          public int length() {
-            return expectedValues;
-          }
-
-          @Override
-          public void set(final int index, final long value) {
-            values[index] = value;
-          }
-        },
-        decompressedPageStream);
+    decodeInto(FastArray.wrap(values), decompressedPageStream);
 
     return values;
   }
 
-  interface TargetArray {
-    int length();
-
-    void set(int index, long value);
-  }
-
-  public static void decodeInto(TargetArray targetArray, final InputStream decompressedPageStream)
+  static void decodeInto(FastArray targetArray, final InputStream decompressedPageStream)
       throws IOException {
     final var dataInputStream = new DataInputStream(decompressedPageStream);
     final var valuesPerBlock = Varint.readUnsignedVarInt(dataInputStream);
@@ -125,26 +100,109 @@ public class DeltaBinaryPackedEncoding<ReadAs> implements ParquetEncoding<ReadAs
       }
       for (int miniBlockIdx = 0; miniBlockIdx < miniBlocksPerBlock; miniBlockIdx++) {
         final var bitWidth = bitWidthsForBlock[miniBlockIdx];
-        long mask = Maths.longMaskLowerBits(bitWidth);
 
-        long buffer = 0;
-        int availableBits = 0;
+        // When the spec says miniblocks are bitpacked - they mean little-endian RLE hybrid
+        // bitpacking, not big-endian legacy bitpacking
+        final var miniBlockSlice =
+            targetArray.slice(
+                valuesSeen, Math.min(valuesPerMiniBlock, totalValueCount - valuesSeen));
+        RLEIntEncoding.readBitPacked(miniBlockSlice, bitWidth, valuesPerMiniBlock, dataInputStream);
+        for (var i = 0; i < miniBlockSlice.length(); i++) {
+          previousValue += miniBlockSlice.get(i) + minDelta;
+          miniBlockSlice.set(i, previousValue);
+        }
+        valuesSeen += miniBlockSlice.length();
+      }
+    }
+  }
 
-        for (int index = 0; index < valuesPerMiniBlock; index++, valuesSeen++) {
-          // When the spec says miniblocks are bitpacked - they mean little-endian RLE hybrid
-          // bitpacking, not big-endian legacy bitpacking
-          while (availableBits < bitWidth) {
-            buffer |= ((long) dataInputStream.readUnsignedByte()) << availableBits;
-            availableBits += 8;
+  @Override
+  public void encode(
+      final List<ReadAs> values,
+      final OutputStream uncompressedPageStream,
+      final ColumnChunkWriter<ReadAs> columnChunkWriter)
+      throws IOException {
+    final var readAsClass = columnChunkWriter.getColumnType().parquetType().getReadAsClass();
+    try {
+      DeltaBinaryPackedEncoding.encodeFrom(
+          FastArray.wrap(values, readAsClass), uncompressedPageStream);
+    } catch (UnsupportedOperationException e) {
+      throw new UnsupportedOperationException(
+          "Can't use " + DELTA_BINARY_PACKED + " with: " + readAsClass, e);
+    }
+  }
+
+  public static void encode32(final int[] values, final OutputStream uncompressedPageStream)
+      throws IOException {
+    encodeFrom(FastArray.wrap(values), uncompressedPageStream);
+  }
+
+  public static void encode64(final long[] values, final OutputStream uncompressedPageStream)
+      throws IOException {
+    encodeFrom(FastArray.wrap(values), uncompressedPageStream);
+  }
+
+  static void encodeFrom(FastArray sourceArray, final OutputStream uncompressedPageStream)
+      throws IOException {
+    // TODO figure this out based on sourceArray.length()
+    final var valuesPerBlock = 128;
+    final var miniBlocksPerBlock = 4;
+    final var totalValueCount = sourceArray.length();
+
+    final var dataOutputStream = new DataOutputStream(uncompressedPageStream);
+    Varint.writeUnsignedVarInt(valuesPerBlock, dataOutputStream);
+    Varint.writeUnsignedVarInt(miniBlocksPerBlock, dataOutputStream);
+    Varint.writeUnsignedVarInt(totalValueCount, dataOutputStream);
+
+    final var valuesPerMiniBlock = valuesPerBlock / miniBlocksPerBlock;
+    long previousValue = sourceArray.get(0);
+    Varint.writeUnsignedVarLong(ZigZag.encode(previousValue), dataOutputStream);
+
+    final var bitWidthsForBlock = new int[miniBlocksPerBlock];
+    final var deltasForBlock = new long[valuesPerBlock];
+    for (int valuesSeen = 1; valuesSeen < totalValueCount; ) {
+      // Write a block
+
+      long minDelta = Long.MAX_VALUE;
+      for (var blockIdx = 0; blockIdx < valuesPerBlock; blockIdx++) {
+        if (valuesSeen < totalValueCount) {
+          long nextValue = sourceArray.get(valuesSeen++);
+          long nextDelta = nextValue - previousValue;
+          previousValue = nextValue;
+          if (nextDelta < minDelta) {
+            minDelta = nextDelta;
           }
-          availableBits -= bitWidth;
+          deltasForBlock[blockIdx] = nextDelta;
+        } else {
+          deltasForBlock[blockIdx] = minDelta; // So that we get a zero after subtraction
+        }
+      }
 
-          if (valuesSeen < targetArray.length()) {
-            previousValue += minDelta + (buffer & mask);
-            buffer >>>= bitWidth;
-            targetArray.set(valuesSeen, previousValue);
+      Varint.writeUnsignedVarLong(ZigZag.encode(minDelta), dataOutputStream);
+
+      for (int miniBlockIdx = 0, blockIdx = 0; miniBlockIdx < miniBlocksPerBlock; miniBlockIdx++) {
+        bitWidthsForBlock[miniBlockIdx] = 0;
+        for (var i = 0; i < valuesPerMiniBlock; i++, blockIdx++) {
+          deltasForBlock[blockIdx] -= minDelta;
+          final var bitWidth = Maths.bitWidth(deltasForBlock[blockIdx]);
+          if (bitWidth > bitWidthsForBlock[miniBlockIdx]) {
+            bitWidthsForBlock[miniBlockIdx] = bitWidth;
           }
         }
+
+        dataOutputStream.writeByte(bitWidthsForBlock[miniBlockIdx]);
+      }
+
+      for (int miniBlockIdx = 0; miniBlockIdx < miniBlocksPerBlock; miniBlockIdx++) {
+        final var bitWidth = bitWidthsForBlock[miniBlockIdx];
+        if (bitWidth == 0) {
+          continue;
+        }
+
+        RLEIntEncoding.writeBitPacked(
+            FastArray.slice(deltasForBlock, miniBlockIdx * valuesPerMiniBlock, valuesPerMiniBlock),
+            bitWidth,
+            dataOutputStream);
       }
     }
   }

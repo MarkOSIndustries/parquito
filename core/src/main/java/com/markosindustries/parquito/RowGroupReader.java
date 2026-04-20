@@ -10,7 +10,6 @@ import com.markosindustries.parquito.types.ColumnType;
 import java.util.Iterator;
 import java.util.Optional;
 import java.util.OptionalInt;
-import java.util.stream.IntStream;
 import org.apache.parquet.format.FieldRepetitionType;
 import org.apache.parquet.format.RowGroup;
 import org.apache.parquet.format.SortingColumn;
@@ -111,26 +110,7 @@ public record RowGroupReader(RowGroup rowGroupHeader, ParquetSchemaNode.Root sch
   }
 
   public OptionalInt getColumnChunkIndexForSchemaPath(final ParquetSchemaPath parquetSchemaPath) {
-    var matchingIndices =
-        IntStream.range(0, rowGroupHeader.columns.size())
-            .filter(
-                index ->
-                    rowGroupHeader.columns.get(index).meta_data.path_in_schema.size()
-                        == parquetSchemaPath.path.length);
-    for (int i = 0; i < parquetSchemaPath.path.length; i++) {
-      final var pathElementIndex = i;
-      matchingIndices =
-          matchingIndices.filter(
-              index ->
-                  rowGroupHeader
-                      .columns
-                      .get(index)
-                      .meta_data
-                      .path_in_schema
-                      .get(pathElementIndex)
-                      .equals(parquetSchemaPath.path[pathElementIndex].name));
-    }
-    return matchingIndices.findAny();
+    return schemaRoot.getChild(parquetSchemaPath).getColumnIndex();
   }
 
   public Optional<? extends ColumnType<?>> getColumnType(
@@ -144,7 +124,9 @@ public record RowGroupReader(RowGroup rowGroupHeader, ParquetSchemaNode.Root sch
                       ? rowGroupHeader.sorting_columns.get(columnChunkIndex)
                       : new SortingColumn(columnChunkIndex, false, true);
               return ColumnType.create(
-                  columnChunkHeader, columnChunkSorting, schemaRoot.getChild(parquetSchemaPath));
+                  columnChunkHeader.meta_data,
+                  columnChunkSorting,
+                  schemaRoot.getChild(parquetSchemaPath));
             })
         .findAny();
   }

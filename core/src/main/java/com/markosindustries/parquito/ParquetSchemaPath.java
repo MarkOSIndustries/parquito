@@ -1,6 +1,9 @@
 package com.markosindustries.parquito;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 import org.apache.parquet.format.SchemaElement;
 
 public class ParquetSchemaPath {
@@ -10,6 +13,49 @@ public class ParquetSchemaPath {
   ParquetSchemaPath(final int[] pathAsFieldIndices, final SchemaElement[] path) {
     this.pathAsFieldIndices = pathAsFieldIndices;
     this.path = path;
+  }
+
+  private static final ParquetSchemaPath EMPTY =
+      new ParquetSchemaPath(new int[0], new SchemaElement[0]);
+
+  static ParquetSchemaPath empty() {
+    return EMPTY;
+  }
+
+  ParquetSchemaPath child(final int fieldIndex, final SchemaElement element) {
+    final var child =
+        new ParquetSchemaPath(
+            new int[this.pathAsFieldIndices.length + 1], new SchemaElement[this.path.length + 1]);
+
+    System.arraycopy(
+        this.pathAsFieldIndices, 0, child.pathAsFieldIndices, 0, this.pathAsFieldIndices.length);
+    child.pathAsFieldIndices[this.pathAsFieldIndices.length] = fieldIndex;
+
+    System.arraycopy(this.path, 0, child.path, 0, this.path.length);
+    child.path[this.path.length] = element;
+
+    return child;
+  }
+
+  List<String> asNamesOnly() {
+    return Arrays.stream(path).map(SchemaElement::getName).toList();
+  }
+
+  @Override
+  public String toString() {
+    return Arrays.stream(path).map(SchemaElement::getName).collect(Collectors.joining("."));
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    if (o == null || getClass() != o.getClass()) return false;
+    final ParquetSchemaPath that = (ParquetSchemaPath) o;
+    return Objects.deepEquals(pathAsFieldIndices, that.pathAsFieldIndices);
+  }
+
+  @Override
+  public int hashCode() {
+    return Arrays.hashCode(pathAsFieldIndices);
   }
 
   static ParquetSchemaPath parsePathElements(

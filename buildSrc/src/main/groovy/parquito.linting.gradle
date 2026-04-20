@@ -12,12 +12,12 @@ spotless {
     target('*.gradle')
     greclipse()
     trimTrailingWhitespace()
-    indentWithSpaces(2)
+    leadingTabsToSpaces(2)
   }
   format "shellScripts", {
     target('*.sh')
     trimTrailingWhitespace()
-    indentWithSpaces(2)
+    leadingTabsToSpaces(2)
   }
 }
 

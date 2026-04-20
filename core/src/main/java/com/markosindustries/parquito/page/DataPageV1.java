@@ -52,7 +52,7 @@ public class DataPageV1<ReadAs> implements DataPage<ReadAs> {
                         d == columnChunkReader.getColumnType().schemaNode().getDefinitionLevelMax())
                 .count();
     this.values =
-        Encodings.<ReadAs>getDecoder(pageHeader.data_page_header.encoding)
+        Encodings.<ReadAs>getEncoding(pageHeader.data_page_header.encoding)
             .decode(
                 nonNullValues,
                 pageHeader.uncompressed_page_size,

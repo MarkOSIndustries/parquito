@@ -1,7 +1,9 @@
 package com.markosindustries.parquito.encoding;
 
+import com.markosindustries.parquito.arrays.FastArray32;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 
 public class BitPackedIntEncoding implements ParquetIntEncoding {
   @Override
@@ -33,5 +35,12 @@ public class BitPackedIntEncoding implements ParquetIntEncoding {
     }
 
     return values;
+  }
+
+  @Override
+  public void encode(
+      final FastArray32 values, final int bitWidth, final OutputStream uncompressedPageStream)
+      throws IOException {
+    throw new UnsupportedOperationException("Not implemented yet");
   }
 }

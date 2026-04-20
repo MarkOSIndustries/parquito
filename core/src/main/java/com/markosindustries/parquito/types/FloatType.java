@@ -4,8 +4,10 @@ import com.markosindustries.parquito.page.Values;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.List;
 import org.apache.parquet.format.LogicalType;
 
 public abstract class FloatType<ReadAs> extends ParquetType<ReadAs> {
@@ -37,12 +39,42 @@ public abstract class FloatType<ReadAs> extends ParquetType<ReadAs> {
     return wrap(byteBuffer.order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer().get(0));
   }
 
+  @Override
+  public void writePlainPage(final List<ReadAs> values, final OutputStream outputStream)
+      throws IOException {
+    final var requiredBytes = values.size() * 4;
+    final var buffer = ByteBuffer.allocate(requiredBytes);
+    final var floatBuffer = buffer.order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer();
+    floatBuffer.position(0);
+    for (final var value : values) {
+      floatBuffer.put(unwrap(value));
+    }
+    outputStream.write(buffer.array());
+  }
+
+  @Override
+  public int getRequiredBytesToWrite(final ReadAs value) {
+    return 4;
+  }
+
+  @Override
+  public void writeToByteBuffer(final ReadAs value, final ByteBuffer byteBuffer) {
+    byteBuffer.order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer().put(unwrap(value));
+  }
+
   protected abstract ReadAs wrap(final float value);
+
+  protected abstract float unwrap(final ReadAs value);
 
   private static final FloatType<Float> FLOATS =
       new FloatType<Float>(Float.class) {
         @Override
         protected Float wrap(final float value) {
+          return value;
+        }
+
+        @Override
+        protected float unwrap(final Float value) {
           return value;
         }
 

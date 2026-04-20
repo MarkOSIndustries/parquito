@@ -1,7 +1,8 @@
 package com.markosindustries.parquito.types;
 
 import com.markosindustries.parquito.ParquetSchemaNode;
-import org.apache.parquet.format.ColumnChunk;
+import java.util.Comparator;
+import org.apache.parquet.format.ColumnMetaData;
 import org.apache.parquet.format.LogicalType;
 import org.apache.parquet.format.SortingColumn;
 
@@ -10,23 +11,23 @@ public record ColumnType<ReadAs>(
     ParquetSchemaNode schemaNode,
     SortingColumn sortingColumnHeader) {
   public static ColumnType<?> create(
-      final ColumnChunk columnChunkHeader,
+      final ColumnMetaData columnMetaData,
       final SortingColumn sortingColumnHeader,
       final ParquetSchemaNode.Root schema) {
     return create(
-        columnChunkHeader,
+        columnMetaData,
         sortingColumnHeader,
-        schema.getChild(schema.parsePathElements(columnChunkHeader.meta_data.path_in_schema)));
+        schema.getChild(schema.parsePathElements(columnMetaData.path_in_schema)));
   }
 
   public static ColumnType<?> create(
-      final ColumnChunk columnChunkHeader,
+      final ColumnMetaData columnMetaData,
       final SortingColumn sortingColumnHeader,
       final ParquetSchemaNode columnSchemaNode) {
     final LogicalType logicalType = columnSchemaNode.getLogicalType();
     final int typeLength = columnSchemaNode.getTypeLength();
     return new ColumnType<>(
-        ParquetType.create(columnChunkHeader.meta_data.type, logicalType, typeLength),
+        ParquetType.create(columnMetaData.type, logicalType, typeLength),
         columnSchemaNode,
         sortingColumnHeader);
   }
@@ -55,5 +56,9 @@ public record ColumnType<ReadAs>(
     } else {
       return parquetType.compare(o1, o2);
     }
+  }
+
+  public Comparator<ReadAs> getComparator() {
+    return this::compare;
   }
 }

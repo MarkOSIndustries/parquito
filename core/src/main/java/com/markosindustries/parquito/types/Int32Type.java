@@ -4,10 +4,12 @@ import com.markosindustries.parquito.page.Values;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import org.apache.parquet.format.LogicalType;
 
 public abstract class Int32Type<ReadAs> extends ParquetType<ReadAs> {
@@ -38,12 +40,42 @@ public abstract class Int32Type<ReadAs> extends ParquetType<ReadAs> {
     return wrap(byteBuffer.order(ByteOrder.LITTLE_ENDIAN).asIntBuffer().get(0));
   }
 
+  @Override
+  public void writePlainPage(final List<ReadAs> values, final OutputStream outputStream)
+      throws IOException {
+    final var requiredBytes = values.size() * 4;
+    final var buffer = ByteBuffer.allocate(requiredBytes);
+    final var intBuffer = buffer.order(ByteOrder.LITTLE_ENDIAN).asIntBuffer();
+    intBuffer.position(0);
+    for (final var value : values) {
+      intBuffer.put(unwrap(value));
+    }
+    outputStream.write(buffer.array());
+  }
+
+  @Override
+  public int getRequiredBytesToWrite(final ReadAs value) {
+    return 4;
+  }
+
+  @Override
+  public void writeToByteBuffer(final ReadAs value, final ByteBuffer byteBuffer) {
+    byteBuffer.order(ByteOrder.LITTLE_ENDIAN).asIntBuffer().put(unwrap(value));
+  }
+
   protected abstract ReadAs wrap(final int value);
+
+  protected abstract int unwrap(final ReadAs value);
 
   private static final Int32Type<Integer> SIGNED_INTEGERS =
       new Int32Type<Integer>(Integer.class) {
         @Override
         protected Integer wrap(final int value) {
+          return value;
+        }
+
+        @Override
+        protected int unwrap(final Integer value) {
           return value;
         }
 
@@ -60,6 +92,11 @@ public abstract class Int32Type<ReadAs> extends ParquetType<ReadAs> {
         }
 
         @Override
+        protected int unwrap(final Integer value) {
+          return value;
+        }
+
+        @Override
         public int compare(final Integer o1, final Integer o2) {
           return Long.compare(0xFFFFFFFFL & o1, 0xFFFFFFFFL & o2);
         }
@@ -69,6 +106,11 @@ public abstract class Int32Type<ReadAs> extends ParquetType<ReadAs> {
         @Override
         protected Instant wrap(final int value) {
           return Instant.ofEpochSecond(Duration.ofDays(value).getSeconds());
+        }
+
+        @Override
+        protected int unwrap(final Instant value) {
+          return (int) value.getEpochSecond();
         }
 
         @Override

@@ -3,7 +3,9 @@ package com.markosindustries.parquito.types;
 import com.markosindustries.parquito.page.Values;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.util.List;
 import org.apache.parquet.format.LogicalType;
 import org.apache.parquet.format.Type;
 
@@ -23,6 +25,13 @@ public abstract class ParquetType<ReadAs> {
       throws IOException;
 
   public abstract ReadAs readFromByteBuffer(final ByteBuffer byteBuffer);
+
+  public abstract void writePlainPage(final List<ReadAs> values, final OutputStream outputStream)
+      throws IOException;
+
+  public abstract int getRequiredBytesToWrite(final ReadAs value);
+
+  public abstract void writeToByteBuffer(final ReadAs value, final ByteBuffer byteBuffer);
 
   /**
    * We don't implement {@link java.util.Comparator} because we have no need of Serialization etc.

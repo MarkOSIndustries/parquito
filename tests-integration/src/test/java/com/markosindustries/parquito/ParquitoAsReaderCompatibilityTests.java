@@ -28,7 +28,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-public class ParquetCompatibilityTests {
+/** Tests where parquito does the reading and the hadoop parquet library does the writing */
+public class ParquitoAsReaderCompatibilityTests {
   private static Stream<Arguments> writerConfigCombinations() {
     final var compressionCodecs =
         List.of(

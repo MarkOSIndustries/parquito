@@ -3,7 +3,10 @@ package com.markosindustries.parquito.types;
 import com.markosindustries.parquito.page.Values;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.nio.channels.Channels;
+import java.util.List;
 import java.util.UUID;
 import org.apache.parquet.format.LogicalType;
 
@@ -35,7 +38,28 @@ public abstract class FixedLengthByteArrayType<ReadAs> extends ParquetType<ReadA
     return wrap(buffer);
   }
 
+  @Override
+  public void writePlainPage(final List<ReadAs> values, final OutputStream outputStream)
+      throws IOException {
+    final var writableChannel = Channels.newChannel(outputStream);
+    for (final var value : values) {
+      writableChannel.write(unwrap(value));
+    }
+  }
+
+  @Override
+  public int getRequiredBytesToWrite(final ReadAs value) {
+    return typeLength;
+  }
+
+  @Override
+  public void writeToByteBuffer(final ReadAs value, final ByteBuffer byteBuffer) {
+    byteBuffer.put(unwrap(value));
+  }
+
   protected abstract ReadAs wrap(final ByteBuffer bytes);
+
+  protected abstract ByteBuffer unwrap(final ReadAs value);
 
   private static final class ByteBuffers extends FixedLengthByteArrayType<ByteBuffer> {
     public ByteBuffers(final int typeLength) {
@@ -45,6 +69,11 @@ public abstract class FixedLengthByteArrayType<ReadAs> extends ParquetType<ReadA
     @Override
     protected ByteBuffer wrap(final ByteBuffer bytes) {
       return bytes;
+    }
+
+    @Override
+    protected ByteBuffer unwrap(final ByteBuffer value) {
+      return value;
     }
 
     @Override
@@ -61,6 +90,22 @@ public abstract class FixedLengthByteArrayType<ReadAs> extends ParquetType<ReadA
           for (int i = 0; i < 8; i++) msb = (msb << 8) | (bytes.get(i) & 0xff);
           for (int i = 8; i < 16; i++) lsb = (lsb << 8) | (bytes.get(i) & 0xff);
           return new UUID(msb, lsb);
+        }
+
+        @Override
+        protected ByteBuffer unwrap(final UUID value) {
+          final var buffer = ByteBuffer.allocate(16);
+          long msb = value.getMostSignificantBits();
+          long lsb = value.getLeastSignificantBits();
+          for (int i = 0; i < 8; i++) {
+            buffer.put(i, (byte) (msb & 0xff));
+            msb = (msb >>> 8);
+          }
+          for (int i = 8; i < 16; i++) {
+            buffer.put(i, (byte) (lsb & 0xff));
+            lsb = (lsb >>> 8);
+          }
+          return buffer.flip();
         }
 
         @Override

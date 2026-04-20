@@ -18,4 +18,13 @@ public interface Values<ReadAs> {
       throw new IndexOutOfBoundsException();
     };
   }
+
+  static <ReadAs> Values<ReadAs> repeated(final ReadAs repeatedValue, final int count) {
+    return index -> {
+      if (index < count) {
+        return repeatedValue;
+      }
+      throw new IndexOutOfBoundsException();
+    };
+  }
 }

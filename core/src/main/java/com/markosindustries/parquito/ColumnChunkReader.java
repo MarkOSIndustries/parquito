@@ -123,9 +123,13 @@ public class ColumnChunkReader<ReadAs> {
     final var columnChunkHeader = rowGroupHeader.columns.get(columnChunkIndex);
     final var columnChunkSorting =
         rowGroupHeader.isSetSorting_columns()
-            ? rowGroupHeader.sorting_columns.get(columnChunkIndex)
+            ? rowGroupHeader.sorting_columns.stream()
+                .filter(sorting -> sorting.column_idx == columnChunkIndex)
+                .findAny()
+                .orElseGet(() -> new SortingColumn(columnChunkIndex, false, true))
             : new SortingColumn(columnChunkIndex, false, true);
-    final var columnType = ColumnType.create(columnChunkHeader, columnChunkSorting, columnSchema);
+    final var columnType =
+        ColumnType.create(columnChunkHeader.meta_data, columnChunkSorting, columnSchema);
     return ColumnChunkReader.create(columnChunkHeader, columnType, byteRangeReader);
   }
 

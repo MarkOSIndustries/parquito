@@ -14,4 +14,8 @@ dependencies {
   // I think this will be useful when trying to decide whether to use dictionary encoding for a given column chunk on write...
   // specifically, the LinearCounting implementation (or HyperLogLog for cardinalities greater than 10^9, but that seems less likely)
   api 'com.clearspring.analytics:stream:2.9.8'
+
+  api 'it.unimi.dsi:fastutil:8.5.18'
+
+  testImplementation 'com.google.guava:guava:33.5.0-jre'
 }

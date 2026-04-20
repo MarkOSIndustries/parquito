@@ -25,7 +25,7 @@ public class DictionaryPage<ReadAs> implements ParquetPage<ReadAs> {
             columnChunkReader.getHeader().meta_data.codec, new ByteBufferInputStream(pageBuffer));
 
     this.values =
-        Encodings.<ReadAs>getDecoder(Encoding.PLAIN)
+        Encodings.<ReadAs>getEncoding(Encoding.PLAIN)
             .decode(
                 pageHeader.dictionary_page_header.num_values,
                 pageHeader.uncompressed_page_size,

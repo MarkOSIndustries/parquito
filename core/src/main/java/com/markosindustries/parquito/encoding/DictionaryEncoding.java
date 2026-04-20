@@ -1,12 +1,17 @@
 package com.markosindustries.parquito.encoding;
 
 import com.markosindustries.parquito.ColumnChunkReader;
+import com.markosindustries.parquito.ColumnChunkWriter;
 import com.markosindustries.parquito.ParquetPredicate;
 import com.markosindustries.parquito.page.PredicateMatcher;
 import com.markosindustries.parquito.page.Values;
+import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.objects.Object2ReferenceRBTreeMap;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.BitSet;
+import java.util.List;
 
 public class DictionaryEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
   @Override
@@ -49,5 +54,34 @@ public class DictionaryEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
         return index -> matchingDictionaryIndices.get(dictionaryIndices[index]);
       }
     };
+  }
+
+  @Override
+  public void encode(
+      final List<ReadAs> values,
+      final OutputStream uncompressedPageStream,
+      final ColumnChunkWriter<ReadAs> columnChunkWriter)
+      throws IOException {
+    final var dictionaryWithOriginalIndices =
+        new Object2ReferenceRBTreeMap<ReadAs, IntArrayList>(
+            columnChunkWriter.getColumnType().getComparator());
+
+    for (var i = 0; i < values.size(); i++) {
+      dictionaryWithOriginalIndices.computeIfAbsent(values.get(i), v -> new IntArrayList(1)).add(i);
+    }
+    final var valuesAsDictionaryIndices = new int[values.size()];
+    var dictionaryIndex = 0;
+    for (final var dictionaryEntry : dictionaryWithOriginalIndices.entrySet()) {
+      for (final var i : dictionaryEntry.getValue()) {
+        valuesAsDictionaryIndices[i] = dictionaryIndex;
+      }
+      dictionaryIndex++;
+    }
+    final var bitWidth = Maths.bitWidth(dictionaryIndex - 1);
+
+    columnChunkWriter.writeDictionaryPage(dictionaryWithOriginalIndices.keySet());
+
+    IntEncodings.INT_ENCODING_RLE_WITHOUT_LENGTH_HEADER.encode(
+        valuesAsDictionaryIndices, bitWidth, uncompressedPageStream);
   }
 }

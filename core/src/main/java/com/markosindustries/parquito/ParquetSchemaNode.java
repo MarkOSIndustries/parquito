@@ -1,15 +1,11 @@
 package com.markosindustries.parquito;
 
-import static java.util.stream.Collectors.toMap;
-
-import java.util.ArrayList;
+import it.unimi.dsi.fastutil.objects.Object2IntArrayMap;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.OptionalInt;
-import java.util.function.Function;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import org.apache.parquet.format.ConvertedType;
 import org.apache.parquet.format.FieldRepetitionType;
 import org.apache.parquet.format.LogicalType;
@@ -17,11 +13,13 @@ import org.apache.parquet.format.SchemaElement;
 
 public class ParquetSchemaNode {
   private final ParquetSchemaNode parent;
-  private final int indexInParent;
+  private final ParquetSchemaPath schemaPath;
   private final SchemaElement element;
+  private final OptionalInt columnIndex;
   private final ParquetSchemaNode[] children;
-  private final Map<String, Integer> childIndicesByName;
-  private final int nodeCount;
+  private final Object2IntArrayMap<String> childIndicesByName;
+  protected final int nodeCount;
+  protected final int leafCount;
   private final int repetitionLevelMax;
   private final int definitionLevelMax;
 
@@ -32,7 +30,14 @@ public class ParquetSchemaNode {
         final List<SchemaElement> remainder,
         final int repetitionLevelMax,
         final int definitionLevelMax) {
-      super(null, -1, element, remainder, repetitionLevelMax, definitionLevelMax);
+      super(
+          null,
+          ParquetSchemaPath.empty(),
+          element,
+          new AtomicInteger(0),
+          remainder,
+          repetitionLevelMax,
+          definitionLevelMax);
     }
 
     public ParquetSchemaPath parsePathElements(List<String> path) {
@@ -52,63 +57,68 @@ public class ParquetSchemaNode {
     if (schema.isEmpty()) {
       throw new IllegalArgumentException("Can't create a schema with no elements");
     }
-    return new Root(schema.get(0), schema.subList(1, schema.size()), 0, 0);
+    return new Root(schema.getFirst(), schema.subList(1, schema.size()), 0, 0);
   }
 
   protected ParquetSchemaNode(
       ParquetSchemaNode parent,
-      int indexInParent,
+      ParquetSchemaPath schemaPath,
       SchemaElement element,
+      AtomicInteger nextColumnIndex,
       List<SchemaElement> remainder,
       int repetitionLevelMax,
       int definitionLevelMax) {
     this.parent = parent;
-    this.indexInParent = indexInParent;
+    this.schemaPath = schemaPath;
     this.element = element;
 
     if (!element.isSetRepetition_type()) {
       this.repetitionLevelMax = repetitionLevelMax;
       this.definitionLevelMax = definitionLevelMax;
     } else {
-      switch (element.repetition_type) {
-        case REQUIRED -> {
-          this.repetitionLevelMax = repetitionLevelMax;
-          this.definitionLevelMax = definitionLevelMax;
-        }
-        case OPTIONAL -> {
-          this.repetitionLevelMax = repetitionLevelMax;
-          this.definitionLevelMax = definitionLevelMax + 1;
-        }
-        case REPEATED -> {
-          this.repetitionLevelMax = repetitionLevelMax + 1;
-          this.definitionLevelMax = definitionLevelMax + 1;
-        }
-        default ->
-            throw new IllegalArgumentException(
-                "Unsupported repetition_type: " + element.repetition_type);
-      }
+      this.repetitionLevelMax =
+          switch (element.repetition_type) {
+            case REQUIRED, OPTIONAL -> repetitionLevelMax;
+            case REPEATED -> repetitionLevelMax + 1;
+          };
+      this.definitionLevelMax =
+          switch (element.repetition_type) {
+            case REQUIRED -> definitionLevelMax;
+            case OPTIONAL, REPEATED -> definitionLevelMax + 1;
+          };
     }
 
-    final var children = new ArrayList<ParquetSchemaNode>(element.num_children);
+    this.columnIndex =
+        element.num_children == 0
+            ? OptionalInt.of(nextColumnIndex.getAndIncrement())
+            : OptionalInt.empty();
+
+    this.children = new ParquetSchemaNode[element.num_children];
     var remaining = remainder;
     for (int i = 0; i < element.num_children; i++) {
-      final var nextChild =
+      children[i] =
           new ParquetSchemaNode(
               this,
-              i,
+              schemaPath.child(i, remaining.getFirst()),
               remaining.getFirst(),
+              nextColumnIndex,
               remaining.subList(1, remaining.size()),
               this.repetitionLevelMax,
               this.definitionLevelMax);
-      remaining = remaining.subList(nextChild.nodeCount, remaining.size());
-      children.add(nextChild);
+      remaining = remaining.subList(children[i].nodeCount, remaining.size());
     }
-    this.children = children.toArray(ParquetSchemaNode[]::new);
-    this.childIndicesByName =
-        IntStream.range(0, this.children.length)
-            .boxed()
-            .collect(toMap(index -> this.children[index].element.name, Function.identity()));
-    this.nodeCount = 1 + children.stream().mapToInt(child -> child.nodeCount).sum();
+    this.childIndicesByName = new Object2IntArrayMap<>(this.children.length);
+    this.childIndicesByName.defaultReturnValue(-1);
+    for (var i = 0; i < this.children.length; i++) {
+      childIndicesByName.put(this.children[i].element.name, i);
+    }
+    this.nodeCount = 1 + Arrays.stream(children).mapToInt(child -> child.nodeCount).sum();
+    this.leafCount =
+        children.length == 0 ? 1 : Arrays.stream(children).mapToInt(child -> child.leafCount).sum();
+  }
+
+  public ParquetSchemaNode getParent() {
+    return parent;
   }
 
   public SchemaElement getElement() {
@@ -116,16 +126,11 @@ public class ParquetSchemaNode {
   }
 
   public ParquetSchemaPath getPath() {
-    final var indices = new ArrayList<Integer>();
-    final var path = new ArrayList<SchemaElement>();
-    ParquetSchemaNode current = this;
-    while (!(current instanceof Root)) {
-      indices.addFirst(current.indexInParent);
-      path.addFirst(current.element);
-      current = current.parent;
-    }
-    return new ParquetSchemaPath(
-        indices.stream().mapToInt(i -> i).toArray(), path.toArray(SchemaElement[]::new));
+    return schemaPath;
+  }
+
+  public OptionalInt getColumnIndex() {
+    return columnIndex;
   }
 
   public ParquetSchemaNode[] getChildren() {
@@ -137,11 +142,11 @@ public class ParquetSchemaNode {
   }
 
   public OptionalInt findIndexOfChildByName(final String name) {
-    final var boxed = this.childIndicesByName.get(name);
-    if (boxed == null) {
+    final var valueOrDefault = this.childIndicesByName.getOrDefault(name, -1);
+    if (valueOrDefault == -1) {
       return OptionalInt.empty();
     }
-    return OptionalInt.of(boxed);
+    return OptionalInt.of(valueOrDefault);
   }
 
   public ParquetSchemaNode getChild(final ParquetSchemaPath parquetSchemaPath) {
@@ -150,6 +155,14 @@ public class ParquetSchemaNode {
       current = current.children[index];
     }
     return current;
+  }
+
+  public int getNodeCount() {
+    return nodeCount;
+  }
+
+  public int getLeafCount() {
+    return leafCount;
   }
 
   public int getRepetitionLevelMax() {

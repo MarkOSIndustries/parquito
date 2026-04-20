@@ -12,10 +12,8 @@ import org.apache.parquet.format.FileMetaData;
 import org.apache.parquet.format.Util;
 
 public class ParquetFooter {
-  private static final byte[] PARQUET_UNENCRYPTED_MAGIC_BYTES =
-      "PAR1".getBytes(StandardCharsets.US_ASCII);
-  private static final byte[] PARQUET_ENCRYPTED_MAGIC_BYTES =
-      "PARE".getBytes(StandardCharsets.US_ASCII);
+  static final byte[] PARQUET_UNENCRYPTED_MAGIC_BYTES = "PAR1".getBytes(StandardCharsets.US_ASCII);
+  static final byte[] PARQUET_ENCRYPTED_MAGIC_BYTES = "PARE".getBytes(StandardCharsets.US_ASCII);
 
   public static CompletableFuture<FileMetaData> read(ByteRangeReader byteRangeReader) {
     try {
@@ -46,8 +44,8 @@ public class ParquetFooter {
     }
   }
 
-  public static CompletableFuture<Void> write(FileMetaData metaData, OutputStream outputStream)
-      throws IOException {
+  public static CompletableFuture<Void> write(
+      final FileMetaData metaData, final OutputStream outputStream) throws IOException {
     return CompletableFuture.runAsync(
         () -> {
           try {

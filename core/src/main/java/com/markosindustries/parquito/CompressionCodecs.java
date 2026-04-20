@@ -2,15 +2,21 @@ package com.markosindustries.parquito;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 import net.jpountz.lz4.LZ4BlockInputStream;
+import net.jpountz.lz4.LZ4BlockOutputStream;
+import org.anarres.lzo.LzoCompressor1x_1;
 import org.anarres.lzo.LzoDecompressor1x;
 import org.anarres.lzo.LzoInputStream;
+import org.anarres.lzo.LzoOutputStream;
 import org.apache.parquet.format.CompressionCodec;
 import org.brotli.dec.BrotliInputStream;
 import org.xerial.snappy.SnappyInputStream;
+import org.xerial.snappy.SnappyOutputStream;
 
 public final class CompressionCodecs {
   @FunctionalInterface
@@ -18,29 +24,45 @@ public final class CompressionCodecs {
     InputStream decompress(InputStream inputStream) throws IOException;
   }
 
-  private static final Map<CompressionCodec, StreamDecompressor> REGISTERED_CODECS =
+  @FunctionalInterface
+  public interface StreamCompressor {
+    OutputStream compress(OutputStream outputStream) throws IOException;
+  }
+
+  public record Codec(StreamDecompressor streamDecompressor, StreamCompressor streamCompressor) {}
+
+  private static final Map<CompressionCodec, Codec> REGISTERED_CODECS =
       new HashMap<>() {
         {
-          put(CompressionCodec.UNCOMPRESSED, inputStream -> inputStream);
-          put(CompressionCodec.SNAPPY, SnappyInputStream::new);
-          put(CompressionCodec.GZIP, GZIPInputStream::new);
+          put(
+              CompressionCodec.UNCOMPRESSED,
+              new Codec(inputStream -> inputStream, outputStream -> outputStream));
+          put(CompressionCodec.SNAPPY, new Codec(SnappyInputStream::new, SnappyOutputStream::new));
+          put(CompressionCodec.GZIP, new Codec(GZIPInputStream::new, GZIPOutputStream::new));
           put(
               CompressionCodec.LZO,
-              inputStream -> new LzoInputStream(inputStream, new LzoDecompressor1x()));
-          put(CompressionCodec.BROTLI, BrotliInputStream::new);
-          put(CompressionCodec.LZ4, LZ4BlockInputStream::new);
+              new Codec(
+                  inputStream -> new LzoInputStream(inputStream, new LzoDecompressor1x()),
+                  outputStream -> new LzoOutputStream(outputStream, new LzoCompressor1x_1())));
+          put(
+              CompressionCodec.BROTLI,
+              new Codec(
+                  BrotliInputStream::new,
+                  outputStream -> {
+                    throw new UnsupportedOperationException("No Brotli write support yet");
+                  }));
+          put(CompressionCodec.LZ4, new Codec(LZ4BlockInputStream::new, LZ4BlockOutputStream::new));
         }
       };
 
   public static synchronized void register(
-      CompressionCodec compressionCodec, StreamDecompressor streamDecompressor) {
-    REGISTERED_CODECS.put(compressionCodec, streamDecompressor);
+      final CompressionCodec compressionCodec, final Codec codec) {
+    REGISTERED_CODECS.put(compressionCodec, codec);
   }
 
-  public static InputStream decompress(CompressionCodec compressionCodec, InputStream inputStream)
-      throws IOException {
-    final var decompressor = REGISTERED_CODECS.get(compressionCodec);
-    if (decompressor == null) {
+  private static Codec getCodec(final CompressionCodec compressionCodec) {
+    final var codec = REGISTERED_CODECS.get(compressionCodec);
+    if (codec == null) {
       throw new UnsupportedOperationException(
           "Use "
               + CompressionCodecs.class.getName()
@@ -49,6 +71,16 @@ public final class CompressionCodecs {
               + " "
               + compressionCodec);
     }
-    return decompressor.decompress(inputStream);
+    return codec;
+  }
+
+  public static InputStream decompress(
+      final CompressionCodec compressionCodec, final InputStream inputStream) throws IOException {
+    return getCodec(compressionCodec).streamDecompressor().decompress(inputStream);
+  }
+
+  public static OutputStream compress(
+      final CompressionCodec compressionCodec, final OutputStream outputStream) throws IOException {
+    return getCodec(compressionCodec).streamCompressor().compress(outputStream);
   }
 }
