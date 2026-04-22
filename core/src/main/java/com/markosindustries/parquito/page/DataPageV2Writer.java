@@ -60,30 +60,33 @@ public class DataPageV2Writer<Value> implements DataPageWriter<Value> {
     // ordering, etc
     final Encoding selectedEncoding = Encoding.PLAIN;
 
-    final var compressedPageOutputStream = new ByteCountingOutputStream(pageOutputBufferStream);
-    final var uncompressedPageOutputStream =
-        new ByteCountingOutputStream(
-            CompressionCodecs.compress(columnMetaData.codec, compressedPageOutputStream));
-
+    final var levelsOutputStream = new ByteCountingOutputStream(pageOutputBufferStream);
     INT_ENCODING_RLE_WITHOUT_LENGTH_HEADER.encode(
         repetitionLevels,
         IntEncodings.bitWidth(
             columnChunkWriter.getColumnType().schemaNode().getRepetitionLevelMax()),
-        uncompressedPageOutputStream);
+        levelsOutputStream);
     INT_ENCODING_RLE_WITHOUT_LENGTH_HEADER.encode(
         definitionLevels,
         IntEncodings.bitWidth(
             columnChunkWriter.getColumnType().schemaNode().getDefinitionLevelMax()),
-        uncompressedPageOutputStream);
+        levelsOutputStream);
+    levelsOutputStream.flush();
 
+
+    final var compressedValuesOutputStream = new ByteCountingOutputStream(pageOutputBufferStream);
+    final var uncompressedValuesOutputStream =
+        new ByteCountingOutputStream(
+            CompressionCodecs.compress(columnMetaData.codec, compressedValuesOutputStream));
     Encodings.<Value>getEncoding(columnMetaData.encodings.getFirst())
-        .encode(values, uncompressedPageOutputStream, columnChunkWriter);
+        .encode(values, uncompressedValuesOutputStream, columnChunkWriter);
+    uncompressedValuesOutputStream.flush();
 
     final var pageHeader =
         new PageHeader(
             PageType.DATA_PAGE_V2,
-            uncompressedPageOutputStream.getBytesWritten(),
-            compressedPageOutputStream.getBytesWritten());
+            levelsOutputStream.getBytesWritten() + uncompressedValuesOutputStream.getBytesWritten(),
+            levelsOutputStream.getBytesWritten() + compressedValuesOutputStream.getBytesWritten());
     // TODO - we could look at counting rows... seems expensive with current structure though
     // TODO - separate pages from column chunks - allow multiple smaller pages
     pageHeader.data_page_header_v2 =
