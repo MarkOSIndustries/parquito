@@ -12,23 +12,21 @@ import org.apache.parquet.format.ColumnMetaData;
 import org.apache.parquet.format.PageType;
 import org.apache.parquet.format.Statistics;
 
-public class ColumnChunkWriter<ReadAs> {
+public class ColumnChunkWriter<WriteAs> {
   private final ColumnMetaData columnMetaData;
-  private final ColumnType<ReadAs> columnType;
+  private final ColumnType<WriteAs> columnType;
   private final int leafDefinitionLevel;
   private final int leafRepetitionLevel;
 
-  private DataPageWriter<ReadAs> dataPageWriter;
-  private int groupDefinitionLevel;
-  private int groupRepetitionLevel;
+  private DataPageWriter<WriteAs> dataPageWriter;
   private ColumnChunk header;
-  private ReadAs minValue;
-  private ReadAs maxValue;
+  private WriteAs minValue;
+  private WriteAs maxValue;
 
   // TODO - naively assuming it'll make sense for this guy to hold onto the header and perform
   // mutations
   public ColumnChunkWriter(
-      final ColumnMetaData columnMetaData, final ColumnType<ReadAs> columnType) {
+      final ColumnMetaData columnMetaData, final ColumnType<WriteAs> columnType) {
     this.columnMetaData = columnMetaData;
     this.columnType = columnType;
     this.leafDefinitionLevel = columnType.schemaNode().getDefinitionLevelMax();
@@ -43,42 +41,27 @@ public class ColumnChunkWriter<ReadAs> {
 
   private void startNewChunk() {
     this.dataPageWriter = DataPageWriter.create(this, PageType.DATA_PAGE_V2);
-    this.groupDefinitionLevel = 0;
-    this.groupRepetitionLevel = 0;
     this.header = makeHeader();
   }
 
-  public ColumnType<ReadAs> getColumnType() {
+  public ColumnType<WriteAs> getColumnType() {
     return columnType;
   }
 
-  public void writeDictionaryPage(final SortedSet<ReadAs> dictionaryValues) {
+  public void writeDictionaryPage(final SortedSet<WriteAs> dictionaryValues) {
     throw new UnsupportedOperationException("Not implemented yet");
   }
 
-  public int getRequiredBytesToWrite(final ReadAs value) {
+  public int getRequiredBytesToWrite(final WriteAs value) {
     return columnType.parquetType().getRequiredBytesToWrite(value);
   }
 
-  // Call as we're going down the schema if node is non-leaf
-  public void enterGroup(final ParquetSchemaNode parquetSchemaNode) {
-    groupDefinitionLevel = parquetSchemaNode.getDefinitionLevelMax();
+  public void accumulateNull(final int repetitionLevel, final int definitionLevel) {
+    dataPageWriter.addNull(repetitionLevel, definitionLevel);
   }
 
-  // Call as we're going back up the schema if node is non-leaf
-  public void leaveGroup(final ParquetSchemaNode parquetSchemaNode) {
-    groupRepetitionLevel = parquetSchemaNode.getRepetitionLevelMax();
-  }
-
-  public void accumulateNull(final ParquetSchemaNode parquetSchemaNode) {
-    dataPageWriter.addNull(groupRepetitionLevel, parquetSchemaNode.getDefinitionLevelMax());
-    groupRepetitionLevel = parquetSchemaNode.getRepetitionLevelMax();
-  }
-
-  public void accumulateValue(final ReadAs value) {
-    dataPageWriter.addValue(
-        Objects.requireNonNull(value), groupRepetitionLevel, leafDefinitionLevel);
-    groupRepetitionLevel = leafRepetitionLevel;
+  public void accumulateValue(final int repetitionLevel, final WriteAs value) {
+    dataPageWriter.addValue(Objects.requireNonNull(value), repetitionLevel, leafDefinitionLevel);
 
     if (minValue == null || columnType.compare(minValue, value) > 0) {
       minValue = value;

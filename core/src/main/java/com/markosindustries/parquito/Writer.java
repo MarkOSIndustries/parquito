@@ -8,25 +8,9 @@ public interface Writer<Value> {
 
   ParquetSchemaNode.Root getSchemaRoot();
 
-  interface WriteAccumulator {
+  interface DataPageAccumulator {
     ColumnChunkWriter<?> getColumnChunkWriter(final ParquetSchemaPath parquetSchemaPath);
-
-    void enterGroup(final ParquetSchemaNode parquetSchemaNode);
-
-    void leaveGroup(final ParquetSchemaNode parquetSchemaNode);
-
-    void nullGroup(final ParquetSchemaNode parquetSchemaNode);
   }
 
-  interface Shredder<Value> {
-    default void shredObject(Object value) {
-      shred((Value) value);
-    }
-
-    void shred(Value value);
-
-    void shredNull();
-  }
-
-  Shredder<Value> makeShredder(WriteAccumulator writeAccumulator);
+  WriteTranslator<Value, ?> getTranslator();
 }

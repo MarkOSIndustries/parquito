@@ -1,6 +1,7 @@
 package com.markosindustries.parquito;
 
 import static org.apache.parquet.hadoop.ParquetFileWriter.Mode.OVERWRITE;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.alibaba.fastjson2.JSONObject;
 import com.google.common.collect.Lists;
@@ -15,6 +16,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.column.ParquetProperties;
@@ -61,10 +63,12 @@ public class ParquitoAsReaderCompatibilityTests {
             parquetSpecsCompliant,
             List.of(),
             List.of());
+    final var actuallyReadTheFile = new AtomicBoolean(false);
     try (final var byteRangeReader = new FileByteRangeReader(file)) {
       ParquetFooter.read(byteRangeReader)
           .thenAccept(
               footer -> {
+                actuallyReadTheFile.set(true);
                 final var schema = ParquetSchemaNode.from(footer.schema);
                 for (RowGroup rowGroup : footer.row_groups) {
                   final var rowGroupReader = new RowGroupReader(rowGroup, schema);
@@ -74,15 +78,16 @@ public class ParquitoAsReaderCompatibilityTests {
                   var rows = 0;
                   while (rowIterator.hasNext()) {
                     final var next = rowIterator.next();
-                    Assertions.assertTrue(next.containsKey("some_repeated"));
-                    Assertions.assertTrue(next.containsKey("some_string"));
-                    Assertions.assertTrue(next.containsKey("some_map"));
+                    assertTrue(next.containsKey("some_repeated"));
+                    assertTrue(next.containsKey("some_string"));
+                    assertTrue(next.containsKey("some_map"));
                     rows++;
                   }
                   Assertions.assertEquals(2, rows);
                 }
               })
           .join();
+      assertTrue(actuallyReadTheFile.get(), "We never actually read the contents of the file");
     }
   }
 
@@ -107,9 +112,11 @@ public class ParquitoAsReaderCompatibilityTests {
             ? "{\"some_string\":\"\"}"
             : "{\"some_string\":\"\",\"some_repeated\":[],\"some_map\":[]}";
     try (final var byteRangeReader = new FileByteRangeReader(file)) {
+      final var actuallyReadTheFile = new AtomicBoolean(false);
       ParquetFooter.read(byteRangeReader)
           .thenAccept(
               footer -> {
+                actuallyReadTheFile.set(true);
                 final var schema = ParquetSchemaNode.from(footer.schema);
                 for (RowGroup rowGroup : footer.row_groups) {
                   final var rowGroupReader = new RowGroupReader(rowGroup, schema);
@@ -126,6 +133,7 @@ public class ParquitoAsReaderCompatibilityTests {
                 }
               })
           .join();
+      assertTrue(actuallyReadTheFile.get(), "We never actually read the contents of the file");
     }
   }
 
@@ -224,9 +232,11 @@ public class ParquitoAsReaderCompatibilityTests {
             List.of(),
             List.of());
     try (final var byteRangeReader = new FileByteRangeReader(file)) {
+      final var actuallyReadTheFile = new AtomicBoolean(false);
       ParquetFooter.read(byteRangeReader)
           .thenAccept(
               footer -> {
+                actuallyReadTheFile.set(true);
                 final var schema = ParquetSchemaNode.from(footer.schema);
                 final var rowReadSpec =
                     new RowReadSpec<>(new ProtobufReader<Example>(Example::newBuilder, schema));
@@ -245,6 +255,7 @@ public class ParquitoAsReaderCompatibilityTests {
                 }
               })
           .join();
+      assertTrue(actuallyReadTheFile.get(), "We never actually read the contents of the file");
     }
   }
 
@@ -392,7 +403,7 @@ public class ParquitoAsReaderCompatibilityTests {
                           .getColumnChunkReaderForSchemaPath(
                               byteRangeReader, schema.parseDotSeparatedPath("some_string"))
                           .orElseThrow();
-                  Assertions.assertTrue(columnChunkReader.mightContainObject("str"));
+                  assertTrue(columnChunkReader.mightContainObject("str"));
                   Assertions.assertFalse(columnChunkReader.mightContainObject("slab"));
                 }
               })
@@ -428,9 +439,8 @@ public class ParquitoAsReaderCompatibilityTests {
                               byteRangeReader, schema.parseDotSeparatedPath("some_string"))
                           .orElseThrow();
                   Assertions.assertFalse(columnChunkReader.mightContainObject("str"));
-                  Assertions.assertTrue(columnChunkReader.mightContainObject("stonks"));
-                  Assertions.assertTrue(
-                      columnChunkReader.mightContainAnyObjects(List.of("str", "stonks")));
+                  assertTrue(columnChunkReader.mightContainObject("stonks"));
+                  assertTrue(columnChunkReader.mightContainAnyObjects(List.of("str", "stonks")));
                   Assertions.assertFalse(
                       columnChunkReader.mightContainAnyObjects(List.of("str", "strut")));
                 }
@@ -467,9 +477,8 @@ public class ParquitoAsReaderCompatibilityTests {
                               byteRangeReader, schema.parseDotSeparatedPath("some_string"))
                           .orElseThrow();
                   Assertions.assertFalse(columnChunkReader.mightContainObject("str"));
-                  Assertions.assertTrue(columnChunkReader.mightContainObject("stonks"));
-                  Assertions.assertTrue(
-                      columnChunkReader.mightContainAnyObjects(List.of("str", "stonks")));
+                  assertTrue(columnChunkReader.mightContainObject("stonks"));
+                  assertTrue(columnChunkReader.mightContainAnyObjects(List.of("str", "stonks")));
                   Assertions.assertFalse(
                       columnChunkReader.mightContainAnyObjects(List.of("str", "strut")));
                 }

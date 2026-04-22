@@ -4,6 +4,7 @@ import static com.markosindustries.parquito.ParquetFooter.PARQUET_UNENCRYPTED_MA
 import static java.util.stream.Collectors.toMap;
 
 import com.markosindustries.parquito.encoding.LittleEndian;
+import com.markosindustries.parquito.rows.RowAccumulator;
 import com.markosindustries.parquito.types.ColumnType;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -21,7 +22,7 @@ import org.apache.parquet.format.KeyValue;
 import org.apache.parquet.format.RowGroup;
 import org.apache.parquet.format.SortingColumn;
 
-public class RowGroupWriter<Row> implements AutoCloseable, Writer.WriteAccumulator {
+public class RowGroupWriter<Row> implements AutoCloseable, Writer.DataPageAccumulator {
   private static final String CREATED_BY_STRING;
 
   static {
@@ -41,7 +42,7 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.WriteAccumulat
   private final ArrayList<SortingColumn> sortingColumns;
   private final ArrayList<ColumnChunkWriter<?>> columnChunkWriters;
   private final Map<ParquetSchemaPath, ColumnChunkWriter<?>> columnChunkWritersByPath;
-  private final Writer.Shredder<Row> shredder;
+  private final RowAccumulator<Row> rowAccumulator;
   private RowGroup currentRowGroup;
 
   public RowGroupWriter(
@@ -75,7 +76,7 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.WriteAccumulat
                     columnChunkWriter -> columnChunkWriter.getColumnType().schemaNode().getPath(),
                     Function.identity()));
 
-    this.shredder = writer.makeShredder(this);
+    this.rowAccumulator = new RowAccumulator<>(schemaRoot, writer.getTranslator(), this);
   }
 
   public void write(final Iterable<Row> rows) throws IOException {
@@ -93,7 +94,7 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.WriteAccumulat
       finishCurrentRowGroup();
       currentRowGroup = newRowGroup();
     }
-    shredder.shred(row);
+    rowAccumulator.accumulate(row);
     currentRowGroup.num_rows++;
   }
 
@@ -193,54 +194,6 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.WriteAccumulat
   @Override
   public ColumnChunkWriter<?> getColumnChunkWriter(final ParquetSchemaPath parquetSchemaPath) {
     return columnChunkWritersByPath.get(parquetSchemaPath);
-  }
-
-  @Override
-  public void enterGroup(final ParquetSchemaNode parquetSchemaNode) {
-    enterGroupRecursive(parquetSchemaNode, parquetSchemaNode);
-  }
-
-  private void enterGroupRecursive(
-      final ParquetSchemaNode entering, final ParquetSchemaNode current) {
-    final var writer = columnChunkWritersByPath.get(current.getPath());
-    if (writer != null) {
-      writer.enterGroup(entering);
-    }
-    for (final var child : current.getChildren()) {
-      enterGroupRecursive(entering, child);
-    }
-  }
-
-  @Override
-  public void leaveGroup(final ParquetSchemaNode parquetSchemaNode) {
-    leaveGroupRecursive(parquetSchemaNode, parquetSchemaNode);
-  }
-
-  public void leaveGroupRecursive(
-      final ParquetSchemaNode leaving, final ParquetSchemaNode current) {
-    final var writer = columnChunkWritersByPath.get(current.getPath());
-    if (writer != null) {
-      writer.leaveGroup(leaving);
-    }
-    for (final var child : current.getChildren()) {
-      leaveGroupRecursive(leaving, child);
-    }
-  }
-
-  @Override
-  public void nullGroup(final ParquetSchemaNode parquetSchemaNode) {
-    nullGroupRecursive(parquetSchemaNode, parquetSchemaNode);
-  }
-
-  public void nullGroupRecursive(
-      final ParquetSchemaNode nullNode, final ParquetSchemaNode current) {
-    final var writer = columnChunkWritersByPath.get(current.getPath());
-    if (writer != null) {
-      writer.accumulateNull(nullNode);
-    }
-    for (final var child : current.getChildren()) {
-      nullGroupRecursive(nullNode, child);
-    }
   }
 
   public record WriteSpec(long maxRowsPerRowGroup, CompressionCodec compressionCodec) {}
