@@ -38,7 +38,10 @@ public final class CompressionCodecs {
               CompressionCodec.UNCOMPRESSED,
               new Codec(inputStream -> inputStream, outputStream -> outputStream));
           put(CompressionCodec.SNAPPY, new Codec(SnappyInputStream::new, SnappyOutputStream::new));
-          put(CompressionCodec.GZIP, new Codec(GZIPInputStream::new, outputStream -> new GZIPOutputStream(outputStream, true)));
+          put(
+              CompressionCodec.GZIP,
+              new Codec(
+                  GZIPInputStream::new, outputStream -> new GZIPOutputStream(outputStream, true)));
           put(
               CompressionCodec.LZO,
               new Codec(

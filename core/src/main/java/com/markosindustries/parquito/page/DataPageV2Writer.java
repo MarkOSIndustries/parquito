@@ -73,7 +73,6 @@ public class DataPageV2Writer<Value> implements DataPageWriter<Value> {
         levelsOutputStream);
     levelsOutputStream.flush();
 
-
     final var compressedValuesOutputStream = new ByteCountingOutputStream(pageOutputBufferStream);
     final var uncompressedValuesOutputStream =
         new ByteCountingOutputStream(
