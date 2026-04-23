@@ -1,5 +1,6 @@
 package com.markosindustries.parquito;
 
+import com.markosindustries.parquito.compression.SnappyCompressOnFlushOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -16,7 +17,6 @@ import org.anarres.lzo.LzoOutputStream;
 import org.apache.parquet.format.CompressionCodec;
 import org.brotli.dec.BrotliInputStream;
 import org.xerial.snappy.SnappyInputStream;
-import org.xerial.snappy.SnappyOutputStream;
 
 public final class CompressionCodecs {
   @FunctionalInterface
@@ -37,7 +37,9 @@ public final class CompressionCodecs {
           put(
               CompressionCodec.UNCOMPRESSED,
               new Codec(inputStream -> inputStream, outputStream -> outputStream));
-          put(CompressionCodec.SNAPPY, new Codec(SnappyInputStream::new, SnappyOutputStream::new));
+          put(
+              CompressionCodec.SNAPPY,
+              new Codec(SnappyInputStream::new, SnappyCompressOnFlushOutputStream::new));
           put(
               CompressionCodec.GZIP,
               new Codec(

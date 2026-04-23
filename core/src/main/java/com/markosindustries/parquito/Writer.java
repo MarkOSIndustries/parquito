@@ -8,6 +8,7 @@ public interface Writer<Value> {
 
   ParquetSchemaNode.Root getSchemaRoot();
 
+  // TODO - move this somewhere else
   interface DataPageAccumulator {
     ColumnChunkWriter<?> getColumnChunkWriter(final ParquetSchemaPath parquetSchemaPath);
   }

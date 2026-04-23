@@ -1,15 +1,22 @@
 package com.markosindustries.parquito;
 
+import static org.apache.parquet.proto.ProtoReadSupport.PB_CLASS;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import com.google.common.collect.Lists;
 import com.google.protobuf.ByteString;
+import com.markosindustries.parquito.filesys.SimpleInputFile;
 import com.markosindustries.parquito.protobuf.ProtobufParquetConfig;
 import com.markosindustries.parquito.protobuf.ProtobufWriter;
 import com.markosindustries.parquito.schemas.Example;
 import com.markosindustries.parquito.schemas.ExampleChild;
 import com.markosindustries.parquito.schemas.ExampleEnum;
+import java.io.FileOutputStream;
+import java.nio.file.Files;
 import java.util.List;
 import java.util.stream.Stream;
 import org.apache.parquet.format.CompressionCodec;
+import org.apache.parquet.proto.ProtoParquetReader;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -26,7 +33,7 @@ public class ParquitoAsWriterCompatibilityTests {
 
   @ParameterizedTest
   @MethodSource("writerConfigCombinations")
-  public void writeProtobufsThenReadThem(CompressionCodec compressionCodec) throws Exception {
+  public void writeProtobufsThenReadThem(final CompressionCodec compressionCodec) throws Exception {
     final var inputProtobufs =
         List.of(
             Example.newBuilder()
@@ -102,10 +109,22 @@ public class ParquitoAsWriterCompatibilityTests {
                 2, compressionCodec
                 /* TODO - config for where to keep unique values? eg: disk/heap*/ ),
             ProtobufWriter.<Example>fromDescriptor(
-                Example.getDescriptor(), new ProtobufParquetConfig(true)))) {
+                Example.getDescriptor(), new ProtobufParquetConfig(false)))) {
+      writer.putMetaData(PB_CLASS, Example.class.getName());
       writer.write(inputProtobufs.iterator());
     }
 
-    // TODO read with hadoop parquet (borrow distroboy code)
+    final var tempFile = Files.createTempFile("parquito.as.writer", ".parquet");
+
+    outputStream.writeTo(new FileOutputStream(tempFile.toFile()));
+
+    final var reader =
+        ProtoParquetReader.<Example.Builder>builder(new SimpleInputFile(tempFile.toFile())).build();
+    var rowIndex = 0;
+    for (var builder = reader.read(); builder != null; builder = reader.read()) {
+      assertEquals(inputProtobufs.get(rowIndex), builder.build());
+      rowIndex++;
+    }
+    assertEquals(inputProtobufs.size(), rowIndex);
   }
 }

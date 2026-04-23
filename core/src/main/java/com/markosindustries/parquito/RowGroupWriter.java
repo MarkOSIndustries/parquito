@@ -109,6 +109,7 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.DataPageAccumu
     for (final var columnChunkWriter : columnChunkWriters) {
       final var offset = byteCountingStream.getBytesWritten();
       final var columnChunkHeader = columnChunkWriter.writeAllAndReset(byteCountingStream);
+      columnChunkHeader.meta_data.setData_page_offset(offset);
       columnChunkHeader.setFile_offset(
           offset); // TODO - does this need to move after the dictionary gets written?
       // TODO remove this temp sanity check
