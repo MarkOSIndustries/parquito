@@ -105,10 +105,10 @@ public class ParquitoRoundTripTests {
         new RowGroupWriter<>(
             outputStream,
             new RowGroupWriter.WriteSpec(
-                2, compressionCodec
+                2, compressionCodec, EncodingSelector.DEFAULT
                 /* TODO - config for where to keep unique values? eg: disk/heap*/ ),
             ProtobufWriter.<Example>fromDescriptor(
-                Example.getDescriptor(), new ProtobufParquetConfig(true)))) {
+                Example.getDescriptor(), new ProtobufParquetConfig(false)))) {
       writer.write(expectedProtobufs.iterator());
     }
 
@@ -130,7 +130,6 @@ public class ParquitoRoundTripTests {
                           byteRangeReader);
                   while (rowIterator.hasNext()) {
                     final var row = rowIterator.next();
-                    System.err.println("Row " + rowIndex + ": " + row);
                     assertEquals(
                         expectedProtobufs.get(rowIndex), row, "Row " + rowIndex + " did not match");
                     rowIndex++;

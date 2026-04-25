@@ -1,13 +1,10 @@
 package com.markosindustries.parquito.page;
 
 import com.markosindustries.parquito.ColumnChunkWriter;
-import java.io.IOException;
-import java.io.OutputStream;
-import org.apache.parquet.format.ColumnMetaData;
 import org.apache.parquet.format.PageHeader;
 import org.apache.parquet.format.PageType;
 
-public interface DataPageWriter<Value> {
+public interface DataPageWriter<Value> extends ParquetPageWriter {
   static <Value> DataPageWriter<Value> create(
       final ColumnChunkWriter<Value> columnChunkWriter, PageType pageType) {
     return switch (pageType) {
@@ -22,10 +19,7 @@ public interface DataPageWriter<Value> {
 
   void addValue(final Value value, final int repetitionLevel, final int definitionLevel);
 
-  PageHeader writePage(final ColumnMetaData columnMetaData, final OutputStream outputStream)
-      throws IOException;
-
-  long getNumValues(final PageHeader pageHeader);
-
   long getNumNulls(final PageHeader pageHeader);
+
+  long getNumNulls();
 }

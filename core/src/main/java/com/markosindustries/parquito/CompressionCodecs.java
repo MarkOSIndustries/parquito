@@ -42,8 +42,7 @@ public final class CompressionCodecs {
               new Codec(SnappyInputStream::new, SnappyCompressOnFlushOutputStream::new));
           put(
               CompressionCodec.GZIP,
-              new Codec(
-                  GZIPInputStream::new, outputStream -> new GZIPOutputStream(outputStream, true)));
+              new Codec(GZIPInputStream::new, outputStream -> new GZIPOutputStream(outputStream)));
           put(
               CompressionCodec.LZO,
               new Codec(

@@ -52,13 +52,10 @@ public class DataPageV2Writer<Value> implements DataPageWriter<Value> {
   }
 
   @Override
-  public PageHeader writePage(final ColumnMetaData columnMetaData, final OutputStream outputStream)
+  public PageHeader writePage(
+      final Encoding encoding, final ColumnMetaData columnMetaData, final OutputStream outputStream)
       throws IOException {
     final var pageOutputBufferStream = new ByteBufferOutputStream();
-
-    // TODO - drive this off the schema node type and maybe something about value cardinality,
-    // ordering, etc
-    final Encoding selectedEncoding = Encoding.PLAIN;
 
     final var repetitionLevelsOutputStream = new ByteCountingOutputStream(pageOutputBufferStream);
     INT_ENCODING_RLE_WITHOUT_LENGTH_HEADER.encode(
@@ -66,22 +63,22 @@ public class DataPageV2Writer<Value> implements DataPageWriter<Value> {
         IntEncodings.bitWidth(
             columnChunkWriter.getColumnType().schemaNode().getRepetitionLevelMax()),
         repetitionLevelsOutputStream);
-    repetitionLevelsOutputStream.flush();
+    repetitionLevelsOutputStream.close();
     final var definitionLevelsOutputStream = new ByteCountingOutputStream(pageOutputBufferStream);
     INT_ENCODING_RLE_WITHOUT_LENGTH_HEADER.encode(
         definitionLevels,
         IntEncodings.bitWidth(
             columnChunkWriter.getColumnType().schemaNode().getDefinitionLevelMax()),
         definitionLevelsOutputStream);
-    definitionLevelsOutputStream.flush();
+    definitionLevelsOutputStream.close();
 
     final var compressedValuesOutputStream = new ByteCountingOutputStream(pageOutputBufferStream);
     final var uncompressedValuesOutputStream =
         new ByteCountingOutputStream(
             CompressionCodecs.compress(columnMetaData.codec, compressedValuesOutputStream));
-    Encodings.<Value>getEncoding(columnMetaData.encodings.getFirst())
+    Encodings.<Value>getEncoding(encoding)
         .encode(values, uncompressedValuesOutputStream, columnChunkWriter);
-    uncompressedValuesOutputStream.flush();
+    uncompressedValuesOutputStream.close();
 
     final var levelsBytesWritten =
         repetitionLevelsOutputStream.getBytesWritten()
@@ -97,7 +94,7 @@ public class DataPageV2Writer<Value> implements DataPageWriter<Value> {
     pageHeader.data_page_header_v2 =
         dataPageHeaderV2
             .setIs_compressed(!columnMetaData.codec.equals(CompressionCodec.UNCOMPRESSED))
-            .setEncoding(selectedEncoding)
+            .setEncoding(encoding)
             .setRepetition_levels_byte_length(repetitionLevelsOutputStream.getBytesWritten())
             .setDefinition_levels_byte_length(definitionLevelsOutputStream.getBytesWritten());
 
@@ -113,7 +110,17 @@ public class DataPageV2Writer<Value> implements DataPageWriter<Value> {
   }
 
   @Override
+  public long getNumValues() {
+    return dataPageHeaderV2.num_values;
+  }
+
+  @Override
   public long getNumNulls(final PageHeader pageHeader) {
     return pageHeader.data_page_header_v2.num_nulls;
+  }
+
+  @Override
+  public long getNumNulls() {
+    return dataPageHeaderV2.num_nulls;
   }
 }

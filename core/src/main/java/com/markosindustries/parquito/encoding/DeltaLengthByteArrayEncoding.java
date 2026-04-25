@@ -19,12 +19,10 @@ public class DeltaLengthByteArrayEncoding<ReadAs> implements ParquetEncoding<Rea
       throws IOException {
     final var lengths = DeltaBinaryPackedEncoding.decode32(expectedValues, decompressedPageStream);
     final var offsets = new int[lengths.length];
-    {
-      int offset = 0;
-      for (int i = 0; i < offsets.length; i++) {
-        offsets[i] += offset;
-        offset += lengths[i];
-      }
+    int offset = 0;
+    for (int i = 0; i < offsets.length; i++) {
+      offsets[i] += offset;
+      offset += lengths[i];
     }
     final var bytes = ByteBuffer.wrap(decompressedPageStream.readAllBytes());
 
@@ -41,7 +39,11 @@ public class DeltaLengthByteArrayEncoding<ReadAs> implements ParquetEncoding<Rea
     var totalBytesForValues = 0;
     for (var i = 0; i < values.size(); i++) {
       totalBytesForValues +=
-          (lengths[i] = columnChunkWriter.getRequiredBytesToWrite(values.get(i)));
+          (lengths[i] =
+              columnChunkWriter
+                  .getColumnType()
+                  .parquetType()
+                  .getRequiredBytesToWrite(values.get(i)));
     }
 
     DeltaBinaryPackedEncoding.encode32(lengths, uncompressedPageStream);

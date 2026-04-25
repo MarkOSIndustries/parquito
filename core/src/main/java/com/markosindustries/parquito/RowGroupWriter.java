@@ -16,7 +16,6 @@ import java.util.Map;
 import java.util.function.Function;
 import org.apache.parquet.format.ColumnMetaData;
 import org.apache.parquet.format.CompressionCodec;
-import org.apache.parquet.format.Encoding;
 import org.apache.parquet.format.FileMetaData;
 import org.apache.parquet.format.KeyValue;
 import org.apache.parquet.format.RowGroup;
@@ -109,9 +108,11 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.DataPageAccumu
     for (final var columnChunkWriter : columnChunkWriters) {
       final var offset = byteCountingStream.getBytesWritten();
       final var columnChunkHeader = columnChunkWriter.writeAllAndReset(byteCountingStream);
-      columnChunkHeader.meta_data.setData_page_offset(offset);
-      columnChunkHeader.setFile_offset(
-          offset); // TODO - does this need to move after the dictionary gets written?
+      if (columnChunkHeader.meta_data.isSetDictionary_page_offset()) {
+        columnChunkHeader.meta_data.dictionary_page_offset += offset;
+      }
+      columnChunkHeader.meta_data.data_page_offset += offset;
+      columnChunkHeader.setFile_offset(columnChunkHeader.meta_data.data_page_offset);
       // TODO remove this temp sanity check
       if (byteCountingStream.getBytesWritten() - offset
           != columnChunkHeader.meta_data.total_compressed_size) {
@@ -149,7 +150,7 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.DataPageAccumu
       final var columnMetadata =
           new ColumnMetaData(
               schemaNode.getElement().type,
-              List.of(Encoding.PLAIN /* TODO */),
+              null,
               schemaNode.getPath().asNamesOnly(),
               writeSpec.compressionCodec(),
               0,
@@ -161,7 +162,7 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.DataPageAccumu
               columnMetadata,
               sortingColumns.get(schemaNode.getColumnIndex().getAsInt()),
               schemaNode);
-      columnChunkWriters.add(ColumnChunkWriter.create(columnMetadata, columnType));
+      columnChunkWriters.add(ColumnChunkWriter.create(columnMetadata, columnType, writeSpec));
     } else {
       for (final var child : schemaNode.getChildren()) {
         buildColumnChunkWritersRecursively(columnChunkWriters, child);
@@ -197,5 +198,8 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.DataPageAccumu
     return columnChunkWritersByPath.get(parquetSchemaPath);
   }
 
-  public record WriteSpec(long maxRowsPerRowGroup, CompressionCodec compressionCodec) {}
+  public record WriteSpec(
+      long maxRowsPerRowGroup,
+      CompressionCodec compressionCodec,
+      EncodingSelector encodingSelector) {}
 }

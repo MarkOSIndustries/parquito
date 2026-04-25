@@ -154,6 +154,10 @@ public class DeltaBinaryPackedEncoding<ReadAs> implements ParquetEncoding<ReadAs
     Varint.writeUnsignedVarInt(miniBlocksPerBlock, dataOutputStream);
     Varint.writeUnsignedVarInt(totalValueCount, dataOutputStream);
 
+    if (totalValueCount == 0) {
+      return;
+    }
+
     final var valuesPerMiniBlock = valuesPerBlock / miniBlocksPerBlock;
     long previousValue = sourceArray.get(0);
     Varint.writeUnsignedVarLong(ZigZag.encode(previousValue), dataOutputStream);

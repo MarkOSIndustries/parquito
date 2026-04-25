@@ -106,7 +106,7 @@ public class ParquitoAsWriterCompatibilityTests {
         new RowGroupWriter<>(
             outputStream,
             new RowGroupWriter.WriteSpec(
-                2, compressionCodec
+                2, compressionCodec, EncodingSelector.DEFAULT
                 /* TODO - config for where to keep unique values? eg: disk/heap*/ ),
             ProtobufWriter.<Example>fromDescriptor(
                 Example.getDescriptor(), new ProtobufParquetConfig(false)))) {

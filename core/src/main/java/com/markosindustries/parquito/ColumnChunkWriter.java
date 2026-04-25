@@ -1,66 +1,70 @@
 package com.markosindustries.parquito;
 
 import com.markosindustries.parquito.page.DataPageWriter;
+import com.markosindustries.parquito.page.DictionaryPageWriter;
 import com.markosindustries.parquito.types.ColumnType;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.Objects;
-import java.util.SortedSet;
 import org.apache.parquet.format.ColumnChunk;
 import org.apache.parquet.format.ColumnMetaData;
+import org.apache.parquet.format.Encoding;
 import org.apache.parquet.format.PageType;
 import org.apache.parquet.format.Statistics;
 
-public class ColumnChunkWriter<WriteAs> {
+public class ColumnChunkWriter<Value> {
   private final ColumnMetaData columnMetaData;
-  private final ColumnType<WriteAs> columnType;
+  private final ColumnType<Value> columnType;
   private final int leafDefinitionLevel;
   private final int leafRepetitionLevel;
+  private final EncodingSelector encodingSelector;
 
-  private DataPageWriter<WriteAs> dataPageWriter;
-  private ColumnChunk header;
-  private WriteAs minValue;
-  private WriteAs maxValue;
+  private DictionaryPageWriter<Value> dictionaryPageWriter;
+  private DataPageWriter<Value> dataPageWriter;
+  private ColumnChunk currentHeader;
+  private Value minValue;
+  private Value maxValue;
 
-  // TODO - naively assuming it'll make sense for this guy to hold onto the header and perform
-  // mutations
   public ColumnChunkWriter(
-      final ColumnMetaData columnMetaData, final ColumnType<WriteAs> columnType) {
+      final ColumnMetaData columnMetaData,
+      final ColumnType<Value> columnType,
+      final RowGroupWriter.WriteSpec writeSpec) {
     this.columnMetaData = columnMetaData;
     this.columnType = columnType;
     this.leafDefinitionLevel = columnType.schemaNode().getDefinitionLevelMax();
     this.leafRepetitionLevel = columnType.schemaNode().getRepetitionLevelMax();
+    this.encodingSelector = writeSpec.encodingSelector();
+    //    this.usesBloomFilter = true; // TODO - get from writer config
     startNewChunk();
   }
 
   public static <ReadAs> ColumnChunkWriter<ReadAs> create(
-      final ColumnMetaData columnMetaData, final ColumnType<ReadAs> columnType) {
-    return new ColumnChunkWriter<ReadAs>(columnMetaData, columnType);
+      final ColumnMetaData columnMetaData,
+      final ColumnType<ReadAs> columnType,
+      final RowGroupWriter.WriteSpec writeSpec) {
+    return new ColumnChunkWriter<ReadAs>(columnMetaData, columnType, writeSpec);
   }
 
   private void startNewChunk() {
+    this.dictionaryPageWriter = new DictionaryPageWriter<>(this);
     this.dataPageWriter = DataPageWriter.create(this, PageType.DATA_PAGE_V2);
-    this.header = makeHeader();
+    this.currentHeader = makeHeader();
   }
 
-  public ColumnType<WriteAs> getColumnType() {
+  public ColumnType<Value> getColumnType() {
     return columnType;
   }
 
-  public void writeDictionaryPage(final SortedSet<WriteAs> dictionaryValues) {
-    throw new UnsupportedOperationException("Not implemented yet");
-  }
-
-  public int getRequiredBytesToWrite(final WriteAs value) {
-    return columnType.parquetType().getRequiredBytesToWrite(value);
+  public DictionaryPageWriter<Value> getDictionaryPageWriter() {
+    return dictionaryPageWriter;
   }
 
   public void accumulateNull(final int repetitionLevel, final int definitionLevel) {
     dataPageWriter.addNull(repetitionLevel, definitionLevel);
   }
 
-  public void accumulateValue(final int repetitionLevel, final WriteAs value) {
+  public void accumulateValue(final int repetitionLevel, final Value value) {
     dataPageWriter.addValue(Objects.requireNonNull(value), repetitionLevel, leafDefinitionLevel);
 
     if (minValue == null || columnType.compare(minValue, value) > 0) {
@@ -69,6 +73,8 @@ public class ColumnChunkWriter<WriteAs> {
     if (maxValue == null || columnType.compare(maxValue, value) < 0) {
       maxValue = value;
     }
+
+    dictionaryPageWriter.addValue(value);
   }
 
   public ColumnChunk writeAllAndReset(final OutputStream outputStream) throws IOException {
@@ -76,26 +82,51 @@ public class ColumnChunkWriter<WriteAs> {
       final var minBuffer =
           ByteBuffer.allocate(columnType.parquetType().getRequiredBytesToWrite(minValue));
       columnType.parquetType().writeToByteBuffer(minValue, minBuffer);
-      this.header.meta_data.statistics.setMin_value(minBuffer);
+      this.currentHeader.meta_data.statistics.setMin_value(minBuffer);
     }
     if (maxValue != null) {
       final var maxBuffer =
           ByteBuffer.allocate(columnType.parquetType().getRequiredBytesToWrite(maxValue));
       columnType.parquetType().writeToByteBuffer(maxValue, maxBuffer);
-      this.header.meta_data.statistics.setMax_value(maxBuffer);
+      this.currentHeader.meta_data.statistics.setMax_value(maxBuffer);
     }
 
-    final var countingOutputStream = new ByteCountingOutputStream(outputStream);
-    final var pageHeader = dataPageWriter.writePage(this.header.meta_data, countingOutputStream);
-    this.header.meta_data.total_compressed_size += countingOutputStream.getBytesWritten();
-    this.header.meta_data.total_uncompressed_size +=
-        countingOutputStream.getBytesWritten()
-            + (pageHeader.uncompressed_page_size - pageHeader.compressed_page_size);
-    this.header.meta_data.num_values += dataPageWriter.getNumValues(pageHeader);
-    this.header.meta_data.statistics.null_count += dataPageWriter.getNumNulls(pageHeader);
+    final var selectedEncoding =
+        encodingSelector.selectEncoding(
+            this.columnMetaData,
+            dictionaryPageWriter.getNumValues(),
+            dataPageWriter.getNumValues(),
+            dataPageWriter.getNumNulls());
+    currentHeader.meta_data.addToEncodings(selectedEncoding);
 
-    final var result = header;
-    header = makeHeader();
+    if (selectedEncoding == Encoding.RLE_DICTIONARY) {
+      final var dictionaryOutputStream = new ByteCountingOutputStream(outputStream);
+      final var pageHeader =
+          dictionaryPageWriter.writePage(Encoding.PLAIN, columnMetaData, dictionaryOutputStream);
+      this.currentHeader.meta_data.total_compressed_size +=
+          dictionaryOutputStream.getBytesWritten();
+      this.currentHeader.meta_data.total_uncompressed_size +=
+          dictionaryOutputStream.getBytesWritten()
+              + (pageHeader.uncompressed_page_size - pageHeader.compressed_page_size);
+      this.currentHeader.meta_data.setDictionary_page_offset(0);
+      this.currentHeader.meta_data.setData_page_offset(dictionaryOutputStream.getBytesWritten());
+    } else {
+      this.currentHeader.meta_data.setData_page_offset(0);
+    }
+
+    final var dataPageOutputStream = new ByteCountingOutputStream(outputStream);
+    final var pageHeader =
+        dataPageWriter.writePage(
+            selectedEncoding, this.currentHeader.meta_data, dataPageOutputStream);
+    this.currentHeader.meta_data.total_compressed_size += dataPageOutputStream.getBytesWritten();
+    this.currentHeader.meta_data.total_uncompressed_size +=
+        dataPageOutputStream.getBytesWritten()
+            + (pageHeader.uncompressed_page_size - pageHeader.compressed_page_size);
+    this.currentHeader.meta_data.num_values += dataPageWriter.getNumValues(pageHeader);
+    this.currentHeader.meta_data.statistics.null_count += dataPageWriter.getNumNulls(pageHeader);
+
+    final var result = currentHeader;
+    currentHeader = makeHeader();
     startNewChunk();
     return result;
   }
