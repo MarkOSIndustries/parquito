@@ -1,6 +1,7 @@
 package com.markosindustries.parquito;
 
 import com.markosindustries.parquito.bloomfilter.BloomFilter;
+import com.markosindustries.parquito.bloomfilter.BloomFilterRead;
 import com.markosindustries.parquito.page.DataPageReader;
 import com.markosindustries.parquito.page.DictionaryPageReader;
 import com.markosindustries.parquito.types.ColumnType;
@@ -70,7 +71,7 @@ public class ColumnChunkReader<ReadAs> {
                                     + BLOOM_FILTER_HEADER_SIZE,
                                 bloomFilterHeader.numBytes)
                             .thenApplyAsync(
-                                bitset -> BloomFilter.from(bloomFilterHeader, bitset),
+                                bitset -> BloomFilter.create(bloomFilterHeader, bitset),
                                 Concurrency.DEFAULT_EXECUTOR);
                       } catch (IOException e) {
                         throw new RuntimeException(e);
@@ -145,7 +146,7 @@ public class ColumnChunkReader<ReadAs> {
     return dictionaryPage.join();
   }
 
-  public BloomFilter getBloomFilter() {
+  public BloomFilterRead getBloomFilter() {
     return bloomFilter.join();
   }
 

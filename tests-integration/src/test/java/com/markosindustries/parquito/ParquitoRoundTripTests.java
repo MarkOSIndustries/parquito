@@ -105,8 +105,7 @@ public class ParquitoRoundTripTests {
         new RowGroupWriter<>(
             outputStream,
             new RowGroupWriter.WriteSpec(
-                2, compressionCodec, EncodingSelector.DEFAULT
-                /* TODO - config for where to keep unique values? eg: disk/heap*/ ),
+                2, compressionCodec, EncodingSelector.DEFAULT, BloomFilterSelector.DEFAULT),
             ProtobufWriter.<Example>fromDescriptor(
                 Example.getDescriptor(), new ProtobufParquetConfig(false)))) {
       writer.write(expectedProtobufs.iterator());

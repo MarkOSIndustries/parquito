@@ -113,21 +113,14 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.DataPageAccumu
       }
       columnChunkHeader.meta_data.data_page_offset += offset;
       columnChunkHeader.setFile_offset(columnChunkHeader.meta_data.data_page_offset);
-      // TODO remove this temp sanity check
-      if (byteCountingStream.getBytesWritten() - offset
-          != columnChunkHeader.meta_data.total_compressed_size) {
-        throw new RuntimeException(
-            "The compressed bytes counted in the RowGroupWriter didn't match what the ColumnChunkHeader counted");
+
+      if (columnChunkHeader.meta_data.isSetBloom_filter_offset()) {
+        columnChunkHeader.meta_data.bloom_filter_offset += offset;
       }
+
       currentRowGroup.total_byte_size += columnChunkHeader.meta_data.total_uncompressed_size;
       currentRowGroup.total_compressed_size += columnChunkHeader.meta_data.total_compressed_size;
       currentRowGroup.addToColumns(columnChunkHeader);
-    }
-    // TODO remove this temp sanity check
-    if (byteCountingStream.getBytesWritten() - currentRowGroup.file_offset
-        != currentRowGroup.total_compressed_size) {
-      throw new RuntimeException(
-          "The compressed bytes counted in the RowGroupWriter didn't match what the offset difference indicates");
     }
 
     fileMetaData.addToRow_groups(currentRowGroup);
@@ -201,5 +194,6 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.DataPageAccumu
   public record WriteSpec(
       long maxRowsPerRowGroup,
       CompressionCodec compressionCodec,
-      EncodingSelector encodingSelector) {}
+      EncodingSelector encodingSelector,
+      BloomFilterSelector bloomFilterSelector) {}
 }

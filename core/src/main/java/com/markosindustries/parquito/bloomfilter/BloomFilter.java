@@ -2,23 +2,59 @@ package com.markosindustries.parquito.bloomfilter;
 
 import java.nio.ByteBuffer;
 import java.util.Collection;
+import org.apache.parquet.format.BloomFilterAlgorithm;
+import org.apache.parquet.format.BloomFilterCompression;
+import org.apache.parquet.format.BloomFilterHash;
 import org.apache.parquet.format.BloomFilterHeader;
+import org.apache.parquet.format.SplitBlockAlgorithm;
+import org.apache.parquet.format.Uncompressed;
+import org.apache.parquet.format.XxHash;
 
 public record BloomFilter(
-    BloomFilterHashFunction hashFunction, BloomFilterImplementation bloomFilterImplementation) {
+    BloomFilterHeader header,
+    ByteBuffer bitset,
+    BloomFilterHashFunction hashFunction,
+    BloomFilterImplementation bloomFilterImplementation)
+    implements BloomFilterRead, BloomFilterWrite {
 
-  public static BloomFilter from(BloomFilterHeader header, ByteBuffer bitset) {
+  public static BloomFilter create(final BloomFilterHeader header, final ByteBuffer bitset) {
     return new BloomFilter(
+        header,
+        bitset,
         BloomFilterHashFunctions.find(header.hash),
-        BloomFilterAlgorithms.read(header.algorithm, bitset));
+        BloomFilterAlgorithms.create(header.algorithm, bitset));
   }
 
-  public <ReadAs> boolean mightContain(final ReadAs value) {
+  public static BloomFilter createEmpty(
+      final long distinctValueCount, final double falsePositiveProbability) {
+    final BloomFilterHash hashFunction = BloomFilterHash.XXHASH(new XxHash());
+    final var algorithm = BloomFilterAlgorithm.BLOCK(new SplitBlockAlgorithm());
+    final var bitset =
+        ByteBuffer.allocate(
+            SplitBlockBloomFilterImplementation.bytesRequiredFor(
+                distinctValueCount, falsePositiveProbability));
+    final var header =
+        new BloomFilterHeader(
+            bitset.capacity(),
+            algorithm,
+            hashFunction,
+            BloomFilterCompression.UNCOMPRESSED(new Uncompressed()));
+    return create(header, bitset);
+  }
+
+  public static <Value> BloomFilter create(
+      final Collection<Value> distinctValues, final double falsePositiveProbability) {
+    final var bloomFilter = createEmpty(distinctValues.size(), falsePositiveProbability);
+    bloomFilter.insertAll(distinctValues);
+    return bloomFilter;
+  }
+
+  public <Value> boolean mightContain(final Value value) {
     final var hash = hashFunction.hash(value);
     return bloomFilterImplementation.mightContain(hash);
   }
 
-  public <ReadAs> boolean mightContainAny(final Collection<ReadAs> values) {
+  public <Value> boolean mightContainAny(final Collection<Value> values) {
     for (final var value : values) {
       final var hash = hashFunction.hash(value);
       if (bloomFilterImplementation.mightContain(hash)) {
@@ -26,5 +62,17 @@ public record BloomFilter(
       }
     }
     return false;
+  }
+
+  public <Value> void insert(final Value value) {
+    final var hash = hashFunction.hash(value);
+    bloomFilterImplementation.insert(hash);
+  }
+
+  public <Value> void insertAll(final Iterable<Value> values) {
+    for (final var value : values) {
+      final var hash = hashFunction.hash(value);
+      bloomFilterImplementation.insert(hash);
+    }
   }
 }

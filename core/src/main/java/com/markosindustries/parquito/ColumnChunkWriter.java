@@ -1,5 +1,6 @@
 package com.markosindustries.parquito;
 
+import com.markosindustries.parquito.bloomfilter.BloomFilter;
 import com.markosindustries.parquito.page.DataPageWriter;
 import com.markosindustries.parquito.page.DictionaryPageWriter;
 import com.markosindustries.parquito.types.ColumnType;
@@ -12,6 +13,7 @@ import org.apache.parquet.format.ColumnMetaData;
 import org.apache.parquet.format.Encoding;
 import org.apache.parquet.format.PageType;
 import org.apache.parquet.format.Statistics;
+import org.apache.parquet.format.Util;
 
 public class ColumnChunkWriter<Value> {
   private final ColumnMetaData columnMetaData;
@@ -19,6 +21,7 @@ public class ColumnChunkWriter<Value> {
   private final int leafDefinitionLevel;
   private final int leafRepetitionLevel;
   private final EncodingSelector encodingSelector;
+  private final BloomFilterSelector bloomFilterSelector;
 
   private DictionaryPageWriter<Value> dictionaryPageWriter;
   private DataPageWriter<Value> dataPageWriter;
@@ -35,6 +38,7 @@ public class ColumnChunkWriter<Value> {
     this.leafDefinitionLevel = columnType.schemaNode().getDefinitionLevelMax();
     this.leafRepetitionLevel = columnType.schemaNode().getRepetitionLevelMax();
     this.encodingSelector = writeSpec.encodingSelector();
+    this.bloomFilterSelector = writeSpec.bloomFilterSelector();
     //    this.usesBloomFilter = true; // TODO - get from writer config
     startNewChunk();
   }
@@ -124,6 +128,18 @@ public class ColumnChunkWriter<Value> {
             + (pageHeader.uncompressed_page_size - pageHeader.compressed_page_size);
     this.currentHeader.meta_data.num_values += dataPageWriter.getNumValues(pageHeader);
     this.currentHeader.meta_data.statistics.null_count += dataPageWriter.getNumNulls(pageHeader);
+
+    if (bloomFilterSelector.shouldWriteBloomFilter(
+        columnMetaData,
+        dictionaryPageWriter.getNumValues(),
+        dataPageWriter.getNumValues(),
+        dataPageWriter.getNumNulls())) {
+      final var bloomFilter = BloomFilter.create(dictionaryPageWriter.getDistinctValues(), 0.00001);
+      Util.writeBloomFilterHeader(bloomFilter.header(), outputStream);
+      outputStream.write(bloomFilter.bitset().array());
+      this.currentHeader.meta_data.setBloom_filter_offset(
+          this.currentHeader.meta_data.data_page_offset + dataPageOutputStream.getBytesWritten());
+    }
 
     final var result = currentHeader;
     currentHeader = makeHeader();

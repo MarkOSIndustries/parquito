@@ -23,7 +23,7 @@ public final class BloomFilterAlgorithms {
     REGISTERED_IMPLEMENTATIONS.put(hashFunction, bloomFilterImplementationConstructor);
   }
 
-  public static BloomFilterImplementation read(
+  public static BloomFilterImplementation create(
       final BloomFilterAlgorithm algorithm, ByteBuffer bitset) {
     final var registeredImplementation = REGISTERED_IMPLEMENTATIONS.get(algorithm.getSetField());
     if (Objects.isNull(registeredImplementation)) {

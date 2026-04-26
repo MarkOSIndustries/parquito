@@ -43,6 +43,8 @@ public abstract class BloomFilterHashFunction {
   abstract long hashBytes(ByteBuffer value);
 
   static final class XXH64 extends BloomFilterHashFunction {
+    public static final XXH64 INSTANCE = new XXH64();
+
     private static final LongHashFunction IMPL = LongHashFunction.xx();
 
     @Override

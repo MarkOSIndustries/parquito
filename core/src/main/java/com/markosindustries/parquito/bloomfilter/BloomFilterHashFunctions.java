@@ -11,7 +11,7 @@ public final class BloomFilterHashFunctions {
       REGISTERED_HASH_FUNCTIONS =
           new HashMap<>() {
             {
-              put(BloomFilterHash._Fields.XXHASH, BloomFilterHashFunction.XXH64::new);
+              put(BloomFilterHash._Fields.XXHASH, () -> BloomFilterHashFunction.XXH64.INSTANCE);
             }
           };
 

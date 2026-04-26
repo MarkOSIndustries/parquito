@@ -11,6 +11,7 @@ import it.unimi.dsi.fastutil.objects.Object2ReferenceRBTreeMap;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.List;
+import java.util.SortedSet;
 import org.apache.parquet.format.ColumnMetaData;
 import org.apache.parquet.format.DictionaryPageHeader;
 import org.apache.parquet.format.Encoding;
@@ -90,5 +91,9 @@ public class DictionaryPageWriter<Value> implements ParquetPageWriter {
       dictionaryIndex++;
     }
     return indices;
+  }
+
+  public SortedSet<Value> getDistinctValues() {
+    return dictionaryWithOriginalIndices.keySet();
   }
 }
