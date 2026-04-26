@@ -15,4 +15,8 @@
     <!-- This makes a bunch of noise when throwing in constructors, which isn't relevant unless you're using Finalizers -->
     <Bug pattern="CT_CONSTRUCTOR_THROW" />
   </Match>
+  <Match>
+    <!-- This tries to force more code to do the same thing when creating static anonymous implementations of classes -->
+    <Bug pattern="MS_EXPOSE_REP" />
+  </Match>
 </FindBugsFilter>

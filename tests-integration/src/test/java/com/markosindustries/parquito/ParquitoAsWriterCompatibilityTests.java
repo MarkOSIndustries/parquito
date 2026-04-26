@@ -115,7 +115,9 @@ public class ParquitoAsWriterCompatibilityTests {
 
     final var tempFile = Files.createTempFile("parquito.as.writer", ".parquet");
 
-    outputStream.writeTo(new FileOutputStream(tempFile.toFile()));
+    try (final var fileOutputStream = new FileOutputStream(tempFile.toFile())) {
+      outputStream.writeTo(fileOutputStream);
+    }
 
     final var reader =
         ProtoParquetReader.<Example.Builder>builder(new SimpleInputFile(tempFile.toFile())).build();
