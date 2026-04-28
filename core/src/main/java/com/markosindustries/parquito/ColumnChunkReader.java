@@ -23,7 +23,12 @@ import org.apache.parquet.format.SortingColumn;
 import org.apache.parquet.format.Util;
 
 public class ColumnChunkReader<ReadAs> {
-  private static final int BLOOM_FILTER_HEADER_SIZE = 18;
+  /**
+   * Usually between 14/18, but a bit of over-read won't hurt because the bloom filter bitset is
+   * next and it's minimum 32 bytes
+   */
+  private static final int BLOOM_FILTER_HEADER_SIZE = 32;
+
   private final org.apache.parquet.format.ColumnChunk header;
   private final ColumnType<ReadAs> columnType;
   private final CompletableFuture<DictionaryPageReader<ReadAs>> dictionaryPage;
@@ -63,12 +68,14 @@ public class ColumnChunkReader<ReadAs> {
                 .thenComposeAsync(
                     bloomHeaderInputStream -> {
                       try (bloomHeaderInputStream) {
+                        final var bloomFilterHeaderCountingStream =
+                            new ByteCountingInputStream(bloomHeaderInputStream);
                         final BloomFilterHeader bloomFilterHeader =
-                            Util.readBloomFilterHeader(bloomHeaderInputStream);
+                            Util.readBloomFilterHeader(bloomFilterHeaderCountingStream);
                         return byteRangeReader
                             .readAsBuffer(
                                 columnChunkHeader.meta_data.bloom_filter_offset
-                                    + BLOOM_FILTER_HEADER_SIZE,
+                                    + bloomFilterHeaderCountingStream.getBytesRead(),
                                 bloomFilterHeader.numBytes)
                             .thenApplyAsync(
                                 bitset -> BloomFilter.create(bloomFilterHeader, bitset),

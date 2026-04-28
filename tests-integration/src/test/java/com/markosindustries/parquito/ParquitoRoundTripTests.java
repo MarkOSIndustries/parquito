@@ -1,6 +1,8 @@
 package com.markosindustries.parquito;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.common.collect.Lists;
 import com.google.protobuf.ByteString;
@@ -127,14 +129,31 @@ public class ParquitoRoundTripTests {
                 var rowIndex = 0;
                 for (RowGroup rowGroup : footer.row_groups) {
                   final var rowGroupReader = new RowGroupReader(rowGroup, schema);
+                  final ColumnChunkReader<?> someStringColumnChunkReader =
+                      rowGroupReader
+                          .getColumnChunkReaderForSchemaPath(
+                              byteRangeReader,
+                              ParquetSchemaPath.parseDotSeparatedPath(
+                                  schema, "some_child.some_string"))
+                          .get();
+                  assertTrue(someStringColumnChunkReader.hasBloomFilter());
+                  assertFalse(someStringColumnChunkReader.getBloomFilter().mightContain("strx"));
                   final var rowIterator =
                       rowGroupReader.getRowIterator(
                           new RowReadSpec<>(new ProtobufReader<>(Example::newBuilder, schema)),
                           byteRangeReader);
                   while (rowIterator.hasNext()) {
                     final var row = rowIterator.next();
-                    assertEquals(
-                        expectedProtobufs.get(rowIndex), row, "Row " + rowIndex + " did not match");
+                    final var expectedProtobuf = expectedProtobufs.get(rowIndex);
+                    if (expectedProtobuf.hasSomeChild()) {
+                      assertTrue(
+                          someStringColumnChunkReader
+                              .getBloomFilter()
+                              .mightContain(expectedProtobuf.getSomeChild().getSomeString()),
+                          "Bloom filter did not contain "
+                              + expectedProtobuf.getSomeChild().getSomeString());
+                    }
+                    assertEquals(expectedProtobuf, row, "Row " + rowIndex + " did not match");
                     rowIndex++;
                   }
                 }
