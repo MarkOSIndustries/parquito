@@ -96,11 +96,13 @@ public class ColumnChunkWriter<Value> {
     }
 
     final var selectedEncoding =
-        encodingSelector.selectEncoding(
-            this.columnMetaData,
-            dictionaryPageWriter.getNumValues(),
-            dataPageWriter.getNumValues(),
-            dataPageWriter.getNumNulls());
+        (dataPageWriter.getNumValues() == dataPageWriter.getNumNulls())
+            ? Encoding.PLAIN
+            : encodingSelector.selectEncoding(
+                this.columnMetaData,
+                dictionaryPageWriter.getNumValues(),
+                dataPageWriter.getNumValues(),
+                dataPageWriter.getNumNulls());
     currentHeader.meta_data.addToEncodings(selectedEncoding);
 
     if (selectedEncoding == Encoding.RLE_DICTIONARY) {
