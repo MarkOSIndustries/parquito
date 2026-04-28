@@ -15,7 +15,7 @@ public interface BloomFilterSelector {
         final long distinctValues,
         final long totalValues,
         final long totalNulls) {
-      return columnMetaData.path_in_schema.contains("some_string");
+      return false;
     }
   }
 }

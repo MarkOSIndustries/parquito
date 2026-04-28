@@ -106,7 +106,11 @@ public class ParquitoAsWriterCompatibilityTests {
         new RowGroupWriter<>(
             outputStream,
             new RowGroupWriter.WriteSpec(
-                2, compressionCodec, EncodingSelector.DEFAULT, BloomFilterSelector.DEFAULT),
+                2,
+                compressionCodec,
+                EncodingSelector.DEFAULT,
+                (columnMetaData, distinctValues, totalValues, totalNulls) ->
+                    columnMetaData.path_in_schema.contains("some_string")),
             ProtobufWriter.<Example>fromDescriptor(
                 Example.getDescriptor(), new ProtobufParquetConfig(false)))) {
       writer.putMetaData(PB_CLASS, Example.class.getName());
