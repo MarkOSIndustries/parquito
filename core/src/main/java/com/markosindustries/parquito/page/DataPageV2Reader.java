@@ -42,7 +42,7 @@ public class DataPageV2Reader<ReadAs> implements DataPageReader<ReadAs> {
                 columnChunkReader.getColumnType().schemaNode().getDefinitionLevelMax()),
             pageStream);
 
-    final var bytesInLevels = pageStream.getBytesRead();
+    final var bytesInLevels = pageStream.getBytesReadAsInt();
 
     this.totalValues = pageHeader.data_page_header_v2.num_values;
     this.nonNullValues =

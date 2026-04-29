@@ -60,8 +60,8 @@ public class DictionaryPageWriter<Value> implements ParquetPageWriter {
     final var pageHeader =
         new PageHeader(
             PageType.DICTIONARY_PAGE,
-            uncompressedValuesOutputStream.getBytesWritten(),
-            compressedValuesOutputStream.getBytesWritten());
+            uncompressedValuesOutputStream.getBytesWrittenAsInt(),
+            compressedValuesOutputStream.getBytesWrittenAsInt());
     pageHeader.setDictionary_page_header(
         new DictionaryPageHeader(dictionaryWithOriginalIndices.size(), selectedEncoding));
 

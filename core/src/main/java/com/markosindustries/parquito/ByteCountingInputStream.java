@@ -6,15 +6,22 @@ import java.io.OutputStream;
 
 public class ByteCountingInputStream extends InputStream {
   private final InputStream inputStream;
-  private int bytesRead;
+  private long bytesRead;
 
   public ByteCountingInputStream(InputStream inputStream) {
     this.inputStream = inputStream;
     this.bytesRead = 0;
   }
 
-  public int getBytesRead() {
+  public long getBytesRead() {
     return bytesRead;
+  }
+
+  public int getBytesReadAsInt() {
+    if(bytesRead > Integer.MAX_VALUE) {
+      throw new ParquetIOException("Read more than " + Integer.MAX_VALUE + " bytes where parquet cannot support it");
+    }
+    return (int)bytesRead;
   }
 
   @Override

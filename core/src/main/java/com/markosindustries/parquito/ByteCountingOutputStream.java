@@ -6,15 +6,22 @@ import javax.annotation.Nonnull;
 
 public class ByteCountingOutputStream extends OutputStream {
   private final OutputStream outputStream;
-  private int bytesWritten;
+  private long bytesWritten;
 
   public ByteCountingOutputStream(final OutputStream outputStream) {
     this.outputStream = outputStream;
     this.bytesWritten = 0;
   }
 
-  public int getBytesWritten() {
+  public long getBytesWritten() {
     return bytesWritten;
+  }
+
+  public int getBytesWrittenAsInt() {
+    if(bytesWritten > Integer.MAX_VALUE) {
+      throw new ParquetIOException("Wrote more than " + Integer.MAX_VALUE + " bytes where parquet cannot support it");
+    }
+    return (int)bytesWritten;
   }
 
   @Override

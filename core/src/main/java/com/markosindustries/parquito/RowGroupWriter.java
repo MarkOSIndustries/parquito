@@ -182,7 +182,7 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.DataPageAccumu
     final var bytesBeforeFooter = byteCountingStream.getBytesWritten();
     ParquetFooter.write(fileMetaData, byteCountingStream).join();
     final var footerBytes = byteCountingStream.getBytesWritten() - bytesBeforeFooter;
-    LittleEndian.writeInt(footerBytes, byteCountingStream);
+    LittleEndian.writeInt((int)footerBytes, byteCountingStream);
     byteCountingStream.write(PARQUET_UNENCRYPTED_MAGIC_BYTES);
   }
 

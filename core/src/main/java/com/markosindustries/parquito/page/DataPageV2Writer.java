@@ -81,22 +81,22 @@ public class DataPageV2Writer<Value> implements DataPageWriter<Value> {
     uncompressedValuesOutputStream.close();
 
     final var levelsBytesWritten =
-        repetitionLevelsOutputStream.getBytesWritten()
-            + definitionLevelsOutputStream.getBytesWritten();
+        repetitionLevelsOutputStream.getBytesWrittenAsInt()
+            + definitionLevelsOutputStream.getBytesWrittenAsInt();
 
     final var pageHeader =
         new PageHeader(
             PageType.DATA_PAGE_V2,
-            levelsBytesWritten + uncompressedValuesOutputStream.getBytesWritten(),
-            levelsBytesWritten + compressedValuesOutputStream.getBytesWritten());
+            levelsBytesWritten + uncompressedValuesOutputStream.getBytesWrittenAsInt(),
+            levelsBytesWritten + compressedValuesOutputStream.getBytesWrittenAsInt());
     // TODO - we could look at counting rows... seems expensive with current structure though
     // TODO - separate pages from column chunks - allow multiple smaller pages
     pageHeader.data_page_header_v2 =
         dataPageHeaderV2
             .setIs_compressed(!columnMetaData.codec.equals(CompressionCodec.UNCOMPRESSED))
             .setEncoding(encoding)
-            .setRepetition_levels_byte_length(repetitionLevelsOutputStream.getBytesWritten())
-            .setDefinition_levels_byte_length(definitionLevelsOutputStream.getBytesWritten());
+            .setRepetition_levels_byte_length(repetitionLevelsOutputStream.getBytesWrittenAsInt())
+            .setDefinition_levels_byte_length(definitionLevelsOutputStream.getBytesWrittenAsInt());
 
     Util.writePageHeader(pageHeader, outputStream);
     pageOutputBufferStream.writeTo(outputStream);

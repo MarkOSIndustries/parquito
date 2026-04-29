@@ -53,7 +53,7 @@ public class ParquetFooter {
             Util.writeFileMetaData(metaData, countingOutputStream);
 
             final var footerSize = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
-            footerSize.putInt(countingOutputStream.getBytesWritten());
+            footerSize.putInt(countingOutputStream.getBytesWrittenAsInt());
 
             outputStream.write(PARQUET_UNENCRYPTED_MAGIC_BYTES);
           } catch (IOException e) {
