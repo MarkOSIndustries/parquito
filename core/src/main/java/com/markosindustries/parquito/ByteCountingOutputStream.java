@@ -18,10 +18,11 @@ public class ByteCountingOutputStream extends OutputStream {
   }
 
   public int getBytesWrittenAsInt() {
-    if(bytesWritten > Integer.MAX_VALUE) {
-      throw new ParquetIOException("Wrote more than " + Integer.MAX_VALUE + " bytes where parquet cannot support it");
+    if (bytesWritten > Integer.MAX_VALUE) {
+      throw new ParquetIOException(
+          "Wrote more than " + Integer.MAX_VALUE + " bytes where parquet cannot support it");
     }
-    return (int)bytesWritten;
+    return (int) bytesWritten;
   }
 
   @Override

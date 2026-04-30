@@ -18,10 +18,11 @@ public class ByteCountingInputStream extends InputStream {
   }
 
   public int getBytesReadAsInt() {
-    if(bytesRead > Integer.MAX_VALUE) {
-      throw new ParquetIOException("Read more than " + Integer.MAX_VALUE + " bytes where parquet cannot support it");
+    if (bytesRead > Integer.MAX_VALUE) {
+      throw new ParquetIOException(
+          "Read more than " + Integer.MAX_VALUE + " bytes where parquet cannot support it");
     }
-    return (int)bytesRead;
+    return (int) bytesRead;
   }
 
   @Override

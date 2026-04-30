@@ -106,12 +106,13 @@ public class ParquitoRoundTripTests {
     try (final var writer =
         new RowGroupWriter<>(
             outputStream,
-            new RowGroupWriter.WriteSpec(
-                2,
-                compressionCodec,
-                EncodingSelector.DEFAULT,
-                (columnMetaData, distinctValues, totalValues, totalNulls) ->
-                    columnMetaData.path_in_schema.contains("some_string")),
+            WriteSpec.newBuilder()
+                .withMaxRowsPerRowGroup(2)
+                .withCompressionCodec(compressionCodec)
+                .withBloomFilterSelector(
+                    (columnMetaData, distinctValues, totalValues, totalNulls) ->
+                        columnMetaData.path_in_schema.contains("some_string"))
+                .build(),
             ProtobufWriter.<Example>fromDescriptor(
                 Example.getDescriptor(), new ProtobufParquetConfig(false)))) {
       writer.write(expectedProtobufs.iterator());

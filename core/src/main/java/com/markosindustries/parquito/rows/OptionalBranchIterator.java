@@ -21,6 +21,9 @@ public class OptionalBranchIterator<Branch> implements ParquetFieldIterator<Bran
     this.definitionLevel = 0;
     this.repetitionLevel = 0;
     for (final var childIterator : childIterators) {
+      if (childIterator == null) {
+        continue;
+      }
       hasNext = hasNext || childIterator.hasNext();
       definitionLevel = Math.max(definitionLevel, childIterator.peekDefinitionLevel());
       repetitionLevel = Math.max(repetitionLevel, childIterator.peekRepetitionLevel());

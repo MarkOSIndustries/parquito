@@ -25,7 +25,7 @@ public class SnappyCompressOnFlushOutputStream extends ByteArrayOutputStream {
 
   @Override
   public void flush() throws IOException {
-    byte[] compressed = new byte[2 + count];
+    byte[] compressed = new byte[Snappy.maxCompressedLength(count)];
     final var compressedBytes = Snappy.compress(buf, 0, count, compressed, 0);
     outputStream.write(compressed, 0, compressedBytes);
     count = 0;

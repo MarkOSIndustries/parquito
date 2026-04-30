@@ -1,7 +1,7 @@
 package com.markosindustries.parquito.protobuf;
 
 import com.google.protobuf.Descriptors;
-import com.google.protobuf.MapEntry;
+import com.google.protobuf.Message;
 import com.markosindustries.parquito.ParquetSchemaNode;
 import com.markosindustries.parquito.WriteTranslator;
 
@@ -19,6 +19,8 @@ public class ProtobufMapWriteTranslator implements WriteTranslator<Object, Void>
 
     this.mapGroupWriteTranslator =
         new MapGroupWriteTranslator<>(
+            keyField,
+            valueField,
             ProtobufMessageWriteTranslator.determineAppropriateTranslator(keyField, keySchemaNode),
             ProtobufMessageWriteTranslator.determineAppropriateTranslator(
                 valueField, valueSchemaNode));
@@ -41,22 +43,28 @@ public class ProtobufMapWriteTranslator implements WriteTranslator<Object, Void>
   }
 
   public static class MapGroupWriteTranslator<Key, KeyWriteAs, Value, ValueWriteAs>
-      implements WriteTranslator<MapEntry<Key, Value>, Void> {
+      implements WriteTranslator<Message, Void> {
+    private final Descriptors.FieldDescriptor keyFieldDescriptor;
+    private final Descriptors.FieldDescriptor valueFieldDescriptor;
     private final WriteTranslator<Key, KeyWriteAs> keyTranslator;
     private final WriteTranslator<Value, ValueWriteAs> valueTranslator;
 
     public MapGroupWriteTranslator(
+        final Descriptors.FieldDescriptor keyFieldDescriptor,
+        final Descriptors.FieldDescriptor valueFieldDescriptor,
         final WriteTranslator<Key, KeyWriteAs> keyTranslator,
         final WriteTranslator<Value, ValueWriteAs> valueTranslator) {
+      this.keyFieldDescriptor = keyFieldDescriptor;
+      this.valueFieldDescriptor = valueFieldDescriptor;
       this.keyTranslator = keyTranslator;
       this.valueTranslator = valueTranslator;
     }
 
     @Override
-    public Object getField(final int childIndex, final MapEntry<Key, Value> keyValueMapEntry) {
+    public Object getField(final int childIndex, final Message keyValueMapEntry) {
       return switch (childIndex) {
-        case 0 -> keyValueMapEntry.getKey();
-        case 1 -> keyValueMapEntry.getValue();
+        case 0 -> keyValueMapEntry.getField(keyFieldDescriptor);
+        case 1 -> keyValueMapEntry.getField(valueFieldDescriptor);
         default ->
             throw new IndexOutOfBoundsException(
                 "We shouldn't be looking for a field at child index "
@@ -79,7 +87,7 @@ public class ProtobufMapWriteTranslator implements WriteTranslator<Object, Void>
     }
 
     @Override
-    public Void translate(final MapEntry<Key, Value> keyValueMapEntry) {
+    public Void translate(final Message keyValueMapEntry) {
       throw new UnsupportedOperationException(
           "A protobuf map field's key_value group node cannot be directly translated, as it is not a leaf node in the parquet schema");
     }

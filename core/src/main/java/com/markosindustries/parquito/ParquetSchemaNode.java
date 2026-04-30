@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.OptionalInt;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.apache.parquet.format.ConvertedType;
 import org.apache.parquet.format.FieldRepetitionType;
 import org.apache.parquet.format.LogicalType;
@@ -50,6 +51,10 @@ public class ParquetSchemaNode {
 
     public ParquetSchemaPath parseDotSeparatedPath(String dotSeparatedPath) {
       return ParquetSchemaPath.parseDotSeparatedPath(this, dotSeparatedPath);
+    }
+
+    public List<ParquetSchemaNode> findLeafNodes() {
+      return findLeafNodesRecursive().toList();
     }
   }
 
@@ -189,21 +194,13 @@ public class ParquetSchemaNode {
     return element.type_length;
   }
 
-  //
-  //  public <ReadAs> RequiredColumnAccessor<ReadAs>
-  // getRequiredColumnAccessor(String... schemaPath) {
-  //    return new RequiredColumnAccessor<>(getChild(schemaPath).element);
-  //  }
-  //
-  //  public <ReadAs> OptionalColumnAccessor<ReadAs>
-  // getOptionalColumnAccessor(String... schemaPath) {
-  //    return new OptionalColumnAccessor<>(getChild(schemaPath).element);
-  //  }
-  //
-  //  public <ReadAs> RepeatedColumnAccessor<ReadAs>
-  // getRepeatedColumnAccessor(String... schemaPath) {
-  //    return new RepeatedColumnAccessor<>(getChild(schemaPath).element);
-  //  }
+  protected Stream<ParquetSchemaNode> findLeafNodesRecursive() {
+    if (children.length > 0) {
+      return Arrays.stream(children).flatMap(ParquetSchemaNode::findLeafNodesRecursive);
+    } else {
+      return Stream.of(this);
+    }
+  }
 
   @Override
   public String toString() {

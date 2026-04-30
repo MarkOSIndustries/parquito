@@ -17,6 +17,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.apache.parquet.format.BloomFilterHeader;
+import org.apache.parquet.format.ColumnMetaData;
 import org.apache.parquet.format.PageHeader;
 import org.apache.parquet.format.RowGroup;
 import org.apache.parquet.format.SortingColumn;
@@ -60,32 +61,7 @@ public class ColumnChunkReader<ReadAs> {
             : 0;
 
     final var dictionaryPageFuture = new CompletableFuture<DictionaryPageReader<ReadAs>>();
-    final var bloomFilterFuture =
-        (columnChunkHeader.meta_data.isSetBloom_filter_offset())
-            ? byteRangeReader
-                .readAsInputStream(
-                    columnChunkHeader.meta_data.bloom_filter_offset, BLOOM_FILTER_HEADER_SIZE)
-                .thenComposeAsync(
-                    bloomHeaderInputStream -> {
-                      try (bloomHeaderInputStream) {
-                        final var bloomFilterHeaderCountingStream =
-                            new ByteCountingInputStream(bloomHeaderInputStream);
-                        final BloomFilterHeader bloomFilterHeader =
-                            Util.readBloomFilterHeader(bloomFilterHeaderCountingStream);
-                        return byteRangeReader
-                            .readAsBuffer(
-                                columnChunkHeader.meta_data.bloom_filter_offset
-                                    + bloomFilterHeaderCountingStream.getBytesRead(),
-                                bloomFilterHeader.numBytes)
-                            .thenApplyAsync(
-                                bitset -> BloomFilter.create(bloomFilterHeader, bitset),
-                                Concurrency.DEFAULT_EXECUTOR);
-                      } catch (IOException e) {
-                        throw new RuntimeException(e);
-                      }
-                    },
-                    Concurrency.DEFAULT_EXECUTOR)
-            : CompletableFuture.<BloomFilter>completedFuture(null);
+    final var bloomFilterFuture = readBloomFilter(byteRangeReader, columnChunkHeader.meta_data);
     final var columnChunk =
         new ColumnChunkReader<ReadAs>(
             columnChunkHeader,
@@ -119,6 +95,11 @@ public class ColumnChunkReader<ReadAs> {
                 }
               },
               Concurrency.DEFAULT_EXECUTOR);
+    } else {
+      dictionaryPageFuture.completeExceptionally(
+          new RuntimeException(
+              "No dictionary page is present for "
+                  + String.join(".", columnChunkHeader.meta_data.path_in_schema)));
     }
     return columnChunk;
   }
@@ -139,6 +120,37 @@ public class ColumnChunkReader<ReadAs> {
     final var columnType =
         ColumnType.create(columnChunkHeader.meta_data, columnChunkSorting, columnSchema);
     return ColumnChunkReader.create(columnChunkHeader, columnType, byteRangeReader);
+  }
+
+  public static CompletableFuture<BloomFilter> readBloomFilter(
+      final ByteRangeReader byteRangeReader, final ColumnMetaData columnMetaData) {
+    if (!columnMetaData.isSetBloom_filter_offset()) {
+      return CompletableFuture.failedFuture(
+          new RuntimeException(
+              "No bloom filter is present for " + String.join(".", columnMetaData.path_in_schema)));
+    }
+    return byteRangeReader
+        .readAsInputStream(columnMetaData.bloom_filter_offset, BLOOM_FILTER_HEADER_SIZE)
+        .thenComposeAsync(
+            bloomHeaderInputStream -> {
+              try (bloomHeaderInputStream) {
+                final var bloomFilterHeaderCountingStream =
+                    new ByteCountingInputStream(bloomHeaderInputStream);
+                final BloomFilterHeader bloomFilterHeader =
+                    Util.readBloomFilterHeader(bloomFilterHeaderCountingStream);
+                return byteRangeReader
+                    .readAsBuffer(
+                        columnMetaData.bloom_filter_offset
+                            + bloomFilterHeaderCountingStream.getBytesRead(),
+                        bloomFilterHeader.numBytes)
+                    .thenApplyAsync(
+                        bitset -> BloomFilter.create(bloomFilterHeader, bitset),
+                        Concurrency.DEFAULT_EXECUTOR);
+              } catch (IOException e) {
+                throw new RuntimeException(e);
+              }
+            },
+            Concurrency.DEFAULT_EXECUTOR);
   }
 
   public org.apache.parquet.format.ColumnChunk getHeader() {

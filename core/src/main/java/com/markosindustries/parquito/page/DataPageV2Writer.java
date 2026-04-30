@@ -29,8 +29,9 @@ public class DataPageV2Writer<Value> implements DataPageWriter<Value> {
 
   public DataPageV2Writer(ColumnChunkWriter<Value> columnChunkWriter) {
     this.columnChunkWriter = columnChunkWriter;
-    this.dataPageHeaderV2 = new DataPageHeaderV2().setNum_values(0).setNum_nulls(0);
+    this.dataPageHeaderV2 = new DataPageHeaderV2().setNum_values(0).setNum_nulls(0).setNum_rows(0);
     this.values = new ArrayList<>();
+    // TODO replace with RLE encoding on the fly to keep RAM low
     this.definitionLevels = new IntArrayList();
     this.repetitionLevels = new IntArrayList();
   }
@@ -39,6 +40,9 @@ public class DataPageV2Writer<Value> implements DataPageWriter<Value> {
   public void addNull(final int repetitionLevel, final int definitionLevel) {
     dataPageHeaderV2.num_nulls++;
     dataPageHeaderV2.num_values++;
+    if (repetitionLevel == 0) {
+      dataPageHeaderV2.num_rows++;
+    }
     repetitionLevels.add(repetitionLevel);
     definitionLevels.add(definitionLevel);
   }
@@ -46,6 +50,9 @@ public class DataPageV2Writer<Value> implements DataPageWriter<Value> {
   @Override
   public void addValue(final Value value, final int repetitionLevel, final int definitionLevel) {
     dataPageHeaderV2.num_values++;
+    if (repetitionLevel == 0) {
+      dataPageHeaderV2.num_rows++;
+    }
     values.add(value);
     repetitionLevels.add(repetitionLevel);
     definitionLevels.add(definitionLevel);

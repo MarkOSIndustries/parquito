@@ -61,7 +61,8 @@ public abstract class BranchAccumulator<Branch, WriteAs> {
         }
       } else {
         for (var childIndex = 0; childIndex < schemaNode.getChildren().length; childIndex++) {
-          fieldAccumulatorsByChildIndex[childIndex].accumulateObject(rLevel, value);
+          final var fieldValue = writeTranslator.getField(childIndex, value);
+          fieldAccumulatorsByChildIndex[childIndex].accumulateObject(rLevel, fieldValue);
         }
       }
       rLevel = schemaNode.getRepetitionLevelMax();

@@ -15,7 +15,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import org.apache.parquet.format.ColumnMetaData;
-import org.apache.parquet.format.CompressionCodec;
 import org.apache.parquet.format.FileMetaData;
 import org.apache.parquet.format.KeyValue;
 import org.apache.parquet.format.RowGroup;
@@ -48,14 +47,13 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.DataPageAccumu
       final OutputStream outputStream, final WriteSpec writeSpec, final Writer<Row> writer)
       throws IOException {
     this.byteCountingStream = new ByteCountingOutputStream(outputStream);
-    byteCountingStream.write(
-        PARQUET_UNENCRYPTED_MAGIC_BYTES); // Spec says we also put the magic bytes at the start of
-    // the file
+    byteCountingStream.write(PARQUET_UNENCRYPTED_MAGIC_BYTES);
     this.writeSpec = writeSpec;
     this.fileMetaData = new FileMetaData();
     this.fileMetaData.setSchema(List.copyOf(writer.getRawSchema()));
     this.fileMetaData.setCreated_by(CREATED_BY_STRING);
     this.fileMetaData.setVersion(2);
+    this.fileMetaData.setNum_rows(0);
     this.userMetadata = new HashMap<>();
     this.schemaRoot = writer.getSchemaRoot();
 
@@ -90,8 +88,7 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.DataPageAccumu
 
   public void write(final Row row) throws IOException {
     if (currentRowGroup.num_rows == writeSpec.maxRowsPerRowGroup()) {
-      finishCurrentRowGroup();
-      currentRowGroup = newRowGroup();
+      finishCurrentRowGroup(currentRowGroup.num_rows);
     }
     rowAccumulator.accumulate(row);
     currentRowGroup.num_rows++;
@@ -101,7 +98,9 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.DataPageAccumu
     userMetadata.put(key, value);
   }
 
-  private void finishCurrentRowGroup() throws IOException {
+  /**
+   */
+  void finishCurrentRowGroup(final long numRowsInGroup) throws IOException {
     currentRowGroup.setFile_offset(byteCountingStream.getBytesWritten());
     currentRowGroup.setTotal_byte_size(0);
     currentRowGroup.setTotal_compressed_size(0);
@@ -123,7 +122,12 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.DataPageAccumu
       currentRowGroup.addToColumns(columnChunkHeader);
     }
 
+    currentRowGroup.setNum_rows(numRowsInGroup);
+
     fileMetaData.addToRow_groups(currentRowGroup);
+    fileMetaData.num_rows += currentRowGroup.num_rows;
+
+    currentRowGroup = newRowGroup();
   }
 
   private RowGroup newRowGroup() {
@@ -167,8 +171,8 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.DataPageAccumu
 
   @Override
   public void close() throws Exception {
-    if (currentRowGroup.num_rows > 0) {
-      finishCurrentRowGroup();
+    if (currentRowGroup.num_rows > 0 || fileMetaData.num_rows == 0) {
+      finishCurrentRowGroup(currentRowGroup.num_rows);
     }
     fileMetaData.setKey_value_metadata(
         userMetadata.entrySet().stream()
@@ -184,16 +188,11 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.DataPageAccumu
     final var footerBytes = byteCountingStream.getBytesWritten() - bytesBeforeFooter;
     LittleEndian.writeInt((int)footerBytes, byteCountingStream);
     byteCountingStream.write(PARQUET_UNENCRYPTED_MAGIC_BYTES);
+    byteCountingStream.flush();
   }
 
   @Override
   public ColumnChunkWriter<?> getColumnChunkWriter(final ParquetSchemaPath parquetSchemaPath) {
     return columnChunkWritersByPath.get(parquetSchemaPath);
   }
-
-  public record WriteSpec(
-      long maxRowsPerRowGroup,
-      CompressionCodec compressionCodec,
-      EncodingSelector encodingSelector,
-      BloomFilterSelector bloomFilterSelector) {}
 }

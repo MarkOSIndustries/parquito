@@ -7,6 +7,7 @@ import com.markosindustries.parquito.types.ColumnType;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.nio.channels.Channels;
 import java.util.Objects;
 import org.apache.parquet.format.ColumnChunk;
 import org.apache.parquet.format.ColumnMetaData;
@@ -26,13 +27,11 @@ public class ColumnChunkWriter<Value> {
   private DictionaryPageWriter<Value> dictionaryPageWriter;
   private DataPageWriter<Value> dataPageWriter;
   private ColumnChunk currentHeader;
-  private Value minValue;
-  private Value maxValue;
 
   public ColumnChunkWriter(
       final ColumnMetaData columnMetaData,
       final ColumnType<Value> columnType,
-      final RowGroupWriter.WriteSpec writeSpec) {
+      final WriteSpec writeSpec) {
     this.columnMetaData = columnMetaData;
     this.columnType = columnType;
     this.leafDefinitionLevel = columnType.schemaNode().getDefinitionLevelMax();
@@ -46,7 +45,7 @@ public class ColumnChunkWriter<Value> {
   public static <ReadAs> ColumnChunkWriter<ReadAs> create(
       final ColumnMetaData columnMetaData,
       final ColumnType<ReadAs> columnType,
-      final RowGroupWriter.WriteSpec writeSpec) {
+      final WriteSpec writeSpec) {
     return new ColumnChunkWriter<ReadAs>(columnMetaData, columnType, writeSpec);
   }
 
@@ -69,26 +68,20 @@ public class ColumnChunkWriter<Value> {
   }
 
   public void accumulateValue(final int repetitionLevel, final Value value) {
-    dataPageWriter.addValue(Objects.requireNonNull(value), repetitionLevel, leafDefinitionLevel);
-
-    if (minValue == null || columnType.compare(minValue, value) > 0) {
-      minValue = value;
-    }
-    if (maxValue == null || columnType.compare(maxValue, value) < 0) {
-      maxValue = value;
-    }
-
-    dictionaryPageWriter.addValue(value);
+    final var distinctValue = dictionaryPageWriter.addValue(Objects.requireNonNull(value));
+    dataPageWriter.addValue(distinctValue, repetitionLevel, leafDefinitionLevel);
   }
 
   public ColumnChunk writeAllAndReset(final OutputStream outputStream) throws IOException {
-    if (minValue != null) {
+    if (dictionaryPageWriter.getNumValues() > 0) {
+      final var minValue = dictionaryPageWriter.getDistinctValues().first();
+      final var maxValue = dictionaryPageWriter.getDistinctValues().first();
+
       final var minBuffer =
           ByteBuffer.allocate(columnType.parquetType().getRequiredBytesToWrite(minValue));
       columnType.parquetType().writeToByteBuffer(minValue, minBuffer);
       this.currentHeader.meta_data.statistics.setMin_value(minBuffer);
-    }
-    if (maxValue != null) {
+
       final var maxBuffer =
           ByteBuffer.allocate(columnType.parquetType().getRequiredBytesToWrite(maxValue));
       columnType.parquetType().writeToByteBuffer(maxValue, maxBuffer);
@@ -137,8 +130,7 @@ public class ColumnChunkWriter<Value> {
         dataPageWriter.getNumValues(),
         dataPageWriter.getNumNulls())) {
       final var bloomFilter = BloomFilter.create(dictionaryPageWriter.getDistinctValues(), 0.00001);
-      Util.writeBloomFilterHeader(bloomFilter.header(), outputStream);
-      outputStream.write(bloomFilter.bitset().array());
+      writeBloomFilter(bloomFilter, outputStream);
       this.currentHeader.meta_data.setBloom_filter_offset(
           this.currentHeader.meta_data.data_page_offset + dataPageOutputStream.getBytesWritten());
     }
@@ -147,6 +139,16 @@ public class ColumnChunkWriter<Value> {
     currentHeader = makeHeader();
     startNewChunk();
     return result;
+  }
+
+  public static void writeBloomFilter(
+      final BloomFilter bloomFilter, final OutputStream outputStream) throws IOException {
+    Util.writeBloomFilterHeader(bloomFilter.header(), outputStream);
+    if (bloomFilter.bitset().hasArray()) {
+      outputStream.write(bloomFilter.bitset().array());
+    } else {
+      Channels.newChannel(outputStream).write(bloomFilter.bitset());
+    }
   }
 
   private ColumnChunk makeHeader() {

@@ -34,6 +34,9 @@ dependencies {
 test {
   useJUnitPlatform()
   jvmArgs = [
-      "-XX:StartFlightRecording=jdk.ExecutionSample#period=1ms,dumponexit=true,filename=/tmp/parquito_tests_${System.currentTimeMillis()}.jfr"
+      "-Xmx2g",
+      "-XX:StartFlightRecording=jdk.ExecutionSample#period=1ms,dumponexit=true,filename=/tmp/parquito_tests_${System.currentTimeMillis()}.jfr",
+      "-XX:+HeapDumpOnOutOfMemoryError",
+      "-XX:HeapDumpPath=/tmp/parquito_tests_oom_${System.currentTimeMillis()}.hprof"
   ]
 }

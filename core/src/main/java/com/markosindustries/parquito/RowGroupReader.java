@@ -1,5 +1,6 @@
 package com.markosindustries.parquito;
 
+import com.markosindustries.parquito.rows.NoOpFieldIterator;
 import com.markosindustries.parquito.rows.OptionalBranchIterator;
 import com.markosindustries.parquito.rows.OptionalValueIterator;
 import com.markosindustries.parquito.rows.ParquetFieldIterator;
@@ -27,7 +28,7 @@ public record RowGroupReader(RowGroup rowGroupHeader, ParquetSchemaNode.Root sch
       final ParquetSchemaNode parquetSchema,
       final ByteRangeReader byteRangeReader) {
     final var maybeColumnChunkReader =
-        getColumnChunkReaderForSchemaPath(byteRangeReader, parquetSchema, parquetSchema.getPath());
+        getColumnChunkReaderForSchemaPath(byteRangeReader, parquetSchema);
     if (maybeColumnChunkReader.isPresent()) {
       return iterateLeaf(
           rowReadSpec,
@@ -75,18 +76,19 @@ public record RowGroupReader(RowGroup rowGroupHeader, ParquetSchemaNode.Root sch
     };
   }
 
-  private <Repeated, Value> ParquetFieldIterator<?>[] makeFieldIterators(
+  <Repeated, Value> ParquetFieldIterator<?>[] makeFieldIterators(
       final RowReadSpec<Repeated, Value, ?> rowReadSpec,
       final ParquetSchemaNode parquetSchema,
       final ByteRangeReader byteRangeReader) {
     final var iterators = new ParquetFieldIterator<?>[parquetSchema.getChildren().length];
     for (var index = 0; index < parquetSchema.getChildren().length; index++) {
-      if (!rowReadSpec.includesChild(index)) {
-        continue;
-      }
       iterators[index] =
-          iterateField(
-              rowReadSpec.forChild(index), parquetSchema.getChildAtIndex(index), byteRangeReader);
+          rowReadSpec.includesChild(index)
+              ? iterateField(
+                  rowReadSpec.forChild(index),
+                  parquetSchema.getChildAtIndex(index),
+                  byteRangeReader)
+              : NoOpFieldIterator.INSTANCE;
     }
     return iterators;
   }
@@ -94,18 +96,18 @@ public record RowGroupReader(RowGroup rowGroupHeader, ParquetSchemaNode.Root sch
   public Optional<? extends ColumnChunkReader<?>> getColumnChunkReaderForSchemaPath(
       final ByteRangeReader byteRangeReader, final ParquetSchemaPath parquetSchemaPath) {
     return getColumnChunkReaderForSchemaPath(
-        byteRangeReader, schemaRoot.getChild(parquetSchemaPath), parquetSchemaPath);
+        byteRangeReader, schemaRoot.getChild(parquetSchemaPath));
   }
 
-  private Optional<? extends ColumnChunkReader<?>> getColumnChunkReaderForSchemaPath(
-      final ByteRangeReader byteRangeReader,
-      final ParquetSchemaNode columnSchema,
-      final ParquetSchemaPath parquetSchemaPath) {
-    return getColumnChunkIndexForSchemaPath(parquetSchemaPath).stream()
+  <Value> Optional<ColumnChunkReader<Value>> getColumnChunkReaderForSchemaPath(
+      final ByteRangeReader byteRangeReader, final ParquetSchemaNode columnSchema) {
+    //noinspection unchecked
+    return columnSchema.getColumnIndex().stream()
         .mapToObj(
             columnChunkIndex ->
-                ColumnChunkReader.create(
-                    rowGroupHeader, columnChunkIndex, columnSchema, byteRangeReader))
+                (ColumnChunkReader<Value>)
+                    ColumnChunkReader.create(
+                        rowGroupHeader, columnChunkIndex, columnSchema, byteRangeReader))
         .findAny();
   }
 

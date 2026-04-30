@@ -7,7 +7,7 @@ import com.markosindustries.parquito.CompressionCodecs;
 import com.markosindustries.parquito.ListView;
 import com.markosindustries.parquito.encoding.Encodings;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
-import it.unimi.dsi.fastutil.objects.Object2ReferenceRBTreeMap;
+import it.unimi.dsi.fastutil.objects.Object2ReferenceAVLTreeMap;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.List;
@@ -20,21 +20,32 @@ import org.apache.parquet.format.PageType;
 import org.apache.parquet.format.Util;
 
 public class DictionaryPageWriter<Value> implements ParquetPageWriter {
-  private final Object2ReferenceRBTreeMap<Value, IntArrayList> dictionaryWithOriginalIndices;
+  private final Object2ReferenceAVLTreeMap<Value, ValueWithOriginalIndices<Value>>
+      dictionaryWithOriginalIndices;
   private final ColumnChunkWriter<Value> columnChunkWriter;
   private int totalValues;
 
+  private record ValueWithOriginalIndices<Value>(Value value, IntArrayList originalIndices) {
+    public static <Value> ValueWithOriginalIndices<Value> create(Value value) {
+      return new ValueWithOriginalIndices<>(value, new IntArrayList(1));
+    }
+  }
+
   public DictionaryPageWriter(final ColumnChunkWriter<Value> columnChunkWriter) {
     this.dictionaryWithOriginalIndices =
-        new Object2ReferenceRBTreeMap<>(columnChunkWriter.getColumnType().getComparator());
+        new Object2ReferenceAVLTreeMap<>(columnChunkWriter.getColumnType().getComparator());
     this.totalValues = 0;
     this.columnChunkWriter = columnChunkWriter;
   }
 
-  public void addValue(final Value value) {
-    dictionaryWithOriginalIndices
-        .computeIfAbsent(value, v -> new IntArrayList(1))
-        .add(totalValues++);
+  public Value addValue(final Value value) {
+    final var valueWithOriginalIndices =
+        dictionaryWithOriginalIndices.computeIfAbsent(
+            value, v -> ValueWithOriginalIndices.create(value));
+
+    valueWithOriginalIndices.originalIndices.add(totalValues++);
+
+    return valueWithOriginalIndices.value;
   }
 
   @Override
@@ -84,8 +95,8 @@ public class DictionaryPageWriter<Value> implements ParquetPageWriter {
   public int[] indexValues(final List<Value> values) {
     int[] indices = new int[values.size()];
     var dictionaryIndex = 0;
-    for (final var dictionaryEntry : dictionaryWithOriginalIndices.entrySet()) {
-      for (final var originalIndex : dictionaryEntry.getValue()) {
+    for (final var valueWithOriginalIndices : dictionaryWithOriginalIndices.values()) {
+      for (final var originalIndex : valueWithOriginalIndices.originalIndices()) {
         indices[originalIndex] = dictionaryIndex;
       }
       dictionaryIndex++;
