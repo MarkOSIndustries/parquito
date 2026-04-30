@@ -99,7 +99,49 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.DataPageAccumu
   }
 
   /**
+   * Exists only for the ParquetRewriter to be able to bit-copy whole row groups
+   *
+   * @param foreignRowGroup The header info for the row group
+   * @param byteRangeReader The byteRangeReader from which we can read the compressed row group and
+   *     other referenced blobs
    */
+  void injectForeignRowGroup(final RowGroup foreignRowGroup, final ByteRangeReader byteRangeReader)
+      throws IOException {
+    // We need to be on a row group boundary or something has gone wrong
+    assert currentRowGroup.num_rows == 0;
+
+    final var alterredRowGroup = foreignRowGroup.deepCopy();
+    alterredRowGroup.setFile_offset(byteCountingStream.getBytesWritten());
+
+    try (final var rowGroupInputStream =
+        byteRangeReader
+            .readAsInputStream(
+                foreignRowGroup.file_offset, (int) foreignRowGroup.total_compressed_size)
+            .join()) {
+      rowGroupInputStream.transferTo(byteCountingStream);
+    }
+
+    for (final var column : alterredRowGroup.columns) {
+      if (column.meta_data.isSetData_page_offset()) {
+        column.meta_data.data_page_offset +=
+            alterredRowGroup.file_offset - foreignRowGroup.file_offset;
+      }
+      if (column.meta_data.isSetDictionary_page_offset()) {
+        column.meta_data.dictionary_page_offset +=
+            alterredRowGroup.file_offset - foreignRowGroup.file_offset;
+      }
+      if (column.meta_data.isSetBloom_filter_offset()) {
+        final var bloomFilter =
+            ColumnChunkReader.readBloomFilter(byteRangeReader, column.meta_data).join();
+        column.meta_data.bloom_filter_offset = byteCountingStream.getBytesWritten();
+        ColumnChunkWriter.writeBloomFilter(bloomFilter, byteCountingStream);
+      }
+    }
+
+    fileMetaData.addToRow_groups(alterredRowGroup);
+    fileMetaData.num_rows += alterredRowGroup.num_rows;
+  }
+
   void finishCurrentRowGroup(final long numRowsInGroup) throws IOException {
     currentRowGroup.setFile_offset(byteCountingStream.getBytesWritten());
     currentRowGroup.setTotal_byte_size(0);
@@ -186,7 +228,7 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.DataPageAccumu
     final var bytesBeforeFooter = byteCountingStream.getBytesWritten();
     ParquetFooter.write(fileMetaData, byteCountingStream).join();
     final var footerBytes = byteCountingStream.getBytesWritten() - bytesBeforeFooter;
-    LittleEndian.writeInt((int)footerBytes, byteCountingStream);
+    LittleEndian.writeInt((int) footerBytes, byteCountingStream);
     byteCountingStream.write(PARQUET_UNENCRYPTED_MAGIC_BYTES);
     byteCountingStream.flush();
   }

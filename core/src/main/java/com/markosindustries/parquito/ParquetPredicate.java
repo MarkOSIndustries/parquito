@@ -25,6 +25,21 @@ public interface ParquetPredicate<ReadAs> {
 
   boolean branchMatches(final IntPredicate childMatchesNextRow);
 
+  default ColumnSpec asColumnSpec() {
+    final ParquetPredicate<ReadAs> self = this;
+    return new ColumnSpec() {
+      @Override
+      public boolean includesChild(final int childFieldIndex) {
+        return self.includesChild(childFieldIndex);
+      }
+
+      @Override
+      public ColumnSpec forChild(final int childFieldIndex) {
+        return self.forChild(childFieldIndex).asColumnSpec();
+      }
+    };
+  }
+
   class All<ReadAs> implements ParquetPredicate<ReadAs> {
     private static final BitSet EMPTY_BITSET = new BitSet();
 
@@ -146,6 +161,34 @@ public interface ParquetPredicate<ReadAs> {
     }
   }
 
+  class Not<ReadAs> implements ParquetPredicate<ReadAs> {
+    private final ParquetPredicate<ReadAs> predicate;
+
+    public Not(final ParquetPredicate<ReadAs> predicate) {
+      this.predicate = predicate;
+    }
+
+    @Override
+    public BitSet includedChildren() {
+      return predicate.includedChildren();
+    }
+
+    @Override
+    public ParquetPredicate<?> forChild(final int childFieldIndex) {
+      return predicate.forChild(childFieldIndex);
+    }
+
+    @Override
+    public boolean valueMatches(final ReadAs value) {
+      return !predicate.valueMatches(value);
+    }
+
+    @Override
+    public boolean branchMatches(final IntPredicate childMatchesNextRow) {
+      return !predicate.branchMatches(childMatchesNextRow);
+    }
+  }
+
   abstract class Leaf<ReadAs, L extends Leaf<ReadAs, L>> implements ParquetPredicate<ReadAs> {
     private final ColumnType<ReadAs> columnType;
     private final LeafConstructor<ReadAs, L> constructor;
@@ -221,6 +264,21 @@ public interface ParquetPredicate<ReadAs> {
     @Override
     public boolean valueMatches(final ReadAs value) {
       return compare(value) == 0;
+    }
+  }
+
+  class NotEquals<ReadAs> extends Leaf<ReadAs, NotEquals<ReadAs>> {
+    public NotEquals(
+        final ReadAs comparator,
+        final ColumnType<ReadAs> columnType,
+        ParquetSchemaPath schemaPath,
+        int offset) {
+      super(NotEquals::new, comparator, columnType, schemaPath, offset);
+    }
+
+    @Override
+    public boolean valueMatches(final ReadAs value) {
+      return compare(value) != 0;
     }
   }
 

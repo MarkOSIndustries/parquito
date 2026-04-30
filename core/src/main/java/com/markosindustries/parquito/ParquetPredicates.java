@@ -15,6 +15,10 @@ public class ParquetPredicates {
     return new ParquetPredicate.Intersection(predicates);
   }
 
+  public static ParquetPredicate<?> not(ParquetPredicate<?> predicate) {
+    return new ParquetPredicate.Not<>(predicate);
+  }
+
   public static <ReadAs> ParquetPredicate<ReadAs> equals(
       final Object comparator,
       final ColumnType<ReadAs> columnType,
@@ -28,6 +32,21 @@ public class ParquetPredicates {
       final ParquetSchemaPath schemaPath) {
     final var columnType = rowGroupReader.getColumnType(schemaPath).orElseThrow();
     return equals(comparator, columnType, schemaPath);
+  }
+
+  public static <ReadAs> ParquetPredicate<ReadAs> notEquals(
+      final Object comparator,
+      final ColumnType<ReadAs> columnType,
+      final ParquetSchemaPath schemaPath) {
+    return new ParquetPredicate.NotEquals<>((ReadAs) comparator, columnType, schemaPath, 0);
+  }
+
+  public static ParquetPredicate<?> notEquals(
+      final RowGroupReader rowGroupReader,
+      final Object comparator,
+      final ParquetSchemaPath schemaPath) {
+    final var columnType = rowGroupReader.getColumnType(schemaPath).orElseThrow();
+    return notEquals(comparator, columnType, schemaPath);
   }
 
   public static <ReadAs> ParquetPredicate<ReadAs> greaterThan(
