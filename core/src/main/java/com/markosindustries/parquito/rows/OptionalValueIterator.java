@@ -65,9 +65,13 @@ public class OptionalValueIterator<ReadAs, Value> implements ParquetFieldIterato
 
   @Override
   public void skipNextRow() {
-    if (dataPage.getDefinitionLevels()[definitionIndex++] == schemaNode.getDefinitionLevelMax()) {
-      valueIndex++;
-    }
+    do {
+      if (dataPage.getDefinitionLevels()[definitionIndex] == schemaNode.getDefinitionLevelMax()) {
+        valueIndex++;
+      }
+      definitionIndex++;
+    } while (definitionIndex < dataPage.getDefinitionLevels().length
+        && dataPage.getRepetitionLevels()[definitionIndex] != 0);
     advancePageIfNecessary();
   }
 
