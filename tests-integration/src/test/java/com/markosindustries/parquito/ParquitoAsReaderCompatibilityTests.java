@@ -144,8 +144,8 @@ public class ParquitoAsReaderCompatibilityTests {
     // In specs compliant mode, the schema is able to represent the absense of a map or a list
     final var expectedJson =
         parquetSpecsCompliant
-            ? "{\"some_string\":\"\"}"
-            : "{\"some_string\":\"\",\"some_repeated\":[],\"some_map\":[]}";
+            ? "{\"some_string\":\"\",\"some_bool\":false}"
+            : "{\"some_string\":\"\",\"some_repeated\":[],\"some_map\":[],\"some_bool\":false}";
     try (final var byteRangeReader = new FileByteRangeReader(file)) {
       final var actuallyReadTheFile = new AtomicBoolean(false);
       ParquetFooter.read(byteRangeReader)

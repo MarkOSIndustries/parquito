@@ -26,9 +26,9 @@ public class BitPackedIntEncoding implements ParquetIntEncoding {
 
     for (int index = 0; index < expectedValues; index++) {
       while (availableBits < bitWidth) {
-        buffer <<= 8;
+        buffer <<= Maths.BITS_PER_BYTE;
         buffer |= decompressedPageStream.read();
-        availableBits += 8;
+        availableBits += Maths.BITS_PER_BYTE;
       }
       availableBits -= bitWidth;
       values[index] = (buffer >>> availableBits) & mask;
@@ -41,6 +41,34 @@ public class BitPackedIntEncoding implements ParquetIntEncoding {
   public void encode(
       final FastArray32 values, final int bitWidth, final OutputStream uncompressedPageStream)
       throws IOException {
-    throw new UnsupportedOperationException("Not implemented yet");
+    if (bitWidth < 0) {
+      throw new IllegalArgumentException("Can't encode a bitWidth less than 0");
+    }
+
+    final var valuesLength = values.length();
+    if (bitWidth == 0 || valuesLength == 0) {
+      return;
+    }
+
+    long buffer = 0;
+    int availableBits = 0;
+    int mask = Maths.intMaskLowerBits(bitWidth);
+    for (var valuesIndex = 0; valuesIndex < valuesLength; ) {
+      while (availableBits < Maths.BITS_PER_BYTE && valuesIndex < valuesLength) {
+        buffer <<= bitWidth;
+        buffer |= values.get32(valuesIndex++) & mask;
+        availableBits += bitWidth;
+      }
+      if (availableBits >= Maths.BITS_PER_BYTE) {
+        uncompressedPageStream.write((int) buffer);
+        buffer >>>= Maths.BITS_PER_BYTE;
+        availableBits -= Maths.BITS_PER_BYTE;
+      }
+    }
+    if (availableBits > 0) {
+      // pad the last byte with zeros
+      buffer <<= Maths.BITS_PER_BYTE - availableBits;
+      uncompressedPageStream.write((int) buffer);
+    }
   }
 }

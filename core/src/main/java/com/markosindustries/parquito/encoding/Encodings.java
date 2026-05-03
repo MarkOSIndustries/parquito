@@ -10,6 +10,7 @@ public class Encodings {
       case DELTA_BINARY_PACKED -> new DeltaBinaryPackedEncoding<>();
       case DELTA_LENGTH_BYTE_ARRAY -> new DeltaLengthByteArrayEncoding<>();
       case DELTA_BYTE_ARRAY -> new DeltaByteArrayEncoding<>();
+      case RLE -> (ParquetEncoding<ReadAs>) new RLEBooleanEncoding();
       default -> throw new UnsupportedOperationException("Unsupported encoding: " + encoding);
         //      case BIT_PACKED -> null;
         //      case BYTE_STREAM_SPLIT -> null;

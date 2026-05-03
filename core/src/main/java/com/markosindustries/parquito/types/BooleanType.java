@@ -1,5 +1,6 @@
 package com.markosindustries.parquito.types;
 
+import com.markosindustries.parquito.arrays.FastArrayBitset;
 import com.markosindustries.parquito.encoding.IntEncodings;
 import com.markosindustries.parquito.page.Values;
 import java.io.IOException;
@@ -7,6 +8,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.BitSet;
 import java.util.Collection;
 import org.apache.parquet.format.LogicalType;
 
@@ -19,7 +21,8 @@ public abstract class BooleanType<ReadAs> extends ParquetType<ReadAs> {
   public Values<ReadAs> readPlainPage(
       int expectedValues, final int decompressedPageBytes, InputStream inputStream)
       throws IOException {
-    final int[] values = IntEncodings.INT_ENCODING_RLE.decode(expectedValues, 1, inputStream);
+    final int[] values =
+        IntEncodings.INT_ENCODING_BIT_PACKED.decode(expectedValues, 1, inputStream);
     return index -> wrap(values[index] != 0);
   }
 
@@ -31,14 +34,13 @@ public abstract class BooleanType<ReadAs> extends ParquetType<ReadAs> {
   @Override
   public void writePlainPage(final Collection<ReadAs> values, final OutputStream outputStream)
       throws IOException {
-    final var requiredBytes = values.size() * 4;
-    final var buffer = ByteBuffer.allocate(requiredBytes);
-    final var intBuffer = buffer.order(ByteOrder.LITTLE_ENDIAN).asIntBuffer();
-    intBuffer.position(0);
+    final var bitset = new BitSet(values.size());
+    var index = 0;
     for (final var value : values) {
-      intBuffer.put(unwrap(value) ? 1 : 0);
+      bitset.set(index++, (Boolean) value);
     }
-    outputStream.write(buffer.array());
+    IntEncodings.INT_ENCODING_BIT_PACKED.encode(
+        new FastArrayBitset(bitset, 0, values.size()), 1, outputStream);
   }
 
   @Override

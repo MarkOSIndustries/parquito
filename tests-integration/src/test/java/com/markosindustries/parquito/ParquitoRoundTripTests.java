@@ -345,27 +345,27 @@ public class ParquitoRoundTripTests {
         });
   }
 
-  //  @ParameterizedTest
-  //  @MethodSource("boolEncodingsSource")
-  //  public void boolEncodingsRoundTrip(
-  //      final CompressionCodec codec, final Encoding encoding, final int valueCount)
-  //      throws Exception {
-  //    final var random = new Random();
-  //
-  //    encodingRoundTrip(
-  //        codec,
-  //        (columnMetaData, distinctValues, totalValues, totalNulls) -> {
-  //          if (columnMetaData.path_in_schema.size() == 1
-  //              && columnMetaData.path_in_schema.get(0).equals("some_bool")) {
-  //            return encoding;
-  //          }
-  //          return Encoding.PLAIN;
-  //        },
-  //        valueCount,
-  //        () -> {
-  //          return Example.newBuilder().setSomeBool(random.nextBoolean()).build();
-  //        });
-  //  }
+  @ParameterizedTest
+  @MethodSource("boolEncodingsSource")
+  public void boolEncodingsRoundTrip(
+      final CompressionCodec codec, final Encoding encoding, final int valueCount)
+      throws Exception {
+    final var random = new Random();
+
+    encodingRoundTrip(
+        codec,
+        (columnMetaData, distinctValues, totalValues, totalNulls) -> {
+          if (columnMetaData.path_in_schema.size() == 1
+              && columnMetaData.path_in_schema.get(0).equals("some_bool")) {
+            return encoding;
+          }
+          return Encoding.PLAIN;
+        },
+        valueCount,
+        () -> {
+          return Example.newBuilder().setSomeBool(random.nextBoolean()).build();
+        });
+  }
 
   private void encodingRoundTrip(
       final CompressionCodec compressionCodec,

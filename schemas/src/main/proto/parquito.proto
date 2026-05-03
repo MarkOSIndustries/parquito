@@ -17,7 +17,7 @@ message Example {
 
   map<uint64,ExampleChild> some_map = 6;
 
-//  bool some_bool = 7;
+  bool some_bool = 7;
 
   message ExampleRepeated {
     string some_string = 1;

@@ -4,7 +4,12 @@ import it.unimi.dsi.fastutil.ints.IntList;
 import java.util.List;
 
 public sealed interface FastArray32 extends FastArray
-    permits IntArray, IntArraySlice, IntListBoxless, IntListBoxed, FastDictionary32 {
+    permits FastDictionary32,
+        IntArray,
+        IntArraySlice,
+        IntListBoxed,
+        IntListBoxless,
+        FastArrayBitset {
   @Override
   default FastArray slice(int offset, int count) {
     return slice32(offset, count);
