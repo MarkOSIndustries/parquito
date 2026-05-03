@@ -87,7 +87,8 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.DataPageAccumu
   }
 
   public void write(final Row row) throws IOException {
-    if (currentRowGroup.total_byte_size >= writeSpec.targetBytesPerRowGroup() || currentRowGroup.num_rows >= writeSpec.maxRowsPerRowGroup()) {
+    if (currentRowGroup.total_byte_size >= writeSpec.targetBytesPerRowGroup()
+        || currentRowGroup.num_rows >= writeSpec.maxRowsPerRowGroup()) {
       finishCurrentRowGroup(currentRowGroup.num_rows);
     }
     currentRowGroup.total_byte_size += rowAccumulator.accumulate(row);

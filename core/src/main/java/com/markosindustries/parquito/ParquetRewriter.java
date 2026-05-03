@@ -195,8 +195,6 @@ public class ParquetRewriter {
     public void transferRows(final BitSet rowsToKeep) {
       final var columnValueIterator = columnValueIteratorFuture.join();
       var rowIndex = 0;
-      var skips = 0;
-      final var debugName = columnChunkWriter.getColumnType().schemaNode().getPath().toString();
       while (columnValueIterator.hasNext()) {
         if (rowsToKeep.get(rowIndex++)) {
           do {
@@ -215,7 +213,6 @@ public class ParquetRewriter {
             columnValueIterator.next();
           } while (columnValueIterator.hasNext()
               && columnValueIterator.peekRepetitionLevel() > 0); // zero means a new row
-          skips++;
         }
       }
     }

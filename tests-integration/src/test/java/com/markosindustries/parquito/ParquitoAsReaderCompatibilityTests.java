@@ -50,6 +50,41 @@ public class ParquitoAsReaderCompatibilityTests {
 
   @ParameterizedTest
   @MethodSource("writerConfigCombinations")
+  public void canReadEmptyFile(
+      CompressionCodecName codecName,
+      ParquetProperties.WriterVersion writerVersion,
+      boolean parquetSpecsCompliant)
+      throws Exception {
+    final var file =
+        generateFileUsingApacheHadoop(
+            List.of(), codecName, writerVersion, parquetSpecsCompliant, List.of(), List.of());
+    final var actuallyReadTheFile = new AtomicBoolean(false);
+    try (final var byteRangeReader = new FileByteRangeReader(file)) {
+      ParquetFooter.read(byteRangeReader)
+          .thenAccept(
+              footer -> {
+                actuallyReadTheFile.set(true);
+                final var schema = ParquetSchemaNode.from(footer.schema);
+                var rows = 0;
+                for (RowGroup rowGroup : footer.row_groups) {
+                  final var rowGroupReader = new RowGroupReader(rowGroup, schema);
+                  final var rowIterator =
+                      rowGroupReader.getRowIterator(
+                          new RowReadSpec<>(new MapReader(schema)), byteRangeReader);
+                  while (rowIterator.hasNext()) {
+                    final var next = rowIterator.next();
+                    rows++;
+                  }
+                }
+                Assertions.assertEquals(0, rows);
+              })
+          .join();
+      assertTrue(actuallyReadTheFile.get(), "We never actually read the contents of the file");
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("writerConfigCombinations")
   public void canReadAFileAsMap(
       CompressionCodecName codecName,
       ParquetProperties.WriterVersion writerVersion,

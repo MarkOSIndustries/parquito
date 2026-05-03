@@ -85,7 +85,8 @@ public class DataPageV2Writer<Value> implements DataPageWriter<Value> {
             values.length(), estimatedPlainBytesRequired, columnChunkWriter);
     final var pageCount =
         Math.max(1, Math.ceilDiv(refinedBytesRequiredEstimate, writeSpec.targetBytesPerDataPage()));
-    final var valuesPerPage = Math.min(Math.ceilDiv(values.length(), pageCount), writeSpec.maxValuesPerDataPage());
+    final var valuesPerPage =
+        Math.min(Math.ceilDiv(values.length(), pageCount), writeSpec.maxValuesPerDataPage());
 
     final var pageHeaders = new ArrayList<PageHeader>(pageCount);
 

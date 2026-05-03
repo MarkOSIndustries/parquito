@@ -10,6 +10,8 @@ import java.util.Iterator;
 
 public class RepeatedValueIterator<ReadAs, Repeated, Value>
     implements ParquetFieldIterator<Repeated> {
+  private final EOFDataPage<ReadAs> eofDataPage = new EOFDataPage<>();
+
   private final Iterator<DataPageReader<ReadAs>> dataPageIterator;
   private final ParquetSchemaNode schemaNode;
   private final Reader<Repeated, Value> reader;
@@ -42,7 +44,7 @@ public class RepeatedValueIterator<ReadAs, Repeated, Value>
 
   @Override
   public boolean hasNext() {
-    return dataPage != null;
+    return dataPage != eofDataPage;
   }
 
   private void advancePageIfNecessary() {
@@ -51,7 +53,7 @@ public class RepeatedValueIterator<ReadAs, Repeated, Value>
         dataPage = dataPageIterator.next();
         dataPageMatcher = dataPage.getValues().matcher(predicate);
       } else {
-        dataPage = null;
+        dataPage = eofDataPage;
       }
       definitionIndex = 0;
       valueIndex = 0;

@@ -8,6 +8,8 @@ import com.markosindustries.parquito.page.PredicateMatcher;
 import java.util.Iterator;
 
 public class OptionalValueIterator<ReadAs, Value> implements ParquetFieldIterator<ReadAs> {
+  private final EOFDataPage<ReadAs> eofDataPage = new EOFDataPage<>();
+
   private final Iterator<DataPageReader<ReadAs>> dataPageIterator;
   private final ParquetSchemaNode schemaNode;
   private final ParquetPredicate<ReadAs> predicate;
@@ -38,7 +40,7 @@ public class OptionalValueIterator<ReadAs, Value> implements ParquetFieldIterato
 
   @Override
   public boolean hasNext() {
-    return dataPage != null;
+    return dataPage != eofDataPage;
   }
 
   private void advancePageIfNecessary() {
@@ -47,7 +49,7 @@ public class OptionalValueIterator<ReadAs, Value> implements ParquetFieldIterato
         dataPage = dataPageIterator.next();
         dataPageMatcher = dataPage.getValues().matcher(predicate);
       } else {
-        dataPage = null;
+        dataPage = eofDataPage;
       }
       definitionIndex = 0;
       valueIndex = 0;

@@ -13,6 +13,7 @@ import com.markosindustries.parquito.schemas.ExampleChild;
 import com.markosindustries.parquito.schemas.ExampleEnum;
 import java.io.FileOutputStream;
 import java.nio.file.Files;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Stream;
 import org.apache.parquet.format.CompressionCodec;
@@ -29,6 +30,37 @@ public class ParquitoAsWriterCompatibilityTests {
 
     return Lists.cartesianProduct(compressionCodecs).stream()
         .map(args -> Arguments.of(args.toArray()));
+  }
+
+  @ParameterizedTest
+  @MethodSource("writerConfigCombinations")
+  public void canWriteEmptyFile(final CompressionCodec compressionCodec) throws Exception {
+    final var outputStream = new ByteBufferOutputStream();
+    try (final var writer =
+        new RowGroupWriter<>(
+            outputStream,
+            WriteSpec.newBuilder().withCompressionCodec(compressionCodec).build(),
+            ProtobufWriter.<Example>fromDescriptor(
+                Example.getDescriptor(), new ProtobufParquetConfig(false)))) {
+      writer.putMetaData(PB_CLASS, Example.class.getName());
+      writer.write(Collections.emptyIterator());
+    }
+
+    final var tempFile = Files.createTempFile("parquito.as.writer", ".parquet");
+
+    try (final var fileOutputStream = new FileOutputStream(tempFile.toFile())) {
+      outputStream.writeTo(fileOutputStream);
+    }
+
+    try (final var reader =
+        ProtoParquetReader.<Example.Builder>builder(new SimpleInputFile(tempFile.toFile()))
+            .build()) {
+      int rowIndex = 0;
+      for (var builder = reader.read(); builder != null; builder = reader.read()) {
+        rowIndex++;
+      }
+      assertEquals(0, rowIndex);
+    }
   }
 
   @ParameterizedTest
