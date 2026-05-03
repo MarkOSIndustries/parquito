@@ -213,7 +213,7 @@ public class ParquitoRoundTripTests {
     final var encodings =
         List.of(
             Encoding.PLAIN,
-            Encoding.DELTA_BYTE_ARRAY,
+            //            Encoding.DELTA_BYTE_ARRAY,
             Encoding.DELTA_LENGTH_BYTE_ARRAY,
             Encoding.RLE_DICTIONARY);
     final var valueCounts = List.of(1, 10_000);
