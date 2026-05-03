@@ -1,6 +1,7 @@
 package com.markosindustries.parquito;
 
 import com.markosindustries.parquito.types.ColumnType;
+import java.util.Collection;
 
 public class ParquetPredicates {
   static <ReadAs> ParquetPredicate.All<ReadAs> all() {
@@ -11,8 +12,17 @@ public class ParquetPredicates {
     return new ParquetPredicate.Union(predicates);
   }
 
+  public static ParquetPredicate<?> union(Collection<? extends ParquetPredicate<?>> predicates) {
+    return union(predicates.toArray(ParquetPredicate[]::new));
+  }
+
   public static ParquetPredicate<?> intersection(ParquetPredicate<?>... predicates) {
     return new ParquetPredicate.Intersection(predicates);
+  }
+
+  public static ParquetPredicate<?> intersection(
+      Collection<? extends ParquetPredicate<?>> predicates) {
+    return intersection(predicates.toArray(ParquetPredicate[]::new));
   }
 
   public static ParquetPredicate<?> not(ParquetPredicate<?> predicate) {

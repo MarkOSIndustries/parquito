@@ -19,9 +19,11 @@ public class RLEIntEncoding implements ParquetIntEncoding {
   private static final int HEADER_FLAG_BIT_PACKED = 1;
 
   private final boolean hasLengthHeader;
+  private final boolean omitsZeroBitWidthRuns;
 
-  public RLEIntEncoding(boolean hasLengthHeader) {
+  public RLEIntEncoding(final boolean hasLengthHeader, final boolean omitsZeroBitWidthRuns) {
     this.hasLengthHeader = hasLengthHeader;
+    this.omitsZeroBitWidthRuns = omitsZeroBitWidthRuns;
   }
 
   @Override
@@ -34,7 +36,7 @@ public class RLEIntEncoding implements ParquetIntEncoding {
 
     final var values = new int[expectedValues];
 
-    if (bitWidth == 0 || expectedValues == 0) {
+    if (expectedValues == 0 || (omitsZeroBitWidthRuns && bitWidth == 0)) {
       return values;
     }
 
@@ -112,7 +114,7 @@ public class RLEIntEncoding implements ParquetIntEncoding {
       throw new IllegalArgumentException("Can't decode a bitWidth less than 0");
     }
 
-    if (bitWidth == 0) {
+    if (omitsZeroBitWidthRuns && bitWidth == 0) {
       return;
     }
 

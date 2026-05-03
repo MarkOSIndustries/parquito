@@ -1,17 +1,21 @@
 package com.markosindustries.parquito.page;
 
-import static com.markosindustries.parquito.encoding.IntEncodings.INT_ENCODING_RLE_WITHOUT_LENGTH_HEADER;
-
 import com.markosindustries.parquito.ByteBufferOutputStream;
 import com.markosindustries.parquito.ByteCountingOutputStream;
 import com.markosindustries.parquito.ColumnChunkWriter;
 import com.markosindustries.parquito.CompressionCodecs;
+import com.markosindustries.parquito.WriteSpec;
+import com.markosindustries.parquito.arrays.FastDictionary;
 import com.markosindustries.parquito.encoding.Encodings;
 import com.markosindustries.parquito.encoding.IntEncodings;
+import com.markosindustries.parquito.encoding.Maths;
+import com.markosindustries.parquito.encoding.ParquetEncoding;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.ints.IntList;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.List;
 import org.apache.parquet.format.ColumnMetaData;
 import org.apache.parquet.format.CompressionCodec;
 import org.apache.parquet.format.DataPageHeaderV2;
@@ -22,69 +26,148 @@ import org.apache.parquet.format.Util;
 
 public class DataPageV2Writer<Value> implements DataPageWriter<Value> {
   private final ColumnChunkWriter<Value> columnChunkWriter;
-  private final DataPageHeaderV2 dataPageHeaderV2;
-  private final ArrayList<Value> values;
+  private final WriteSpec writeSpec;
   private final IntArrayList definitionLevels;
   private final IntArrayList repetitionLevels;
+  private final int repetitionLevelMax;
+  private final int definitionLevelMax;
+  private int totalNulls;
+  private int totalValues;
+  private int totalRows;
 
-  public DataPageV2Writer(ColumnChunkWriter<Value> columnChunkWriter) {
+  public DataPageV2Writer(ColumnChunkWriter<Value> columnChunkWriter, WriteSpec writeSpec) {
     this.columnChunkWriter = columnChunkWriter;
-    this.dataPageHeaderV2 = new DataPageHeaderV2().setNum_values(0).setNum_nulls(0).setNum_rows(0);
-    this.values = new ArrayList<>();
-    // TODO replace with RLE encoding on the fly to keep RAM low
+    this.writeSpec = writeSpec;
     this.definitionLevels = new IntArrayList();
     this.repetitionLevels = new IntArrayList();
+    this.repetitionLevelMax =
+        columnChunkWriter.getColumnType().schemaNode().getRepetitionLevelMax();
+    this.definitionLevelMax =
+        columnChunkWriter.getColumnType().schemaNode().getDefinitionLevelMax();
   }
 
   @Override
   public void addNull(final int repetitionLevel, final int definitionLevel) {
-    dataPageHeaderV2.num_nulls++;
-    dataPageHeaderV2.num_values++;
+    this.totalNulls++;
+    this.totalValues++;
     if (repetitionLevel == 0) {
-      dataPageHeaderV2.num_rows++;
+      this.totalRows++;
     }
     repetitionLevels.add(repetitionLevel);
     definitionLevels.add(definitionLevel);
   }
 
   @Override
-  public void addValue(final Value value, final int repetitionLevel, final int definitionLevel) {
-    dataPageHeaderV2.num_values++;
+  public void addValue(final int repetitionLevel, final int definitionLevel) {
+    this.totalValues++;
     if (repetitionLevel == 0) {
-      dataPageHeaderV2.num_rows++;
+      this.totalRows++;
     }
-    values.add(value);
     repetitionLevels.add(repetitionLevel);
     definitionLevels.add(definitionLevel);
   }
 
   @Override
-  public PageHeader writePage(
-      final Encoding encoding, final ColumnMetaData columnMetaData, final OutputStream outputStream)
+  public List<PageHeader> writePages(
+      final FastDictionary<Value, ?> values,
+      final int estimatedPlainBytesRequired,
+      final Encoding encoding,
+      final ColumnMetaData columnMetaData,
+      final OutputStream outputStream)
       throws IOException {
-    final var pageOutputBufferStream = new ByteBufferOutputStream();
+    final var encodingImpl = Encodings.<Value>getEncoding(encoding);
 
+    // TODO - replace with an incremental encoder so we can watch byte counts and decide when to
+    // switch pages
+    //  This will work ok, but we could get closer to the target page size that way
+    final var refinedBytesRequiredEstimate =
+        encodingImpl.refineBytesRequiredEstimate(
+            values.length(), estimatedPlainBytesRequired, columnChunkWriter);
+    final var pageCount =
+        Math.max(1, Math.ceilDiv(refinedBytesRequiredEstimate, writeSpec.targetBytesPerDataPage()));
+    final var valuesPerPage = Math.min(Math.ceilDiv(values.length(), pageCount), writeSpec.maxValuesPerDataPage());
+
+    final var pageHeaders = new ArrayList<PageHeader>(pageCount);
+
+    var valuesIndex = 0;
+    for (var levelsIndex = 0; levelsIndex < repetitionLevels.size(); ) {
+      //    for (var i = 0; i < pageCount; i++) {
+      var nextValuesIndex = Math.min(values.length(), valuesIndex + valuesPerPage);
+      var valueCount = nextValuesIndex - valuesIndex;
+
+      final var dataPageHeaderV2 =
+          new DataPageHeaderV2()
+              .setNum_values(0)
+              .setNum_nulls(0)
+              .setNum_rows(0)
+              .setEncoding(encoding);
+      var nextLevelsIndex = levelsIndex;
+      while (nextLevelsIndex < repetitionLevels.size()
+          && (dataPageHeaderV2.num_values < valueCount
+              || valueCount == 0
+              || repetitionLevels.getInt(nextLevelsIndex) != 0)) {
+        if (definitionLevels.getInt(nextLevelsIndex) == definitionLevelMax) {
+          dataPageHeaderV2.num_values++;
+        } else {
+          dataPageHeaderV2.num_nulls++;
+        }
+        if (repetitionLevels.getInt(nextLevelsIndex) == 0) {
+          dataPageHeaderV2.num_rows++;
+        }
+        nextLevelsIndex++;
+      }
+      // We excluded nulls before for efficiency, but they also count as rows as far as the header
+      // is concerned
+      valueCount = dataPageHeaderV2.num_values;
+      nextValuesIndex = valuesIndex + valueCount;
+      dataPageHeaderV2.num_values += dataPageHeaderV2.num_nulls;
+
+      if (dataPageHeaderV2.num_values > 0) {
+        final var pageHeader =
+            writePage(
+                dataPageHeaderV2,
+                repetitionLevels.subList(levelsIndex, nextLevelsIndex),
+                definitionLevels.subList(levelsIndex, nextLevelsIndex),
+                values.sliceDictionary(valuesIndex, valueCount),
+                encodingImpl,
+                columnMetaData,
+                outputStream);
+        pageHeaders.add(pageHeader);
+      }
+
+      levelsIndex = nextLevelsIndex;
+      valuesIndex = nextValuesIndex;
+    }
+
+    return pageHeaders;
+  }
+
+  private PageHeader writePage(
+      final DataPageHeaderV2 dataPageHeaderV2,
+      final IntList pageRepetitionLevels,
+      final IntList pageDefinitionLevels,
+      final FastDictionary<Value, ?> pageValues,
+      final ParquetEncoding<Value> encodingImpl,
+      final ColumnMetaData columnMetaData,
+      final OutputStream outputStream)
+      throws IOException {
+    // TODO - resize this better when we get to incremental encoding
+    final var pageOutputBufferStream =
+        new ByteBufferOutputStream(writeSpec.targetBytesPerDataPage());
     final var repetitionLevelsOutputStream = new ByteCountingOutputStream(pageOutputBufferStream);
-    INT_ENCODING_RLE_WITHOUT_LENGTH_HEADER.encode(
-        repetitionLevels,
-        IntEncodings.bitWidth(
-            columnChunkWriter.getColumnType().schemaNode().getRepetitionLevelMax()),
-        repetitionLevelsOutputStream);
+    IntEncodings.INT_ENCODING_DATA_PAGE_V2_LEVELS.encode(
+        pageRepetitionLevels, Maths.bitWidth(repetitionLevelMax), repetitionLevelsOutputStream);
     repetitionLevelsOutputStream.close();
     final var definitionLevelsOutputStream = new ByteCountingOutputStream(pageOutputBufferStream);
-    INT_ENCODING_RLE_WITHOUT_LENGTH_HEADER.encode(
-        definitionLevels,
-        IntEncodings.bitWidth(
-            columnChunkWriter.getColumnType().schemaNode().getDefinitionLevelMax()),
-        definitionLevelsOutputStream);
+    IntEncodings.INT_ENCODING_DATA_PAGE_V2_LEVELS.encode(
+        pageDefinitionLevels, Maths.bitWidth(definitionLevelMax), definitionLevelsOutputStream);
     definitionLevelsOutputStream.close();
 
     final var compressedValuesOutputStream = new ByteCountingOutputStream(pageOutputBufferStream);
     final var uncompressedValuesOutputStream =
         new ByteCountingOutputStream(
             CompressionCodecs.compress(columnMetaData.codec, compressedValuesOutputStream));
-    Encodings.<Value>getEncoding(encoding)
-        .encode(values, uncompressedValuesOutputStream, columnChunkWriter);
+    encodingImpl.encode(pageValues, uncompressedValuesOutputStream, columnChunkWriter);
     uncompressedValuesOutputStream.close();
 
     final var levelsBytesWritten =
@@ -96,12 +179,9 @@ public class DataPageV2Writer<Value> implements DataPageWriter<Value> {
             PageType.DATA_PAGE_V2,
             levelsBytesWritten + uncompressedValuesOutputStream.getBytesWrittenAsInt(),
             levelsBytesWritten + compressedValuesOutputStream.getBytesWrittenAsInt());
-    // TODO - we could look at counting rows... seems expensive with current structure though
-    // TODO - separate pages from column chunks - allow multiple smaller pages
     pageHeader.data_page_header_v2 =
         dataPageHeaderV2
             .setIs_compressed(!columnMetaData.codec.equals(CompressionCodec.UNCOMPRESSED))
-            .setEncoding(encoding)
             .setRepetition_levels_byte_length(repetitionLevelsOutputStream.getBytesWrittenAsInt())
             .setDefinition_levels_byte_length(definitionLevelsOutputStream.getBytesWrittenAsInt());
 
@@ -118,7 +198,7 @@ public class DataPageV2Writer<Value> implements DataPageWriter<Value> {
 
   @Override
   public long getNumValues() {
-    return dataPageHeaderV2.num_values;
+    return totalValues;
   }
 
   @Override
@@ -128,6 +208,16 @@ public class DataPageV2Writer<Value> implements DataPageWriter<Value> {
 
   @Override
   public long getNumNulls() {
-    return dataPageHeaderV2.num_nulls;
+    return totalNulls;
+  }
+
+  @Override
+  public long getNumRows(final PageHeader pageHeader) {
+    return pageHeader.data_page_header_v2.num_rows;
+  }
+
+  @Override
+  public long getNumRows() {
+    return totalRows;
   }
 }

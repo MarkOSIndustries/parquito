@@ -2,12 +2,12 @@ package com.markosindustries.parquito.encoding;
 
 import com.markosindustries.parquito.ColumnChunkReader;
 import com.markosindustries.parquito.ColumnChunkWriter;
+import com.markosindustries.parquito.arrays.FastDictionary;
 import com.markosindustries.parquito.page.Values;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
-import java.util.List;
 
 public class DeltaLengthByteArrayEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
   @Override
@@ -31,19 +31,19 @@ public class DeltaLengthByteArrayEncoding<ReadAs> implements ParquetEncoding<Rea
 
   @Override
   public void encode(
-      final List<ReadAs> values,
+      final FastDictionary<ReadAs, ?> values,
       final OutputStream uncompressedPageStream,
       final ColumnChunkWriter<ReadAs> columnChunkWriter)
       throws IOException {
-    final var lengths = new int[values.size()];
+    final var lengths = new int[values.length()];
     var totalBytesForValues = 0;
-    for (var i = 0; i < values.size(); i++) {
+    for (var i = 0; i < values.length(); i++) {
       totalBytesForValues +=
           (lengths[i] =
               columnChunkWriter
                   .getColumnType()
                   .parquetType()
-                  .getRequiredBytesToWrite(values.get(i)));
+                  .getRequiredBytesToWrite(values.getAsObject(i)));
     }
 
     DeltaBinaryPackedEncoding.encode32(lengths, uncompressedPageStream);
@@ -53,5 +53,14 @@ public class DeltaLengthByteArrayEncoding<ReadAs> implements ParquetEncoding<Rea
       columnChunkWriter.getColumnType().parquetType().writeToByteBuffer(value, valueBuffer);
     }
     uncompressedPageStream.write(valueBuffer.array());
+  }
+
+  @Override
+  public int refineBytesRequiredEstimate(
+      final int valueCount,
+      final int estimatedPlainBytesRequired,
+      final ColumnChunkWriter<ReadAs> columnChunkWriter) {
+    return estimatedPlainBytesRequired
+        + columnChunkWriter.getColumnType().parquetType().getPlainBytesOverhead() * valueCount;
   }
 }

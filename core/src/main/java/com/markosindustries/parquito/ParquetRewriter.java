@@ -17,6 +17,16 @@ public class ParquetRewriter {
     this.keepRowsPredicateProvider = keepRowsPredicateProvider;
   }
 
+  private sealed interface RowGroupAction
+      permits RowGroupAction.Copy, RowGroupAction.Rewrite, RowGroupAction.Drop {
+    record Copy(RowGroup rowGroup) implements RowGroupAction {}
+
+    record Drop() implements RowGroupAction {}
+
+    record Rewrite(RowGroup rowGroup, BitSet keepRowsBitset, long countOfRowsToKeep)
+        implements RowGroupAction {}
+  }
+
   /**
    * Rewrites a parquet file by only touching row groups that need modification according to the
    * keepRowsPredicate. Rows that match are copied across, while rows that don't are dropped. There
@@ -48,48 +58,67 @@ public class ParquetRewriter {
               try (final var writer =
                   new RowGroupWriter<>(
                       targetOutputStream, writeSpec, new NoOpWriter(footer.schema, schema))) {
-                for (RowGroup rowGroup : footer.row_groups) {
-                  final var rowGroupReader = new RowGroupReader(rowGroup, schema);
-                  final var keepRowsPredicate = keepRowsPredicateProvider.apply(rowGroupReader);
+                final var rowGroupActions =
+                    footer.row_groups.stream()
+                        .map(
+                            rowGroup ->
+                                CompletableFuture.<RowGroupAction>supplyAsync(
+                                    () -> {
+                                      final var rowGroupReader =
+                                          new RowGroupReader(rowGroup, schema);
+                                      final var keepRowsPredicate =
+                                          keepRowsPredicateProvider.apply(rowGroupReader);
 
-                  boolean anyKeep = false, anyDiscard = false;
-                  final var keepRowsBitset = new BitSet();
+                                      boolean anyKeep = false, anyDiscard = false;
+                                      final var keepRowsBitset = new BitSet();
 
-                  final var rowReadSpec = new RowReadSpec<>(NoOpReader.INSTANCE, keepRowsPredicate);
-                  final var predicateIterator =
-                      new OptionalBranchIterator<>(
-                          rowGroupReader.makeFieldIterators(rowReadSpec, schema, sourceRangeReader),
-                          schema,
-                          rowReadSpec);
-                  var rowIndex = 0;
-                  var countOfRowsToKeep = 0L;
-                  while (predicateIterator.hasNext()) {
-                    final var isMatch = predicateIterator.nextRowMatches();
-                    anyKeep = anyKeep || isMatch;
-                    anyDiscard = anyDiscard || !isMatch;
-                    keepRowsBitset.set(rowIndex++, isMatch);
-                    if (isMatch) {
-                      countOfRowsToKeep++;
-                    }
-                    predicateIterator.next();
-                  }
+                                      final var rowReadSpec =
+                                          new RowReadSpec<>(NoOpReader.INSTANCE, keepRowsPredicate);
+                                      final var predicateIterator =
+                                          new OptionalBranchIterator<>(
+                                              rowGroupReader.makeFieldIterators(
+                                                  rowReadSpec, schema, sourceRangeReader),
+                                              schema,
+                                              rowReadSpec);
+                                      var rowIndex = 0;
+                                      var countOfRowsToKeep = 0L;
+                                      while (predicateIterator.hasNext()) {
+                                        final var isMatch = predicateIterator.nextRowMatches();
+                                        anyKeep = anyKeep || isMatch;
+                                        anyDiscard = anyDiscard || !isMatch;
+                                        keepRowsBitset.set(rowIndex++, isMatch);
+                                        if (isMatch) {
+                                          countOfRowsToKeep++;
+                                        }
+                                        predicateIterator.next();
+                                      }
 
-                  if (anyKeep) {
-                    if (anyDiscard) {
-                      // A rewrite is in order
-                      rewriteRowGroup(
-                          schema,
-                          sourceRangeReader,
-                          rowGroupReader,
-                          keepRowsBitset,
-                          countOfRowsToKeep,
-                          writer);
-                    } else {
-                      // We can just copy this row unmodified
-                      copyRowGroup(rowGroup, sourceRangeReader, writer);
-                    }
-                  } else {
-                    // We can completely drop this row group
+                                      if (anyKeep) {
+                                        if (anyDiscard) {
+                                          return new RowGroupAction.Rewrite(
+                                              rowGroup, keepRowsBitset, countOfRowsToKeep);
+                                        } else {
+                                          return new RowGroupAction.Copy(rowGroup);
+                                        }
+                                      } else {
+                                        return new RowGroupAction.Drop();
+                                      }
+                                    }))
+                        .toList();
+
+                for (final var rowGroupAction : rowGroupActions) {
+                  switch (rowGroupAction.join()) {
+                    case RowGroupAction.Copy copy ->
+                        copyRowGroup(copy.rowGroup, sourceRangeReader, writer);
+                    case RowGroupAction.Drop drop -> {}
+                    case RowGroupAction.Rewrite rewrite ->
+                        rewriteRowGroup(
+                            schema,
+                            sourceRangeReader,
+                            new RowGroupReader(rewrite.rowGroup(), schema),
+                            rewrite.keepRowsBitset(),
+                            rewrite.countOfRowsToKeep(),
+                            writer);
                   }
                 }
               } catch (Exception e) {

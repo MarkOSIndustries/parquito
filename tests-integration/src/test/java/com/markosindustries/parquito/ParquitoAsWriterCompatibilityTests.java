@@ -106,7 +106,7 @@ public class ParquitoAsWriterCompatibilityTests {
         new RowGroupWriter<>(
             outputStream,
             WriteSpec.newBuilder()
-                .withMaxRowsPerRowGroup(2)
+                .withTargetBytesPerRowGroup(10)
                 .withCompressionCodec(compressionCodec)
                 .withBloomFilterSelector(
                     (columnMetaData, distinctValues, totalValues, totalNulls) ->

@@ -5,7 +5,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
-import java.util.List;
+import java.util.Collection;
 import org.apache.parquet.format.LogicalType;
 import org.apache.parquet.format.Type;
 
@@ -26,10 +26,18 @@ public abstract class ParquetType<ReadAs> {
 
   public abstract ReadAs readFromByteBuffer(final ByteBuffer byteBuffer);
 
-  public abstract void writePlainPage(final List<ReadAs> values, final OutputStream outputStream)
-      throws IOException;
+  public abstract void writePlainPage(
+      final Collection<ReadAs> values, final OutputStream outputStream) throws IOException;
 
   public abstract int getRequiredBytesToWrite(final ReadAs value);
+
+  public int getPlainBytesOverhead() {
+    return 0;
+  }
+
+  public int getRequiredBytesToWritePlain(final ReadAs value) {
+    return getPlainBytesOverhead() + getRequiredBytesToWrite(value);
+  }
 
   public abstract void writeToByteBuffer(final ReadAs value, final ByteBuffer byteBuffer);
 

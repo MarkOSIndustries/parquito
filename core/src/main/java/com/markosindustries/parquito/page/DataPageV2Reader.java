@@ -1,13 +1,12 @@
 package com.markosindustries.parquito.page;
 
-import static com.markosindustries.parquito.encoding.IntEncodings.INT_ENCODING_RLE_WITHOUT_LENGTH_HEADER;
-
 import com.markosindustries.parquito.ByteBufferInputStream;
 import com.markosindustries.parquito.ByteCountingInputStream;
 import com.markosindustries.parquito.ColumnChunkReader;
 import com.markosindustries.parquito.CompressionCodecs;
 import com.markosindustries.parquito.encoding.Encodings;
 import com.markosindustries.parquito.encoding.IntEncodings;
+import com.markosindustries.parquito.encoding.Maths;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import org.apache.parquet.format.PageHeader;
@@ -30,16 +29,14 @@ public class DataPageV2Reader<ReadAs> implements DataPageReader<ReadAs> {
     final var pageStream = new ByteCountingInputStream(new ByteBufferInputStream(pageBuffer));
 
     this.repetitionLevels =
-        INT_ENCODING_RLE_WITHOUT_LENGTH_HEADER.decode(
+        IntEncodings.INT_ENCODING_DATA_PAGE_V2_LEVELS.decode(
             pageHeader.data_page_header_v2.num_values,
-            IntEncodings.bitWidth(
-                columnChunkReader.getColumnType().schemaNode().getRepetitionLevelMax()),
+            Maths.bitWidth(columnChunkReader.getColumnType().schemaNode().getRepetitionLevelMax()),
             pageStream);
     this.definitionLevels =
-        INT_ENCODING_RLE_WITHOUT_LENGTH_HEADER.decode(
+        IntEncodings.INT_ENCODING_DATA_PAGE_V2_LEVELS.decode(
             pageHeader.data_page_header_v2.num_values,
-            IntEncodings.bitWidth(
-                columnChunkReader.getColumnType().schemaNode().getDefinitionLevelMax()),
+            Maths.bitWidth(columnChunkReader.getColumnType().schemaNode().getDefinitionLevelMax()),
             pageStream);
 
     final var bytesInLevels = pageStream.getBytesReadAsInt();

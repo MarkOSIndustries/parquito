@@ -14,7 +14,13 @@ public class RowAccumulator<Row> {
     accumulator = new BranchAccumulator.Optional<>(translator, schemaRoot, dataPageAccumulator);
   }
 
-  public void accumulate(final Row row) {
-    accumulator.accumulate(0, row);
+  /**
+   * Accumulate a row and return the estimated extra bytes required
+   *
+   * @param row The row to accumulate
+   * @return The estimated bytes required for that row
+   */
+  public int accumulate(final Row row) {
+    return accumulator.accumulate(0, row);
   }
 }

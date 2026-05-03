@@ -8,7 +8,7 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
+import java.util.Collection;
 import org.apache.parquet.format.LogicalType;
 
 public abstract class ByteArrayType<ReadAs> extends ParquetType<ReadAs> {
@@ -52,7 +52,7 @@ public abstract class ByteArrayType<ReadAs> extends ParquetType<ReadAs> {
   }
 
   @Override
-  public void writePlainPage(final List<ReadAs> values, final OutputStream outputStream)
+  public void writePlainPage(final Collection<ReadAs> values, final OutputStream outputStream)
       throws IOException {
     final var writableChannel = Channels.newChannel(outputStream);
 
@@ -66,6 +66,11 @@ public abstract class ByteArrayType<ReadAs> extends ParquetType<ReadAs> {
   @Override
   public int getRequiredBytesToWrite(final ReadAs value) {
     return unwrap(value).remaining();
+  }
+
+  @Override
+  public int getPlainBytesOverhead() {
+    return 4;
   }
 
   @Override

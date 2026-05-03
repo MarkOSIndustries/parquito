@@ -44,45 +44,54 @@ public abstract class BranchAccumulator<Branch, WriteAs> {
     }
   }
 
-  public void accumulateNull(final int repetitionLevel, final int definitionLevel) {
+  public int accumulateNull(final int repetitionLevel, final int definitionLevel) {
+    var bytes = 0;
     for (final var fieldAccumulator : fieldAccumulatorsByChildIndex) {
-      fieldAccumulator.accumulateNull(repetitionLevel, definitionLevel);
+      bytes += fieldAccumulator.accumulateNull(repetitionLevel, definitionLevel);
     }
+    return bytes;
   }
 
-  protected <RepeatedValues extends Iterable<Branch>> void accumulateRepeated(
+  protected <RepeatedValues extends Iterable<Branch>> int accumulateRepeated(
       final int repetitionLevel, final RepeatedValues values) {
     var rLevel = repetitionLevel;
+    var bytes = 0;
     for (final var value : values) {
       if (value == null) {
         for (var childIndex = 0; childIndex < schemaNode.getChildren().length; childIndex++) {
-          fieldAccumulatorsByChildIndex[childIndex].accumulateNull(
-              rLevel, schemaNode.getDefinitionLevelMax());
+          bytes +=
+              fieldAccumulatorsByChildIndex[childIndex].accumulateNull(
+                  rLevel, schemaNode.getDefinitionLevelMax());
         }
       } else {
         for (var childIndex = 0; childIndex < schemaNode.getChildren().length; childIndex++) {
           final var fieldValue = writeTranslator.getField(childIndex, value);
-          fieldAccumulatorsByChildIndex[childIndex].accumulateObject(rLevel, fieldValue);
+          bytes += fieldAccumulatorsByChildIndex[childIndex].accumulateObject(rLevel, fieldValue);
         }
       }
       rLevel = schemaNode.getRepetitionLevelMax();
     }
     if (rLevel == repetitionLevel) {
       // We didn't write any values - we need a sentinel write
-      accumulateNull(repetitionLevel, schemaNode.getDefinitionLevelMax() - 1);
+      bytes += accumulateNull(repetitionLevel, schemaNode.getDefinitionLevelMax() - 1);
     }
+    return bytes;
   }
 
-  protected void accumulateSingle(final int repetitionLevel, final Branch value) {
+  protected int accumulateSingle(final int repetitionLevel, final Branch value) {
+    var bytes = 0;
     for (var childIndex = 0; childIndex < schemaNode.getChildren().length; childIndex++) {
       final var fieldValue = writeTranslator.getField(childIndex, value);
       if (fieldValue == null) {
-        fieldAccumulatorsByChildIndex[childIndex].accumulateNull(
-            repetitionLevel, schemaNode.getDefinitionLevelMax());
+        bytes +=
+            fieldAccumulatorsByChildIndex[childIndex].accumulateNull(
+                repetitionLevel, schemaNode.getDefinitionLevelMax());
       } else {
-        fieldAccumulatorsByChildIndex[childIndex].accumulateObject(repetitionLevel, fieldValue);
+        bytes +=
+            fieldAccumulatorsByChildIndex[childIndex].accumulateObject(repetitionLevel, fieldValue);
       }
     }
+    return bytes;
   }
 
   public static class Optional<Branch, WriteAs> extends BranchAccumulator<Branch, WriteAs>
@@ -95,8 +104,8 @@ public abstract class BranchAccumulator<Branch, WriteAs> {
     }
 
     @Override
-    public void accumulate(final int repetitionLevel, final Branch value) {
-      accumulateSingle(repetitionLevel, value);
+    public int accumulate(final int repetitionLevel, final Branch value) {
+      return accumulateSingle(repetitionLevel, value);
     }
   }
 
@@ -111,8 +120,8 @@ public abstract class BranchAccumulator<Branch, WriteAs> {
     }
 
     @Override
-    public void accumulate(final int repetitionLevel, final RepeatedValues values) {
-      accumulateRepeated(repetitionLevel, values);
+    public int accumulate(final int repetitionLevel, final RepeatedValues values) {
+      return accumulateRepeated(repetitionLevel, values);
     }
   }
 }

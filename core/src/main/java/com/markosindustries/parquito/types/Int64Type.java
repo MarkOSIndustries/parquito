@@ -9,7 +9,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
+import java.util.Collection;
 import org.apache.parquet.format.LogicalType;
 
 public abstract class Int64Type<ReadAs> extends ParquetType<ReadAs> {
@@ -41,7 +41,7 @@ public abstract class Int64Type<ReadAs> extends ParquetType<ReadAs> {
   }
 
   @Override
-  public void writePlainPage(final List<ReadAs> values, final OutputStream outputStream)
+  public void writePlainPage(final Collection<ReadAs> values, final OutputStream outputStream)
       throws IOException {
     final var requiredBytes = values.size() * 8;
     final var buffer = ByteBuffer.allocate(requiredBytes);

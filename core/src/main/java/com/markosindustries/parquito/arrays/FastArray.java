@@ -37,27 +37,21 @@ public sealed interface FastArray permits FastArray32, FastArray64 {
 
   @SuppressWarnings("unchecked")
   static <T> FastArray wrap(List<T> list, Class<T> elementClass) {
-    if (list instanceof IntList) {
-      return new IntListBoxless((IntList) list);
+    if (list instanceof IntList || elementClass.isAssignableFrom(Integer.class)) {
+      return FastArray32.wrap(list, elementClass);
     }
-    if (list instanceof LongList) {
-      return new LongListBoxless((LongList) list);
-    }
-    if (elementClass.isAssignableFrom(Integer.class)) {
-      return new IntListBoxed((List<Integer>) list);
-    }
-    if (elementClass.isAssignableFrom(Long.class)) {
-      return new LongListBoxed((List<Long>) list);
+    if (list instanceof LongList || elementClass.isAssignableFrom(Long.class)) {
+      return FastArray64.wrap(list, elementClass);
     }
     throw new UnsupportedOperationException(
         "Cannot use Boxless access with " + list.getClass() + " of " + elementClass);
   }
 
-  static FastArray slice(int[] values, int offset, int count) {
+  static FastArray32 slice(int[] values, int offset, int count) {
     return new IntArraySlice(values, offset, count);
   }
 
-  static FastArray slice(long[] values, int offset, int count) {
+  static FastArray64 slice(long[] values, int offset, int count) {
     return new LongArraySlice(values, offset, count);
   }
 }

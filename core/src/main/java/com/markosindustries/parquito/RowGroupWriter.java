@@ -87,10 +87,10 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.DataPageAccumu
   }
 
   public void write(final Row row) throws IOException {
-    if (currentRowGroup.num_rows == writeSpec.maxRowsPerRowGroup()) {
+    if (currentRowGroup.total_byte_size >= writeSpec.targetBytesPerRowGroup() || currentRowGroup.num_rows >= writeSpec.maxRowsPerRowGroup()) {
       finishCurrentRowGroup(currentRowGroup.num_rows);
     }
-    rowAccumulator.accumulate(row);
+    currentRowGroup.total_byte_size += rowAccumulator.accumulate(row);
     currentRowGroup.num_rows++;
   }
 
@@ -175,7 +175,8 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.DataPageAccumu
   private RowGroup newRowGroup() {
     final var rowGroup = new RowGroup();
     rowGroup.setSorting_columns(sortingColumns);
-    rowGroup.setNum_rowsIsSet(true);
+    rowGroup.setTotal_byte_size(0);
+    rowGroup.setNum_rows(0);
     return rowGroup;
   }
 

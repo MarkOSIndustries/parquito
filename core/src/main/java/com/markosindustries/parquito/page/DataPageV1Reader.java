@@ -5,6 +5,7 @@ import com.markosindustries.parquito.ColumnChunkReader;
 import com.markosindustries.parquito.CompressionCodecs;
 import com.markosindustries.parquito.encoding.Encodings;
 import com.markosindustries.parquito.encoding.IntEncodings;
+import com.markosindustries.parquito.encoding.Maths;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -33,14 +34,14 @@ public class DataPageV1Reader<ReadAs> implements DataPageReader<ReadAs> {
         IntEncodings.getDecoder(pageHeader.data_page_header.repetition_level_encoding)
             .decode(
                 pageHeader.data_page_header.num_values,
-                IntEncodings.bitWidth(
+                Maths.bitWidth(
                     columnChunkReader.getColumnType().schemaNode().getRepetitionLevelMax()),
                 decompressedPageStream);
     this.definitionLevels =
         IntEncodings.getDecoder(pageHeader.data_page_header.definition_level_encoding)
             .decode(
                 pageHeader.data_page_header.num_values,
-                IntEncodings.bitWidth(
+                Maths.bitWidth(
                     columnChunkReader.getColumnType().schemaNode().getDefinitionLevelMax()),
                 decompressedPageStream);
     this.totalValues = pageHeader.data_page_header.num_values;

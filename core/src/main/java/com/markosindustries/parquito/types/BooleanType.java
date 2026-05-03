@@ -7,7 +7,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.List;
+import java.util.Collection;
 import org.apache.parquet.format.LogicalType;
 
 public abstract class BooleanType<ReadAs> extends ParquetType<ReadAs> {
@@ -29,7 +29,7 @@ public abstract class BooleanType<ReadAs> extends ParquetType<ReadAs> {
   }
 
   @Override
-  public void writePlainPage(final List<ReadAs> values, final OutputStream outputStream)
+  public void writePlainPage(final Collection<ReadAs> values, final OutputStream outputStream)
       throws IOException {
     final var requiredBytes = values.size() * 4;
     final var buffer = ByteBuffer.allocate(requiredBytes);

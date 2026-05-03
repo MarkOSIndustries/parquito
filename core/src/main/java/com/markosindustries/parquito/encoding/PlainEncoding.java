@@ -2,11 +2,12 @@ package com.markosindustries.parquito.encoding;
 
 import com.markosindustries.parquito.ColumnChunkReader;
 import com.markosindustries.parquito.ColumnChunkWriter;
+import com.markosindustries.parquito.arrays.FastDictionary;
 import com.markosindustries.parquito.page.Values;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.List;
+import java.util.SortedSet;
 
 public class PlainEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
   @Override
@@ -24,10 +25,27 @@ public class PlainEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
 
   @Override
   public void encode(
-      final List<ReadAs> values,
+      final FastDictionary<ReadAs, ?> values,
       final OutputStream uncompressedPageStream,
       final ColumnChunkWriter<ReadAs> columnChunkWriter)
       throws IOException {
     columnChunkWriter.getColumnType().parquetType().writePlainPage(values, uncompressedPageStream);
+  }
+
+  public void encode(
+      final SortedSet<ReadAs> values,
+      final OutputStream uncompressedPageStream,
+      final ColumnChunkWriter<ReadAs> columnChunkWriter)
+      throws IOException {
+    columnChunkWriter.getColumnType().parquetType().writePlainPage(values, uncompressedPageStream);
+  }
+
+  @Override
+  public int refineBytesRequiredEstimate(
+      final int valueCount,
+      final int estimatedPlainBytesRequired,
+      final ColumnChunkWriter<ReadAs> columnChunkWriter) {
+    return estimatedPlainBytesRequired
+        + columnChunkWriter.getColumnType().parquetType().getPlainBytesOverhead() * valueCount;
   }
 }

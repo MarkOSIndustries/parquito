@@ -18,26 +18,28 @@ public class RLEIntEncodingTests {
 
   private static Stream<Arguments> encoderTestCombinations() {
     final var withLengthHeader = List.of(true, false);
+    final var omitZeroWidthRuns = List.of(true, false);
     final var values =
         List.of(
+            new int[] {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
             new int[] {2, 1},
             new int[] {1, 1},
             new int[] {0, 0},
             new int[] {1, 2, 3, 4, 5, 6, 7, 8, 9},
             new int[] {0, 0, 1, 0, 0, 1, 0, 0, 1});
 
-    return Lists.cartesianProduct(withLengthHeader, values).stream()
+    return Lists.cartesianProduct(withLengthHeader, omitZeroWidthRuns, values).stream()
         .map(args -> Arguments.of(args.toArray()));
   }
 
   @ParameterizedTest
   @MethodSource("encoderTestCombinations")
-  public void roundTripWithoutHeader(boolean withLengthHeader, int[] expectedValues)
-      throws Exception {
+  public void roundTripWithoutHeader(
+      boolean withLengthHeader, boolean omitZeroWidthRuns, int[] expectedValues) throws Exception {
     final var maxValue = Arrays.stream(expectedValues).max().getAsInt();
     final int bitWidth = Maths.bitWidth(maxValue);
     final var outputStream = new ByteBufferOutputStream();
-    final var encoding = new RLEIntEncoding(withLengthHeader);
+    final var encoding = new RLEIntEncoding(withLengthHeader, omitZeroWidthRuns);
     encoding.encode(expectedValues, bitWidth, outputStream);
     final var expectedBytesRead = outputStream.size();
     outputStream.write(new byte[] {0, 0}); // add a few bytes so we can check for reader overruns

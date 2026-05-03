@@ -23,6 +23,7 @@ public class ColumnChunkWriter<Value> {
   private final int leafRepetitionLevel;
   private final EncodingSelector encodingSelector;
   private final BloomFilterSelector bloomFilterSelector;
+  private final WriteSpec writeSpec;
 
   private DictionaryPageWriter<Value> dictionaryPageWriter;
   private DataPageWriter<Value> dataPageWriter;
@@ -38,7 +39,7 @@ public class ColumnChunkWriter<Value> {
     this.leafRepetitionLevel = columnType.schemaNode().getRepetitionLevelMax();
     this.encodingSelector = writeSpec.encodingSelector();
     this.bloomFilterSelector = writeSpec.bloomFilterSelector();
-    //    this.usesBloomFilter = true; // TODO - get from writer config
+    this.writeSpec = writeSpec;
     startNewChunk();
   }
 
@@ -51,7 +52,7 @@ public class ColumnChunkWriter<Value> {
 
   private void startNewChunk() {
     this.dictionaryPageWriter = new DictionaryPageWriter<>(this);
-    this.dataPageWriter = DataPageWriter.create(this, PageType.DATA_PAGE_V2);
+    this.dataPageWriter = DataPageWriter.create(this, writeSpec, PageType.DATA_PAGE_V2);
     this.currentHeader = makeHeader();
   }
 
@@ -63,19 +64,21 @@ public class ColumnChunkWriter<Value> {
     return dictionaryPageWriter;
   }
 
-  public void accumulateNull(final int repetitionLevel, final int definitionLevel) {
+  public int accumulateNull(final int repetitionLevel, final int definitionLevel) {
     dataPageWriter.addNull(repetitionLevel, definitionLevel);
+    return 0;
   }
 
-  public void accumulateValue(final int repetitionLevel, final Value value) {
-    final var distinctValue = dictionaryPageWriter.addValue(Objects.requireNonNull(value));
-    dataPageWriter.addValue(distinctValue, repetitionLevel, leafDefinitionLevel);
+  public int accumulateValue(final int repetitionLevel, final Value value) {
+    final var bytes = dictionaryPageWriter.addValue(Objects.requireNonNull(value));
+    dataPageWriter.addValue(repetitionLevel, leafDefinitionLevel);
+    return bytes;
   }
 
   public ColumnChunk writeAllAndReset(final OutputStream outputStream) throws IOException {
     if (dictionaryPageWriter.getNumValues() > 0) {
       final var minValue = dictionaryPageWriter.getDistinctValues().first();
-      final var maxValue = dictionaryPageWriter.getDistinctValues().first();
+      final var maxValue = dictionaryPageWriter.getDistinctValues().last();
 
       final var minBuffer =
           ByteBuffer.allocate(columnType.parquetType().getRequiredBytesToWrite(minValue));
@@ -100,8 +103,7 @@ public class ColumnChunkWriter<Value> {
 
     if (selectedEncoding == Encoding.RLE_DICTIONARY) {
       final var dictionaryOutputStream = new ByteCountingOutputStream(outputStream);
-      final var pageHeader =
-          dictionaryPageWriter.writePage(Encoding.PLAIN, columnMetaData, dictionaryOutputStream);
+      final var pageHeader = dictionaryPageWriter.writePage(columnMetaData, dictionaryOutputStream);
       this.currentHeader.meta_data.total_compressed_size +=
           dictionaryOutputStream.getBytesWritten();
       this.currentHeader.meta_data.total_uncompressed_size +=
@@ -114,15 +116,21 @@ public class ColumnChunkWriter<Value> {
     }
 
     final var dataPageOutputStream = new ByteCountingOutputStream(outputStream);
-    final var pageHeader =
-        dataPageWriter.writePage(
-            selectedEncoding, this.currentHeader.meta_data, dataPageOutputStream);
+    final var pageHeaders =
+        dataPageWriter.writePages(
+            dictionaryPageWriter.makeFastDictionary(),
+            dictionaryPageWriter.getEstimatedBytesRequired(),
+            selectedEncoding,
+            this.currentHeader.meta_data,
+            dataPageOutputStream);
+    this.currentHeader.meta_data.num_values += dataPageWriter.getNumValues();
+    this.currentHeader.meta_data.statistics.null_count += dataPageWriter.getNumNulls();
     this.currentHeader.meta_data.total_compressed_size += dataPageOutputStream.getBytesWritten();
-    this.currentHeader.meta_data.total_uncompressed_size +=
-        dataPageOutputStream.getBytesWritten()
-            + (pageHeader.uncompressed_page_size - pageHeader.compressed_page_size);
-    this.currentHeader.meta_data.num_values += dataPageWriter.getNumValues(pageHeader);
-    this.currentHeader.meta_data.statistics.null_count += dataPageWriter.getNumNulls(pageHeader);
+    this.currentHeader.meta_data.total_uncompressed_size += dataPageOutputStream.getBytesWritten();
+    for (final var pageHeader : pageHeaders) {
+      this.currentHeader.meta_data.total_uncompressed_size +=
+          (pageHeader.uncompressed_page_size - pageHeader.compressed_page_size);
+    }
 
     if (bloomFilterSelector.shouldWriteBloomFilter(
         columnMetaData,

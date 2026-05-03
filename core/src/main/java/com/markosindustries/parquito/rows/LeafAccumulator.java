@@ -22,30 +22,33 @@ public class LeafAccumulator<Leaf, WriteAs> {
         (ColumnChunkWriter<WriteAs>) dataPageAccumulator.getColumnChunkWriter(schemaNode.getPath());
   }
 
-  public void accumulateNull(final int repetitionLevel, final int definitionLevel) {
-    columnChunkWriter.accumulateNull(repetitionLevel, definitionLevel);
+  public int accumulateNull(final int repetitionLevel, final int definitionLevel) {
+    return columnChunkWriter.accumulateNull(repetitionLevel, definitionLevel);
   }
 
-  protected void accumulateSingle(final int repetitionLevel, final Leaf value) {
-    columnChunkWriter.accumulateValue(
+  protected int accumulateSingle(final int repetitionLevel, final Leaf value) {
+    return columnChunkWriter.accumulateValue(
         repetitionLevel, writeTranslator.translate(Objects.requireNonNull(value)));
   }
 
-  public <RepeatedValues extends Iterable<Leaf>> void accumulateRepeated(
+  public <RepeatedValues extends Iterable<Leaf>> int accumulateRepeated(
       final int repetitionLevel, final RepeatedValues values) {
     var rLevel = repetitionLevel;
+    var bytes = 0;
     for (final var value : values) {
       if (value == null) {
-        columnChunkWriter.accumulateNull(rLevel, schemaNode.getDefinitionLevelMax());
+        bytes += columnChunkWriter.accumulateNull(rLevel, schemaNode.getDefinitionLevelMax());
       } else {
-        columnChunkWriter.accumulateValue(rLevel, writeTranslator.translate(value));
+        bytes += columnChunkWriter.accumulateValue(rLevel, writeTranslator.translate(value));
       }
       rLevel = schemaNode.getRepetitionLevelMax();
     }
     if (rLevel == repetitionLevel) {
       // We didn't write any values - we need a sentinel write
-      columnChunkWriter.accumulateNull(repetitionLevel, schemaNode.getDefinitionLevelMax() - 1);
+      bytes +=
+          columnChunkWriter.accumulateNull(repetitionLevel, schemaNode.getDefinitionLevelMax() - 1);
     }
+    return bytes;
   }
 
   public static class Optional<Leaf, WriteAs> extends LeafAccumulator<Leaf, WriteAs>
@@ -58,8 +61,8 @@ public class LeafAccumulator<Leaf, WriteAs> {
     }
 
     @Override
-    public void accumulate(final int repetitionLevel, final Leaf value) {
-      accumulateSingle(repetitionLevel, value);
+    public int accumulate(final int repetitionLevel, final Leaf value) {
+      return accumulateSingle(repetitionLevel, value);
     }
   }
 
@@ -73,8 +76,8 @@ public class LeafAccumulator<Leaf, WriteAs> {
     }
 
     @Override
-    public void accumulate(final int repetitionLevel, final RepeatedValues values) {
-      accumulateRepeated(repetitionLevel, values);
+    public int accumulate(final int repetitionLevel, final RepeatedValues values) {
+      return accumulateRepeated(repetitionLevel, values);
     }
   }
 }

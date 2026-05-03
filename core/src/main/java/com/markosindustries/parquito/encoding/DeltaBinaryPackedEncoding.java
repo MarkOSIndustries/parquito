@@ -6,13 +6,13 @@ import com.clearspring.analytics.util.Varint;
 import com.markosindustries.parquito.ColumnChunkReader;
 import com.markosindustries.parquito.ColumnChunkWriter;
 import com.markosindustries.parquito.arrays.FastArray;
+import com.markosindustries.parquito.arrays.FastDictionary;
 import com.markosindustries.parquito.page.Values;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.List;
 
 public class DeltaBinaryPackedEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
   @Override
@@ -118,14 +118,13 @@ public class DeltaBinaryPackedEncoding<ReadAs> implements ParquetEncoding<ReadAs
 
   @Override
   public void encode(
-      final List<ReadAs> values,
+      final FastDictionary<ReadAs, ?> values,
       final OutputStream uncompressedPageStream,
       final ColumnChunkWriter<ReadAs> columnChunkWriter)
       throws IOException {
     final var readAsClass = columnChunkWriter.getColumnType().parquetType().getReadAsClass();
     try {
-      DeltaBinaryPackedEncoding.encodeFrom(
-          FastArray.wrap(values, readAsClass), uncompressedPageStream);
+      DeltaBinaryPackedEncoding.encodeFrom(values.asFastArray(), uncompressedPageStream);
     } catch (UnsupportedOperationException e) {
       throw new UnsupportedOperationException(
           "Can't use " + DELTA_BINARY_PACKED + " with: " + readAsClass, e);
@@ -209,5 +208,13 @@ public class DeltaBinaryPackedEncoding<ReadAs> implements ParquetEncoding<ReadAs
             dataOutputStream);
       }
     }
+  }
+
+  @Override
+  public int refineBytesRequiredEstimate(
+      final int valueCount,
+      final int estimatedPlainBytesRequired,
+      final ColumnChunkWriter<ReadAs> columnChunkWriter) {
+    return Math.ceilDiv(Maths.bitWidth(valueCount) * valueCount, 8);
   }
 }
