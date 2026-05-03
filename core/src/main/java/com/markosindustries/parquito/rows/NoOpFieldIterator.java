@@ -1,5 +1,7 @@
 package com.markosindustries.parquito.rows;
 
+import java.util.NoSuchElementException;
+
 public class NoOpFieldIterator implements ParquetFieldIterator<Void> {
   public static final NoOpFieldIterator INSTANCE = new NoOpFieldIterator();
 
@@ -28,6 +30,6 @@ public class NoOpFieldIterator implements ParquetFieldIterator<Void> {
 
   @Override
   public Void next() {
-    return null;
+    throw new NoSuchElementException();
   }
 }

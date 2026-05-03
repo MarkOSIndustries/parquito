@@ -522,7 +522,7 @@ public class ParquitoAsReaderCompatibilityTests {
     }
   }
 
-  private static File generateFileUsingApacheHadoop(
+  static File generateFileUsingApacheHadoop(
       final List<Example> rows,
       final CompressionCodecName codecName,
       final ParquetProperties.WriterVersion writerVersion,

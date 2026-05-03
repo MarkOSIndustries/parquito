@@ -122,6 +122,12 @@ public class ParquetRewriter {
                             writer);
                   }
                 }
+
+                if (footer.isSetKey_value_metadata()) {
+                  for (final var keyValueMetadatum : footer.key_value_metadata) {
+                    writer.putMetaData(keyValueMetadatum.key, keyValueMetadatum.value);
+                  }
+                }
               } catch (Exception e) {
                 throw new RuntimeException(e);
               }

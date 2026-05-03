@@ -3,7 +3,7 @@ package com.markosindustries.parquito;
 import com.markosindustries.parquito.rows.BranchBuilder;
 import com.markosindustries.parquito.rows.RepeatedBuilder;
 
-public class NoOpReader implements Reader<Void, Void> {
+public class NoOpReader implements Reader<Object, Object> {
   public static final NoOpReader INSTANCE = new NoOpReader();
 
   private NoOpReader() {}
@@ -14,31 +14,31 @@ public class NoOpReader implements Reader<Void, Void> {
   }
 
   @Override
-  public BranchBuilder<Void> branchBuilder() {
+  public BranchBuilder<Object> branchBuilder() {
     return new NullBranchBuilder();
   }
 
   @Override
-  public RepeatedBuilder<Void, Void> repeatedBuilder() {
+  public RepeatedBuilder<Object, Object> repeatedBuilder() {
     return new NullRepeatedBuilder();
   }
 
-  private static class NullBranchBuilder implements BranchBuilder<Void> {
+  private static class NullBranchBuilder implements BranchBuilder<Object> {
     @Override
     public void put(final int fieldIndex, final Object value) {}
 
     @Override
-    public Void build() {
+    public Object build() {
       return null;
     }
   }
 
-  private static class NullRepeatedBuilder implements RepeatedBuilder<Void, Void> {
+  private static class NullRepeatedBuilder implements RepeatedBuilder<Object, Object> {
     @Override
-    public void add(final Void unused) {}
+    public void add(final Object unused) {}
 
     @Override
-    public Void build() {
+    public Object build() {
       return null;
     }
   }
