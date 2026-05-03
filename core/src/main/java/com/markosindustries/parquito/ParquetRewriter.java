@@ -103,7 +103,8 @@ public class ParquetRewriter {
                                       } else {
                                         return new RowGroupAction.Drop();
                                       }
-                                    }))
+                                    },
+                                    Concurrency.DEFAULT_EXECUTOR))
                         .toList();
 
                 for (final var rowGroupAction : rowGroupActions) {
