@@ -27,7 +27,7 @@ public abstract class Int32Type<ReadAs> extends ParquetType<ReadAs> {
 
     final var expectedBytes = expectedValues * 4;
     final var buffer = ByteBuffer.allocate(expectedBytes);
-    if (inputStream.read(buffer.array()) != expectedBytes) {
+    if (inputStream.readNBytes(buffer.array(), 0, expectedBytes) != expectedBytes) {
       throw new EOFException("Not enough bytes to read " + expectedValues + " Int32s");
     }
 
