@@ -7,9 +7,11 @@ public sealed interface FastArray32 extends FastArray
     permits FastDictionary32,
         IntArray,
         IntArraySlice,
-        IntListBoxed,
-        IntListBoxless,
-        FastArrayBitset {
+        ShortArray,
+        ShortArraySlice,
+        ByteArray,
+        ByteArraySlice,
+        FastList32 {
   @Override
   default FastArray slice(int offset, int count) {
     return slice32(offset, count);

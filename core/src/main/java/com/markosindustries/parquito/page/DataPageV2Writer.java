@@ -6,12 +6,11 @@ import com.markosindustries.parquito.ColumnChunkWriter;
 import com.markosindustries.parquito.CompressionCodecs;
 import com.markosindustries.parquito.WriteSpec;
 import com.markosindustries.parquito.arrays.FastDictionary;
+import com.markosindustries.parquito.arrays.FastList32;
 import com.markosindustries.parquito.encoding.Encodings;
 import com.markosindustries.parquito.encoding.IntEncodings;
 import com.markosindustries.parquito.encoding.Maths;
 import com.markosindustries.parquito.encoding.ParquetEncoding;
-import it.unimi.dsi.fastutil.ints.IntArrayList;
-import it.unimi.dsi.fastutil.ints.IntList;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
@@ -27,8 +26,8 @@ import org.apache.parquet.format.Util;
 public class DataPageV2Writer<Value> implements DataPageWriter<Value> {
   private final ColumnChunkWriter<Value> columnChunkWriter;
   private final WriteSpec writeSpec;
-  private final IntArrayList definitionLevels;
-  private final IntArrayList repetitionLevels;
+  private final FastList32 repetitionLevels;
+  private final FastList32 definitionLevels;
   private final int repetitionLevelMax;
   private final int definitionLevelMax;
   private int totalNulls;
@@ -38,12 +37,12 @@ public class DataPageV2Writer<Value> implements DataPageWriter<Value> {
   public DataPageV2Writer(ColumnChunkWriter<Value> columnChunkWriter, WriteSpec writeSpec) {
     this.columnChunkWriter = columnChunkWriter;
     this.writeSpec = writeSpec;
-    this.definitionLevels = new IntArrayList();
-    this.repetitionLevels = new IntArrayList();
     this.repetitionLevelMax =
         columnChunkWriter.getColumnType().schemaNode().getRepetitionLevelMax();
     this.definitionLevelMax =
         columnChunkWriter.getColumnType().schemaNode().getDefinitionLevelMax();
+    this.repetitionLevels = FastList32.createTightestFit(repetitionLevelMax);
+    this.definitionLevels = FastList32.createTightestFit(definitionLevelMax);
   }
 
   @Override
@@ -91,7 +90,7 @@ public class DataPageV2Writer<Value> implements DataPageWriter<Value> {
     final var pageHeaders = new ArrayList<PageHeader>(pageCount);
 
     var valuesIndex = 0;
-    for (var levelsIndex = 0; levelsIndex < repetitionLevels.size(); ) {
+    for (var levelsIndex = 0; levelsIndex < repetitionLevels.length(); ) {
       //    for (var i = 0; i < pageCount; i++) {
       var nextValuesIndex = Math.min(values.length(), valuesIndex + valuesPerPage);
       var valueCount = nextValuesIndex - valuesIndex;
@@ -103,16 +102,16 @@ public class DataPageV2Writer<Value> implements DataPageWriter<Value> {
               .setNum_rows(0)
               .setEncoding(encoding);
       var nextLevelsIndex = levelsIndex;
-      while (nextLevelsIndex < repetitionLevels.size()
+      while (nextLevelsIndex < repetitionLevels.length()
           && (dataPageHeaderV2.num_values < valueCount
               || valueCount == 0
-              || repetitionLevels.getInt(nextLevelsIndex) != 0)) {
-        if (definitionLevels.getInt(nextLevelsIndex) == definitionLevelMax) {
+              || repetitionLevels.get32(nextLevelsIndex) != 0)) {
+        if (definitionLevels.get32(nextLevelsIndex) == definitionLevelMax) {
           dataPageHeaderV2.num_values++;
         } else {
           dataPageHeaderV2.num_nulls++;
         }
-        if (repetitionLevels.getInt(nextLevelsIndex) == 0) {
+        if (repetitionLevels.get32(nextLevelsIndex) == 0) {
           dataPageHeaderV2.num_rows++;
         }
         nextLevelsIndex++;
@@ -145,8 +144,8 @@ public class DataPageV2Writer<Value> implements DataPageWriter<Value> {
 
   private PageHeader writePage(
       final DataPageHeaderV2 dataPageHeaderV2,
-      final IntList pageRepetitionLevels,
-      final IntList pageDefinitionLevels,
+      final FastList32 pageRepetitionLevels,
+      final FastList32 pageDefinitionLevels,
       final FastDictionary<Value, ?> pageValues,
       final ParquetEncoding<Value> encodingImpl,
       final ColumnMetaData columnMetaData,

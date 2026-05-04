@@ -37,7 +37,6 @@ public final class LongArraySlice implements FastArray64 {
 
   @Override
   public FastArray slice(final int offset, final int count) {
-    return new com.markosindustries.parquito.arrays.LongArraySlice(
-        values, this.offset + offset, count);
+    return new LongArraySlice(values, this.offset + offset, count);
   }
 }

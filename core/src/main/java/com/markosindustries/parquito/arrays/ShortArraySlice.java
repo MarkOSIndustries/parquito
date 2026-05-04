@@ -1,14 +1,14 @@
 package com.markosindustries.parquito.arrays;
 
-public final class IntArraySlice implements FastArray32 {
-  private final int[] values;
+public final class ShortArraySlice implements FastArray32 {
+  private final short[] values;
   private final int offset;
   private final int count;
 
-  public IntArraySlice(final int[] values, int offset, int count) {
+  public ShortArraySlice(final short[] values, int offset, int count) {
     if (offset < 0 || offset + count > values.length) {
       throw new IllegalArgumentException(
-          "Cannot slice int["
+          "Cannot slice short["
               + values.length
               + "] with offset "
               + offset
@@ -27,7 +27,7 @@ public final class IntArraySlice implements FastArray32 {
 
   @Override
   public void set32(final int index, final int value) {
-    values[offset + index] = value;
+    values[offset + index] = (short) value;
   }
 
   @Override
@@ -37,6 +37,6 @@ public final class IntArraySlice implements FastArray32 {
 
   @Override
   public FastArray32 slice32(final int offset, final int count) {
-    return new IntArraySlice(values, this.offset + offset, count);
+    return new ShortArraySlice(values, this.offset + offset, count);
   }
 }

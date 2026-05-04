@@ -26,7 +26,6 @@ public final class LongListBoxless implements FastArray64 {
 
   @Override
   public FastArray slice(final int offset, final int count) {
-    return new com.markosindustries.parquito.arrays.LongListBoxless(
-        values.subList(offset, offset + count));
+    return new LongListBoxless(values.subList(offset, offset + count));
   }
 }

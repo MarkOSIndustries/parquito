@@ -57,10 +57,12 @@ public class Maths {
     return 1L << (bitWidth(value) + 1);
   }
 
+  public static final byte BYTES_PER_SHORT = 2;
   public static final byte BYTES_PER_INT = 4;
   public static final byte BYTES_PER_LONG = 8;
 
   public static final byte BITS_PER_BYTE = 8;
+  public static final byte BITS_PER_SHORT = BYTES_PER_SHORT * BITS_PER_BYTE;
   public static final byte BITS_PER_INT = BYTES_PER_INT * BITS_PER_BYTE;
   public static final byte BITS_PER_LONG = BYTES_PER_LONG * BITS_PER_BYTE;
 }

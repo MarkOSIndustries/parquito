@@ -2,11 +2,17 @@ package com.markosindustries.parquito.arrays;
 
 import java.util.List;
 
-public final class IntListBoxed implements FastArray32 {
+public final class IntListBoxed implements FastList32 {
   private final List<Integer> values;
+  private final boolean fixedSize;
 
   public IntListBoxed(final List<Integer> values) {
+    this(values, false);
+  }
+
+  private IntListBoxed(final List<Integer> values, final boolean fixedSize) {
     this.values = values;
+    this.fixedSize = fixedSize;
   }
 
   @Override
@@ -25,8 +31,20 @@ public final class IntListBoxed implements FastArray32 {
   }
 
   @Override
+  public void add(final int value) {
+    if (fixedSize) {
+      throw new IndexOutOfBoundsException("Can't grow this IntListBoxled");
+    }
+    values.add(value);
+  }
+
+  @Override
   public FastArray32 slice32(final int offset, final int count) {
-    return new com.markosindustries.parquito.arrays.IntListBoxed(
-        values.subList(offset, offset + count));
+    return new IntListBoxed(values.subList(offset, offset + count), true);
+  }
+
+  @Override
+  public FastList32 subList(final int startOffsetInclusive, final int endOffsetExclusive) {
+    return new IntListBoxed(values.subList(startOffsetInclusive, endOffsetExclusive), true);
   }
 }
