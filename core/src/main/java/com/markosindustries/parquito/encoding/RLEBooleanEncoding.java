@@ -1,5 +1,7 @@
 package com.markosindustries.parquito.encoding;
 
+import static org.apache.parquet.format.Encoding.RLE;
+
 import com.markosindustries.parquito.ColumnChunkReader;
 import com.markosindustries.parquito.ColumnChunkWriter;
 import com.markosindustries.parquito.arrays.FastDictionary;
@@ -17,6 +19,11 @@ public class RLEBooleanEncoding implements ParquetEncoding<Boolean> {
       final InputStream decompressedPageStream,
       final ColumnChunkReader<Boolean> columnChunkReader)
       throws IOException {
+    final var readAsClass = columnChunkReader.getColumnType().parquetType().getReadAsClass();
+    if (!readAsClass.isAssignableFrom(Boolean.class)) {
+      throw new UnsupportedOperationException("Can't use " + RLE + " with: " + readAsClass);
+    }
+
     final var values =
         IntEncodings.INT_ENCODING_RLE.decode(expectedValues, 1, decompressedPageStream);
 
@@ -33,7 +40,7 @@ public class RLEBooleanEncoding implements ParquetEncoding<Boolean> {
         new AbstractIntList() {
           @Override
           public int getInt(final int index) {
-            return values.getAsObject(index) ? 1 : 0;
+            return ((Boolean) values.getAsObject(index)) ? 1 : 0;
           }
 
           @Override
@@ -50,6 +57,6 @@ public class RLEBooleanEncoding implements ParquetEncoding<Boolean> {
       final int valueCount,
       final int estimatedPlainBytesRequired,
       final ColumnChunkWriter<Boolean> columnChunkWriter) {
-    return 0;
+    return Maths.ceilDivPow2(valueCount, 3);
   }
 }
