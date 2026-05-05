@@ -2,6 +2,7 @@ package com.markosindustries.parquito.protobuf;
 
 import com.google.protobuf.Descriptors;
 import com.markosindustries.parquito.ParquetSchemaBuilder;
+import com.markosindustries.parquito.SchemaTraversalSpec;
 import java.util.List;
 import org.apache.parquet.format.ConvertedType;
 import org.apache.parquet.format.EnumType;
@@ -21,27 +22,52 @@ public class ProtobufSchemaConverter {
     this.protobufParquetConfig = protobufParquetConfig;
   }
 
-  public List<SchemaElement> convertDescriptorToSchema(Descriptors.Descriptor descriptor) {
-    return convertMessage(new ParquetSchemaBuilder(descriptor.getFullName()), descriptor, false)
+  public List<SchemaElement> convertDescriptorToSchema(
+      final Descriptors.Descriptor descriptor, final SchemaTraversalSpec schemaTraversalSpec) {
+    return convertMessage(
+            new ParquetSchemaBuilder(descriptor.getFullName()),
+            descriptor,
+            false,
+            schemaTraversalSpec,
+            protobufParquetConfig.recursionLimit())
         .build();
   }
 
   private ParquetSchemaBuilder convertMessage(
       final ParquetSchemaBuilder builder,
       final Descriptors.Descriptor descriptor,
-      final boolean isMapEntry) {
-    builder.mutateElement(
-        schemaElement -> {
-          return schemaElement.setNum_children(descriptor.getFields().size());
-        });
-    for (final Descriptors.FieldDescriptor field : descriptor.getFields()) {
-      builder.addChild(convertField(field, isMapEntry || field.isRequired()));
+      final boolean isMapEntry,
+      final SchemaTraversalSpec schemaTraversalSpec,
+      final int recursionLimit) {
+    var childrenCount = 0;
+    if (recursionLimit > 0) {
+      final var fields = descriptor.getFields();
+      for (int childFieldIndex = 0; childFieldIndex < fields.size(); childFieldIndex++) {
+        if (schemaTraversalSpec.includesChild(childFieldIndex)) {
+          childrenCount++;
+          final Descriptors.FieldDescriptor field = fields.get(childFieldIndex);
+          builder.addChild(
+              convertField(
+                  field,
+                  isMapEntry || field.isRequired(),
+                  schemaTraversalSpec.forChild(childFieldIndex),
+                  recursionLimit - 1));
+        }
+      }
     }
-    return builder;
+
+    final var finalChildrenCount = childrenCount;
+    return builder.mutateElement(
+        schemaElement -> {
+          return schemaElement.setNum_children(finalChildrenCount);
+        });
   }
 
   private ParquetSchemaBuilder convertField(
-      final Descriptors.FieldDescriptor field, final boolean isRequired) {
+      final Descriptors.FieldDescriptor field,
+      final boolean isRequired,
+      final SchemaTraversalSpec schemaTraversalSpec,
+      final int recursionLimit) {
     final var topLevelBuilder = new ParquetSchemaBuilder(field.getName());
     topLevelBuilder.mutateElement(
         schemaElement -> {
@@ -53,7 +79,12 @@ public class ProtobufSchemaConverter {
 
     final var protobufAlignedBuilder = wrapListsAndMaps(topLevelBuilder, field);
     if (field.getType() == Descriptors.FieldDescriptor.Type.MESSAGE) {
-      convertMessage(protobufAlignedBuilder, field.getMessageType(), field.isMapField());
+      convertMessage(
+          protobufAlignedBuilder,
+          field.getMessageType(),
+          field.isMapField(),
+          schemaTraversalSpec,
+          recursionLimit);
     } else {
       protobufAlignedBuilder.mutateElement(
           schemaElement ->

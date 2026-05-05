@@ -42,7 +42,7 @@ public class ParquitoRoundTripTests {
             outputStream,
             WriteSpec.newBuilder().withCompressionCodec(compressionCodec).build(),
             ProtobufWriter.<Example>fromDescriptor(
-                Example.getDescriptor(), new ProtobufParquetConfig(false)))) {
+                Example.getDescriptor(), ProtobufParquetConfig.newBuilder().build()))) {
       writer.write(Collections.emptyIterator());
     }
 
@@ -153,7 +153,7 @@ public class ParquitoRoundTripTests {
                         columnMetaData.path_in_schema.contains("some_string"))
                 .build(),
             ProtobufWriter.<Example>fromDescriptor(
-                Example.getDescriptor(), new ProtobufParquetConfig(false)))) {
+                Example.getDescriptor(), ProtobufParquetConfig.newBuilder().build()))) {
       writer.write(expectedProtobufs.iterator());
     }
 

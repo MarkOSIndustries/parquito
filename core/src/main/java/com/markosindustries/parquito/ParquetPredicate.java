@@ -25,17 +25,17 @@ public interface ParquetPredicate<ReadAs> {
 
   boolean branchMatches(final IntPredicate childMatchesNextRow);
 
-  default ColumnSpec asColumnSpec() {
+  default SchemaTraversalSpec asSchemaTraversalSpec() {
     final ParquetPredicate<ReadAs> self = this;
-    return new ColumnSpec() {
+    return new SchemaTraversalSpec() {
       @Override
       public boolean includesChild(final int childFieldIndex) {
         return self.includesChild(childFieldIndex);
       }
 
       @Override
-      public ColumnSpec forChild(final int childFieldIndex) {
-        return self.forChild(childFieldIndex).asColumnSpec();
+      public SchemaTraversalSpec forChild(final int childFieldIndex) {
+        return self.forChild(childFieldIndex).asSchemaTraversalSpec();
       }
     };
   }

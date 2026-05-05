@@ -41,7 +41,7 @@ public class ParquitoAsWriterCompatibilityTests {
             outputStream,
             WriteSpec.newBuilder().withCompressionCodec(compressionCodec).build(),
             ProtobufWriter.<Example>fromDescriptor(
-                Example.getDescriptor(), new ProtobufParquetConfig(false)))) {
+                Example.getDescriptor(), ProtobufParquetConfig.newBuilder().build()))) {
       writer.putMetaData(PB_CLASS, Example.class.getName());
       writer.write(Collections.emptyIterator());
     }
@@ -145,7 +145,7 @@ public class ParquitoAsWriterCompatibilityTests {
                         columnMetaData.path_in_schema.contains("some_string"))
                 .build(),
             ProtobufWriter.<Example>fromDescriptor(
-                Example.getDescriptor(), new ProtobufParquetConfig(false)))) {
+                Example.getDescriptor(), ProtobufParquetConfig.newBuilder().build()))) {
       writer.putMetaData(PB_CLASS, Example.class.getName());
       writer.write(inputProtobufs.iterator());
     }

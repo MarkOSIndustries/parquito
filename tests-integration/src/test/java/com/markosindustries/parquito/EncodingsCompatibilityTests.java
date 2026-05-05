@@ -377,7 +377,7 @@ public class EncodingsCompatibilityTests {
                 .withEncodingSelector(encodingSelector)
                 .build(),
             ProtobufWriter.<Example>fromDescriptor(
-                Example.getDescriptor(), new ProtobufParquetConfig(false)))) {
+                Example.getDescriptor(), ProtobufParquetConfig.newBuilder().build()))) {
       writer.putMetaData(PB_CLASS, Example.class.getName());
       writer.write(expectedProtobufs.iterator());
     }
