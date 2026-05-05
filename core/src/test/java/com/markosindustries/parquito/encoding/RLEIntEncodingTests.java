@@ -34,8 +34,8 @@ public class RLEIntEncodingTests {
 
   @ParameterizedTest
   @MethodSource("encoderTestCombinations")
-  public void roundTripWithoutHeader(
-      boolean withLengthHeader, boolean omitZeroWidthRuns, int[] expectedValues) throws Exception {
+  public void roundTrip(boolean withLengthHeader, boolean omitZeroWidthRuns, int[] expectedValues)
+      throws Exception {
     final var maxValue = Arrays.stream(expectedValues).max().getAsInt();
     final int bitWidth = Maths.bitWidth(maxValue);
     final var outputStream = new ByteBufferOutputStream();

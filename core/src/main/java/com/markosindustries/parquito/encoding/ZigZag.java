@@ -2,20 +2,18 @@ package com.markosindustries.parquito.encoding;
 
 public interface ZigZag {
   static int encode(final int value) {
-    int sign = value < 0 ? -1 : 0;
-    return (value << 1) ^ sign;
+    return (value << 1) ^ (value >> 31);
   }
 
   static int decode(final int value) {
-    return (value ^ -(value & 1)) >> 1;
+    return (value >>> 1) ^ -(value & 1);
   }
 
   static long encode(final long value) {
-    int sign = value < 0 ? -1 : 0;
-    return (value << 1) ^ sign;
+    return (value << 1) ^ (value >> 63);
   }
 
   static long decode(final long value) {
-    return (value ^ -(value & 1)) >> 1;
+    return (value >>> 1) ^ -(value & 1L);
   }
 }

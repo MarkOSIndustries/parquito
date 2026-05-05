@@ -1,8 +1,16 @@
 package com.markosindustries.parquito.encoding;
 
 public class Maths {
+  public static byte byteMaskUpperBits(int bits) {
+    return (byte) (~(0xFF >> bits) & 0xFF);
+  }
+
+  public static byte byteMaskLowerBits(int bits) {
+    return (byte) (~(0xFF << bits) & 0xFF);
+  }
+
   public static int intMaskLowerBits(int bits) {
-    return bits == Maths.BITS_PER_INT ? 0xFFFFFFFF : ~(0xFFFFFFFF << bits);
+    return (int) (~(0xFFFFFFFFL << bits) & 0xFFFFFFFFL);
   }
 
   public static long longMaskLowerBits(int bits) {

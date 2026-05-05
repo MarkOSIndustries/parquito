@@ -196,6 +196,7 @@ public class DeltaBinaryPackedEncoding<ReadAs> implements ParquetEncoding<ReadAs
         dataOutputStream.writeByte(bitWidthsForBlock[miniBlockIdx]);
       }
 
+      var deltaForBlockOffset = 0;
       for (int miniBlockIdx = 0; miniBlockIdx < miniBlocksPerBlock; miniBlockIdx++) {
         final var bitWidth = bitWidthsForBlock[miniBlockIdx];
         if (bitWidth == 0) {
@@ -203,9 +204,11 @@ public class DeltaBinaryPackedEncoding<ReadAs> implements ParquetEncoding<ReadAs
         }
 
         RLEIntEncoding.writeBitPacked(
-            FastArray.slice(deltasForBlock, miniBlockIdx * valuesPerMiniBlock, valuesPerMiniBlock),
+            FastArray.slice(deltasForBlock, deltaForBlockOffset, valuesPerMiniBlock),
             bitWidth,
             dataOutputStream);
+
+        deltaForBlockOffset += valuesPerMiniBlock;
       }
     }
   }

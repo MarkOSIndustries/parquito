@@ -2,6 +2,7 @@ package com.markosindustries.parquito.encoding;
 
 import com.clearspring.analytics.util.Varint;
 import com.markosindustries.parquito.ByteBufferOutputStream;
+import com.markosindustries.parquito.ParquetIOException;
 import com.markosindustries.parquito.SpecifiedByteCountInputStream;
 import com.markosindustries.parquito.arrays.FastArray;
 import com.markosindustries.parquito.arrays.FastArray32;
@@ -10,6 +11,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Arrays;
 
 /**
  * Run Length Encoding / Bit-Packing Hybrid
@@ -184,6 +186,49 @@ public class RLEIntEncoding implements ParquetIntEncoding {
     writeBitPacked(values, bitWidth, runLengthDividedBy8 << 3, dataOutput);
   }
 
+  private static final byte[] maskUpperAtBitIndex =
+      new byte[] {
+        Maths.byteMaskUpperBits(8),
+        Maths.byteMaskUpperBits(7),
+        Maths.byteMaskUpperBits(6),
+        Maths.byteMaskUpperBits(5),
+        Maths.byteMaskUpperBits(4),
+        Maths.byteMaskUpperBits(3),
+        Maths.byteMaskUpperBits(2),
+        Maths.byteMaskUpperBits(1),
+      };
+  private static final byte[] maskLowerForBitsRemaining;
+
+  static {
+    maskLowerForBitsRemaining = new byte[Maths.BITS_PER_LONG + 1];
+    Arrays.fill(
+        maskLowerForBitsRemaining,
+        Maths.BITS_PER_BYTE,
+        Maths.BITS_PER_LONG + 1,
+        Maths.byteMaskLowerBits(8));
+    for (var bitsRemaining = 0; bitsRemaining < Maths.BITS_PER_BYTE; bitsRemaining++) {
+      maskLowerForBitsRemaining[bitsRemaining] = Maths.byteMaskLowerBits(bitsRemaining);
+    }
+  }
+
+  private static final int[][] byteIndexIncrementFor;
+  private static final int[][] nextBitIndexFor;
+
+  static {
+    byteIndexIncrementFor = new int[Maths.BITS_PER_BYTE][];
+    nextBitIndexFor = new int[Maths.BITS_PER_BYTE][];
+    for (var bitIndex = 0; bitIndex < Maths.BITS_PER_BYTE; bitIndex++) {
+      byteIndexIncrementFor[bitIndex] = new int[Maths.BITS_PER_LONG + 1];
+      nextBitIndexFor[bitIndex] = new int[Maths.BITS_PER_LONG + 1];
+      for (var bitsNeeded = 0; bitsNeeded < byteIndexIncrementFor[bitIndex].length; bitsNeeded++) {
+        final var nextBitIndex = bitsNeeded + bitIndex;
+        byteIndexIncrementFor[bitIndex][bitsNeeded] = nextBitIndex >= Maths.BITS_PER_BYTE ? 1 : 0;
+        nextBitIndexFor[bitIndex][bitsNeeded] =
+            Math.min(nextBitIndex, Maths.BITS_PER_BYTE) % Maths.BITS_PER_BYTE;
+      }
+    }
+  }
+
   public static void readBitPacked(
       final FastArray targetArray,
       final int bitWidth,
@@ -195,24 +240,35 @@ public class RLEIntEncoding implements ParquetIntEncoding {
           "Bit packed runs must have length which is a multiple of 8");
     }
 
-    final long mask = Maths.longMaskLowerBits(bitWidth);
-    final int count = targetArray.length();
-    long buffer = 0;
-    int bitsAvailable = 0;
-    for (int i = 0; i < count; i++) {
-      while (bitsAvailable < bitWidth) {
-        buffer |= ((long) inputStream.read()) << bitsAvailable;
-        bitsAvailable += 8;
-      }
-      targetArray.set(i, buffer & mask);
-      buffer >>>= bitWidth;
-      bitsAvailable -= bitWidth;
-    }
+    final int expectedBytes = Maths.floorDivPow2(bitWidth * runLength, 3);
 
-    // The encoding demands runLength values, even if we don't need that many
-    for (int wastedBits = bitWidth * (runLength - count); wastedBits > 7; wastedBits -= 8) {
-      //noinspection ResultOfMethodCallIgnored
-      inputStream.read();
+    final int valuesLength = targetArray.length();
+    final var next8Buffer = new byte[bitWidth];
+    int valueIndex = 0;
+    for (int bytesRead = 0; bytesRead < expectedBytes; bytesRead += next8Buffer.length) {
+      if (inputStream.readNBytes(next8Buffer, 0, next8Buffer.length) != next8Buffer.length) {
+        throw new ParquetIOException("Not enough bytes available");
+      }
+      int byteIndex = 0, bitIndex = 0;
+      for (var i = 0; i < 8 && valueIndex < valuesLength; i++) {
+        long nextValue = 0;
+        int bitsNeeded = bitWidth;
+        while (bitsNeeded > 0) {
+          int nextByteIndex = byteIndex + byteIndexIncrementFor[bitIndex][bitsNeeded];
+          int nextBitIndex = nextBitIndexFor[bitIndex][bitsNeeded];
+          long extract =
+              0xFF
+                  & (next8Buffer[byteIndex]
+                      & maskUpperAtBitIndex[bitIndex]
+                      & (maskLowerForBitsRemaining[bitsNeeded] << bitIndex));
+          int shiftLeft = (bitWidth - bitsNeeded) - bitIndex;
+          nextValue |= shiftLeft > 0 ? extract << shiftLeft : extract >>> -shiftLeft;
+          bitsNeeded -= Maths.BITS_PER_BYTE - bitIndex;
+          byteIndex = nextByteIndex;
+          bitIndex = nextBitIndex;
+        }
+        targetArray.set(valueIndex++, nextValue);
+      }
     }
   }
 
@@ -229,32 +285,36 @@ public class RLEIntEncoding implements ParquetIntEncoding {
       final int runLength,
       final OutputStream outputStream)
       throws IOException {
-    final var valuesLength = sourceArray.length();
+    if (Maths.remainderDivPow2(runLength, 3) != 0) {
+      throw new IllegalArgumentException(
+          "Bit packed runs must have length which is a multiple of 8");
+    }
 
-    long byteBuffer = 0;
-    int packedBits = 0;
-    for (var valueIndex = 0; valueIndex < valuesLength; valueIndex++) {
-      var value = sourceArray.get(valueIndex);
-      for (int valueBitsRemaining = bitWidth; valueBitsRemaining > 0; ) {
-        final var bitsToGrab = Math.min(valueBitsRemaining, Maths.BITS_PER_LONG - packedBits);
-        byteBuffer |= (value & Maths.longMaskLowerBits(bitsToGrab)) << packedBits;
-        packedBits += bitsToGrab;
-        valueBitsRemaining -= bitsToGrab;
-        value >>>= bitsToGrab;
-        while (packedBits >= Maths.BITS_PER_BYTE) {
-          // Ignores all but lowest Maths.BITS_PER_BYTE bits
-          outputStream.write((int) byteBuffer);
-          packedBits -= Maths.BITS_PER_BYTE;
-          byteBuffer >>>= Maths.BITS_PER_BYTE;
+    final int expectedBytes = Maths.floorDivPow2(bitWidth * runLength, 3);
+
+    final var valuesLength = sourceArray.length();
+    final var next8Buffer = new byte[bitWidth];
+    int valueIndex = 0;
+    for (int bytesWritten = 0; bytesWritten < expectedBytes; bytesWritten += next8Buffer.length) {
+      int byteIndex = 0, bitIndex = 0;
+      Arrays.fill(next8Buffer, (byte) 0);
+      for (var i = 0; i < 8 && valueIndex < valuesLength; i++) {
+        long nextValue = sourceArray.get(valueIndex++);
+        int bitsAvailable = bitWidth;
+        while (bitsAvailable > 0) {
+          int nextByteIndex = byteIndex + byteIndexIncrementFor[bitIndex][bitsAvailable];
+          int nextBitIndex = nextBitIndexFor[bitIndex][bitsAvailable];
+          next8Buffer[byteIndex] |=
+              (byte) ((nextValue & maskLowerForBitsRemaining[bitsAvailable]) << bitIndex);
+          int shiftRight = Maths.BITS_PER_BYTE - bitIndex;
+          nextValue >>>= shiftRight;
+          bitsAvailable -= shiftRight;
+          byteIndex = nextByteIndex;
+          bitIndex = nextBitIndex;
         }
       }
-    }
-    if (packedBits > 0) {
-      outputStream.write((int) byteBuffer);
-    }
-    // The encoding demands runLength values, even if we don't need that many
-    for (int wastedBits = bitWidth * (runLength - valuesLength); wastedBits > 7; wastedBits -= 8) {
-      outputStream.write(0);
+
+      outputStream.write(next8Buffer);
     }
   }
 }
