@@ -56,12 +56,6 @@ public class EncodingsCompatibilityTests {
   }
 
   private static Stream<Arguments> intEncodingsSource() {
-    final var encodings =
-        List.of(
-            Encoding.PLAIN,
-            Encoding.DELTA_BINARY_PACKED,
-            Encoding.RLE_DICTIONARY,
-            Encoding.BYTE_STREAM_SPLIT);
     final var valueCounts = List.of(1, 10_000);
     final var maxValues = List.of(0, 1, Integer.MAX_VALUE);
 

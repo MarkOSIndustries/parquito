@@ -97,7 +97,8 @@ public final class SchemaTraversalSpecs {
       implements SchemaTraversalSpec {
     @Override
     public boolean includesChild(final int childFieldIndex) {
-      return true;
+      return schemaPath.path.length > offset + 1
+          || schemaPath.pathAsFieldIndices[offset] != childFieldIndex;
     }
 
     @Override

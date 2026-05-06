@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.OptionalInt;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import org.apache.parquet.format.ConvertedType;
 import org.apache.parquet.format.FieldRepetitionType;
@@ -55,6 +56,14 @@ public class ParquetSchemaNode {
 
     public List<ParquetSchemaNode> findLeafNodes() {
       return findLeafNodesRecursive().toList();
+    }
+
+    public List<SchemaElement> toRawSchema() {
+      return toRawSchemaRecursive(SchemaTraversalSpecs.all()).toList();
+    }
+
+    public Root trim(final SchemaTraversalSpec schemaTraversalSpec) {
+      return from(toRawSchemaRecursive(schemaTraversalSpec).toList());
     }
   }
 
@@ -200,6 +209,19 @@ public class ParquetSchemaNode {
     } else {
       return Stream.of(this);
     }
+  }
+
+  protected Stream<SchemaElement> toRawSchemaRecursive(final SchemaTraversalSpec trimSpec) {
+    final var matchingChildIndices =
+        IntStream.range(0, children.length).filter(trimSpec::includesChild).toArray();
+
+    return Stream.concat(
+        Stream.of(this.getElement().setNum_children(matchingChildIndices.length)),
+        Arrays.stream(matchingChildIndices)
+            .boxed()
+            .flatMap(
+                childIndex ->
+                    children[childIndex].toRawSchemaRecursive(trimSpec.forChild(childIndex))));
   }
 
   @Override

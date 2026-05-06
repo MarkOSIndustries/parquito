@@ -1,6 +1,6 @@
 package com.markosindustries.parquito.rows;
 
-import java.util.NoSuchElementException;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 public class NoOpFieldIterator implements ParquetFieldIterator<Void> {
   public static final NoOpFieldIterator INSTANCE = new NoOpFieldIterator();
@@ -28,8 +28,9 @@ public class NoOpFieldIterator implements ParquetFieldIterator<Void> {
     return false;
   }
 
+  @SuppressFBWarnings("IT_NO_SUCH_ELEMENT")
   @Override
   public Void next() {
-    throw new NoSuchElementException();
+    return null;
   }
 }
