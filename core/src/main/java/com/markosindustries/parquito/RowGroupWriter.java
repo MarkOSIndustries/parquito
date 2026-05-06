@@ -33,6 +33,7 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.DataPageAccumu
   }
 
   private final ByteCountingOutputStream byteCountingStream;
+  private final ByteBufferOutputStream bloomOutputStream;
   private final WriteSpec writeSpec;
   private final FileMetaData fileMetaData;
   private final Map<String, String> userMetadata;
@@ -48,6 +49,7 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.DataPageAccumu
       throws IOException {
     this.byteCountingStream = new ByteCountingOutputStream(outputStream);
     byteCountingStream.write(PARQUET_UNENCRYPTED_MAGIC_BYTES);
+    this.bloomOutputStream = new ByteBufferOutputStream();
     this.writeSpec = writeSpec;
     this.fileMetaData = new FileMetaData();
     this.fileMetaData.setSchema(List.copyOf(writer.getRawSchema()));
@@ -149,7 +151,9 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.DataPageAccumu
     currentRowGroup.setTotal_compressed_size(0);
     for (final var columnChunkWriter : columnChunkWriters) {
       final var offset = byteCountingStream.getBytesWritten();
-      final var columnChunkHeader = columnChunkWriter.writeAllAndReset(byteCountingStream);
+      final var bloomOffset = bloomOutputStream.size();
+      final var columnChunkHeader =
+          columnChunkWriter.writeAllAndReset(byteCountingStream, bloomOutputStream);
       if (columnChunkHeader.meta_data.isSetDictionary_page_offset()) {
         columnChunkHeader.meta_data.dictionary_page_offset += offset;
       }
@@ -157,7 +161,7 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.DataPageAccumu
       columnChunkHeader.setFile_offset(columnChunkHeader.meta_data.data_page_offset);
 
       if (columnChunkHeader.meta_data.isSetBloom_filter_offset()) {
-        columnChunkHeader.meta_data.bloom_filter_offset += offset;
+        columnChunkHeader.meta_data.bloom_filter_offset += bloomOffset;
       }
 
       currentRowGroup.total_byte_size += columnChunkHeader.meta_data.total_uncompressed_size;
@@ -218,6 +222,17 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.DataPageAccumu
     if (currentRowGroup.num_rows > 0 || fileMetaData.num_rows == 0) {
       finishCurrentRowGroup(currentRowGroup.num_rows);
     }
+
+    final var bytesBeforeBloomFilters = byteCountingStream.getBytesWritten();
+    bloomOutputStream.writeTo(byteCountingStream);
+    for (final var rowGroup : fileMetaData.row_groups) {
+      for (final var column : rowGroup.columns) {
+        if (column.meta_data.isSetBloom_filter_offset()) {
+          column.meta_data.bloom_filter_offset += bytesBeforeBloomFilters;
+        }
+      }
+    }
+
     fileMetaData.setKey_value_metadata(
         userMetadata.entrySet().stream()
             .map(

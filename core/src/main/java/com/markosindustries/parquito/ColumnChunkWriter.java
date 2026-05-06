@@ -75,7 +75,9 @@ public class ColumnChunkWriter<Value> {
     return bytes;
   }
 
-  public ColumnChunk writeAllAndReset(final OutputStream outputStream) throws IOException {
+  public ColumnChunk writeAllAndReset(
+      final OutputStream rowGroupOutputStream, final OutputStream bloomOutputStream)
+      throws IOException {
     if (dictionaryPageWriter.getNumValues() > 0) {
       final var minValue = dictionaryPageWriter.getDistinctValues().first();
       final var maxValue = dictionaryPageWriter.getDistinctValues().last();
@@ -103,7 +105,7 @@ public class ColumnChunkWriter<Value> {
     currentHeader.meta_data.addToEncodings(selectedEncoding);
 
     if (selectedEncoding == Encoding.RLE_DICTIONARY) {
-      final var dictionaryOutputStream = new ByteCountingOutputStream(outputStream);
+      final var dictionaryOutputStream = new ByteCountingOutputStream(rowGroupOutputStream);
       final var pageHeader = dictionaryPageWriter.writePage(columnMetaData, dictionaryOutputStream);
       this.currentHeader.meta_data.total_compressed_size +=
           dictionaryOutputStream.getBytesWritten();
@@ -116,7 +118,7 @@ public class ColumnChunkWriter<Value> {
       this.currentHeader.meta_data.setData_page_offset(0);
     }
 
-    final var dataPageOutputStream = new ByteCountingOutputStream(outputStream);
+    final var dataPageOutputStream = new ByteCountingOutputStream(rowGroupOutputStream);
     final var pageHeaders =
         dataPageWriter.writePages(
             dictionaryPageWriter.makeFastDictionary(),
@@ -139,9 +141,8 @@ public class ColumnChunkWriter<Value> {
         dataPageWriter.getNumValues(),
         dataPageWriter.getNumNulls())) {
       final var bloomFilter = BloomFilter.create(dictionaryPageWriter.getDistinctValues(), 0.00001);
-      writeBloomFilter(bloomFilter, outputStream);
-      this.currentHeader.meta_data.setBloom_filter_offset(
-          this.currentHeader.meta_data.data_page_offset + dataPageOutputStream.getBytesWritten());
+      writeBloomFilter(bloomFilter, bloomOutputStream);
+      this.currentHeader.meta_data.setBloom_filter_offset(0);
     }
 
     final var result = currentHeader;
