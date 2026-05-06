@@ -32,10 +32,11 @@ public class ByteBufferInputStream extends InputStream {
 
   @Override
   public int read(final byte[] b, final int off, final int len) throws IOException {
-    if (available() == 0) {
+    final var available = available();
+    if (available == 0) {
       return -1;
     }
-    final var bytes = Math.min(available(), len);
+    final var bytes = Math.min(available, len);
     byteBuffer.get(b, off, bytes);
     return bytes;
   }
