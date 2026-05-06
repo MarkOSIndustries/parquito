@@ -10,8 +10,10 @@ import com.markosindustries.parquito.schemas.Example;
 import com.markosindustries.parquito.schemas.ExampleChild;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -191,13 +193,9 @@ public class EncodingsCompatibilityTests {
     encodingRoundTrip(
         testFileReader,
         codec,
-        (columnMetaData, distinctValues, totalValues, totalNulls) -> {
-          if (columnMetaData.path_in_schema.size() == 1
-              && columnMetaData.path_in_schema.get(0).equals("some_string")) {
-            return encoding;
-          }
-          return Encoding.PLAIN;
-        },
+        (schema) ->
+            new EncodingSelector.PlainEncodingSelector(
+                Map.of(schema.parseDotSeparatedPath("some_string"), encoding)),
         valueCount,
         () -> {
           for (var i = 0; i < byteMutationsPerRow; i++) {
@@ -222,13 +220,9 @@ public class EncodingsCompatibilityTests {
     encodingRoundTrip(
         testFileReader,
         codec,
-        (columnMetaData, distinctValues, totalValues, totalNulls) -> {
-          if (columnMetaData.path_in_schema.size() == 2
-              && columnMetaData.path_in_schema.get(1).equals("some_int32")) {
-            return encoding;
-          }
-          return Encoding.PLAIN;
-        },
+        (schema) ->
+            new EncodingSelector.PlainEncodingSelector(
+                Map.of(schema.parseDotSeparatedPath("some_child.some_int32"), encoding)),
         valueCount,
         () -> {
           return Example.newBuilder()
@@ -254,13 +248,9 @@ public class EncodingsCompatibilityTests {
     encodingRoundTrip(
         testFileReader,
         codec,
-        (columnMetaData, distinctValues, totalValues, totalNulls) -> {
-          if (columnMetaData.path_in_schema.size() == 2
-              && columnMetaData.path_in_schema.get(1).equals("some_int64")) {
-            return encoding;
-          }
-          return Encoding.PLAIN;
-        },
+        (schema) ->
+            new EncodingSelector.PlainEncodingSelector(
+                Map.of(schema.parseDotSeparatedPath("some_child.some_int64"), encoding)),
         valueCount,
         () -> {
           return Example.newBuilder()
@@ -285,13 +275,9 @@ public class EncodingsCompatibilityTests {
     encodingRoundTrip(
         testFileReader,
         codec,
-        (columnMetaData, distinctValues, totalValues, totalNulls) -> {
-          if (columnMetaData.path_in_schema.size() == 2
-              && columnMetaData.path_in_schema.get(1).equals("some_float")) {
-            return encoding;
-          }
-          return Encoding.PLAIN;
-        },
+        (schema) ->
+            new EncodingSelector.PlainEncodingSelector(
+                Map.of(schema.parseDotSeparatedPath("some_child.some_float"), encoding)),
         valueCount,
         () -> {
           return Example.newBuilder()
@@ -314,13 +300,9 @@ public class EncodingsCompatibilityTests {
     encodingRoundTrip(
         testFileReader,
         codec,
-        (columnMetaData, distinctValues, totalValues, totalNulls) -> {
-          if (columnMetaData.path_in_schema.size() == 2
-              && columnMetaData.path_in_schema.get(1).equals("some_double")) {
-            return encoding;
-          }
-          return Encoding.PLAIN;
-        },
+        (schema) ->
+            new EncodingSelector.PlainEncodingSelector(
+                Map.of(schema.parseDotSeparatedPath("some_child.some_double"), encoding)),
         valueCount,
         () -> {
           return Example.newBuilder()
@@ -345,13 +327,9 @@ public class EncodingsCompatibilityTests {
     encodingRoundTrip(
         testFileReader,
         codec,
-        (columnMetaData, distinctValues, totalValues, totalNulls) -> {
-          if (columnMetaData.path_in_schema.size() == 1
-              && columnMetaData.path_in_schema.get(0).equals("some_bool")) {
-            return encoding;
-          }
-          return Encoding.PLAIN;
-        },
+        (schema) ->
+            new EncodingSelector.PlainEncodingSelector(
+                Map.of(schema.parseDotSeparatedPath("some_bool"), encoding)),
         valueCount,
         () -> {
           return Example.newBuilder().setSomeBool(random.nextBoolean()).build();
@@ -361,12 +339,16 @@ public class EncodingsCompatibilityTests {
   private void encodingRoundTrip(
       final TestFileReader testFileReader,
       final CompressionCodec compressionCodec,
-      final EncodingSelector encodingSelector,
+      final Function<ParquetSchemaNode.Root, EncodingSelector> encodingSelectorProvider,
       final int valueCount,
       final Supplier<Example> randomRowSupplier)
       throws Exception {
     final var expectedProtobufs =
         IntStream.range(0, valueCount).mapToObj(ignored -> randomRowSupplier.get()).toList();
+
+    final var protobufWriter =
+        ProtobufWriter.<Example>fromDescriptor(
+            Example.getDescriptor(), ProtobufParquetConfig.newBuilder().build());
 
     final var outputStream = new ByteBufferOutputStream();
     try (final var writer =
@@ -374,10 +356,10 @@ public class EncodingsCompatibilityTests {
             outputStream,
             WriteSpec.newBuilder()
                 .withCompressionCodec(compressionCodec)
-                .withEncodingSelector(encodingSelector)
+                .withEncodingSelector(
+                    encodingSelectorProvider.apply(protobufWriter.getSchemaRoot()))
                 .build(),
-            ProtobufWriter.<Example>fromDescriptor(
-                Example.getDescriptor(), ProtobufParquetConfig.newBuilder().build()))) {
+            protobufWriter)) {
       writer.putMetaData(PB_CLASS, Example.class.getName());
       writer.write(expectedProtobufs.iterator());
     }

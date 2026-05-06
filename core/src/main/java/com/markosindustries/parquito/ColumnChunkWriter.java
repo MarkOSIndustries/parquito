@@ -95,7 +95,8 @@ public class ColumnChunkWriter<Value> {
         (dataPageWriter.getNumValues() == dataPageWriter.getNumNulls())
             ? Encoding.PLAIN
             : encodingSelector.selectEncoding(
-                this.columnMetaData,
+                this.columnMetaData.type,
+                this.columnType.schemaNode().getPath(),
                 dictionaryPageWriter.getNumValues(),
                 dataPageWriter.getNumValues(),
                 dataPageWriter.getNumNulls());
