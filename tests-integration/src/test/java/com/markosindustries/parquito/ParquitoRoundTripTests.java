@@ -15,6 +15,7 @@ import com.markosindustries.parquito.schemas.ExampleChild;
 import com.markosindustries.parquito.schemas.ExampleEnum;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Stream;
 import org.apache.parquet.format.CompressionCodec;
@@ -149,8 +150,10 @@ public class ParquitoRoundTripTests {
                 .withTargetBytesPerRowGroup(10)
                 .withCompressionCodec(compressionCodec)
                 .withBloomFilterSelector(
-                    (columnMetaData, distinctValues, totalValues, totalNulls) ->
-                        columnMetaData.path_in_schema.contains("some_string"))
+                    (type, schemaPath, distinctValues, totalValues, totalNulls) ->
+                        schemaPath.path[schemaPath.path.length - 1].name.contains("some_string")
+                            ? Optional.of(0.00001)
+                            : Optional.empty())
                 .build(),
             ProtobufWriter.<Example>fromDescriptor(
                 Example.getDescriptor(), ProtobufParquetConfig.newBuilder().build()))) {
@@ -319,8 +322,10 @@ public class ParquitoRoundTripTests {
                 .withTargetBytesPerRowGroup(10)
                 .withCompressionCodec(compressionCodec)
                 .withBloomFilterSelector(
-                    (columnMetaData, distinctValues, totalValues, totalNulls) ->
-                        columnMetaData.path_in_schema.contains("some_string"))
+                    (type, schemaPath, distinctValues, totalValues, totalNulls) ->
+                        schemaPath.path[schemaPath.path.length - 1].name.contains("some_string")
+                            ? Optional.of(0.00001)
+                            : Optional.empty())
                 .build(),
             protobufWriter)) {
       writer.write(inputProtobufs.iterator());
@@ -470,8 +475,10 @@ public class ParquitoRoundTripTests {
                 .withTargetBytesPerRowGroup(10)
                 .withCompressionCodec(compressionCodec)
                 .withBloomFilterSelector(
-                    (columnMetaData, distinctValues, totalValues, totalNulls) ->
-                        columnMetaData.path_in_schema.contains("some_string"))
+                    (type, schemaPath, distinctValues, totalValues, totalNulls) ->
+                        schemaPath.path[schemaPath.path.length - 1].name.contains("some_string")
+                            ? Optional.of(0.00001)
+                            : Optional.empty())
                 .build(),
             protobufWriter)) {
       writer.write(inputProtobufs.iterator());

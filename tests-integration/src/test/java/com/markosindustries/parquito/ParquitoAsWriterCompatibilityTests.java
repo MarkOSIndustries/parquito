@@ -15,6 +15,7 @@ import java.io.FileOutputStream;
 import java.nio.file.Files;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Stream;
 import org.apache.parquet.format.CompressionCodec;
 import org.apache.parquet.proto.ProtoParquetReader;
@@ -141,8 +142,10 @@ public class ParquitoAsWriterCompatibilityTests {
                 .withTargetBytesPerRowGroup(10)
                 .withCompressionCodec(compressionCodec)
                 .withBloomFilterSelector(
-                    (columnMetaData, distinctValues, totalValues, totalNulls) ->
-                        columnMetaData.path_in_schema.contains("some_string"))
+                    (type, schemaPath, distinctValues, totalValues, totalNulls) ->
+                        schemaPath.path[schemaPath.path.length - 1].name.contains("some_string")
+                            ? Optional.of(0.00001)
+                            : Optional.empty())
                 .build(),
             ProtobufWriter.<Example>fromDescriptor(
                 Example.getDescriptor(), ProtobufParquetConfig.newBuilder().build()))) {
