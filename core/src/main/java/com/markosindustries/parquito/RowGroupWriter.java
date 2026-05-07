@@ -136,8 +136,8 @@ public class RowGroupWriter<Row> implements AutoCloseable, Writer.DataPageAccumu
       if (column.meta_data.isSetBloom_filter_offset()) {
         final var bloomFilter =
             ColumnChunkReader.readBloomFilter(byteRangeReader, column.meta_data).join();
-        column.meta_data.bloom_filter_offset = byteCountingStream.getBytesWritten();
-        ColumnChunkWriter.writeBloomFilter(bloomFilter, byteCountingStream);
+        column.meta_data.bloom_filter_offset = bloomOutputStream.size();
+        ColumnChunkWriter.writeBloomFilter(bloomFilter, bloomOutputStream);
       }
     }
 
