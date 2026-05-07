@@ -144,7 +144,7 @@ public class ParquitoAsWriterCompatibilityTests {
                 .withBloomFilterSelector(
                     (type, schemaPath, distinctValues, totalValues, totalNulls) ->
                         schemaPath.path[schemaPath.path.length - 1].name.contains("some_string")
-                            ? Optional.of(0.00001)
+                            ? Optional.of(BloomFilterSelector.bytesRequiredFor(10, 0.001))
                             : Optional.empty())
                 .build(),
             ProtobufWriter.<Example>fromDescriptor(

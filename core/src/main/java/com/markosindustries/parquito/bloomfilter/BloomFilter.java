@@ -25,14 +25,10 @@ public record BloomFilter(
         BloomFilterAlgorithms.create(header.algorithm, bitset));
   }
 
-  public static BloomFilter createEmpty(
-      final long distinctValueCount, final double falsePositiveProbability) {
+  public static BloomFilter createEmpty(final int sizeInBytes) {
     final BloomFilterHash hashFunction = BloomFilterHash.XXHASH(new XxHash());
     final var algorithm = BloomFilterAlgorithm.BLOCK(new SplitBlockAlgorithm());
-    final var bitset =
-        ByteBuffer.allocate(
-            SplitBlockBloomFilterImplementation.bytesRequiredFor(
-                distinctValueCount, falsePositiveProbability));
+    final var bitset = ByteBuffer.allocate(sizeInBytes);
     final var header =
         new BloomFilterHeader(
             bitset.capacity(),
@@ -40,13 +36,6 @@ public record BloomFilter(
             hashFunction,
             BloomFilterCompression.UNCOMPRESSED(new Uncompressed()));
     return create(header, bitset);
-  }
-
-  public static <Value> BloomFilter create(
-      final Collection<Value> distinctValues, final double falsePositiveProbability) {
-    final var bloomFilter = createEmpty(distinctValues.size(), falsePositiveProbability);
-    bloomFilter.insertAll(distinctValues);
-    return bloomFilter;
   }
 
   public <Value> boolean mightContain(final Value value) {

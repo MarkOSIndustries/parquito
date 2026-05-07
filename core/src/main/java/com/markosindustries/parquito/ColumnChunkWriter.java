@@ -135,17 +135,16 @@ public class ColumnChunkWriter<Value> {
           (pageHeader.uncompressed_page_size - pageHeader.compressed_page_size);
     }
 
-    final var falsePositiveProbability =
+    final var bloomFilterSizeInBytes =
         bloomFilterSelector.shouldWriteBloomFilter(
             this.columnMetaData.type,
             this.columnType.schemaNode().getPath(),
             dictionaryPageWriter.getNumValues(),
             dataPageWriter.getNumValues(),
             dataPageWriter.getNumNulls());
-    if (falsePositiveProbability.isPresent()) {
-      final var bloomFilter =
-          BloomFilter.create(
-              dictionaryPageWriter.getDistinctValues(), falsePositiveProbability.get());
+    if (bloomFilterSizeInBytes.isPresent()) {
+      final var bloomFilter = BloomFilter.createEmpty(bloomFilterSizeInBytes.get());
+      bloomFilter.insertAll(dictionaryPageWriter.getDistinctValues());
       writeBloomFilter(bloomFilter, bloomOutputStream);
       this.currentHeader.meta_data.setBloom_filter_offset(0);
     }
