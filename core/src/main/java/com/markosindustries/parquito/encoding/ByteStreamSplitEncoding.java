@@ -45,12 +45,20 @@ public class ByteStreamSplitEncoding<ReadAs> implements ParquetEncoding<ReadAs> 
     }
 
     var buffer = ByteBuffer.allocate(byteWidth);
-    return index -> {
-      var byteIndex = 0;
-      for (var streamIndex = index; streamIndex < bytes.length; streamIndex += expectedValues) {
-        buffer.put(byteIndex++, bytes[streamIndex]);
+    return new Values<ReadAs>() {
+      @Override
+      public ReadAs get(final int index) {
+        var byteIndex = 0;
+        for (var streamIndex = index; streamIndex < bytes.length; streamIndex += expectedValues) {
+          buffer.put(byteIndex++, bytes[streamIndex]);
+        }
+        return parquetType.readFromByteBuffer(buffer);
       }
-      return parquetType.readFromByteBuffer(buffer);
+
+      @Override
+      public int count() {
+        return expectedValues;
+      }
     };
   }
 

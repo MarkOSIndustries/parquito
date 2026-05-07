@@ -26,7 +26,17 @@ public class DeltaLengthByteArrayEncoding<ReadAs> implements ParquetEncoding<Rea
     }
     final var bytes = ByteBuffer.wrap(decompressedPageStream.readAllBytes());
 
-    return index -> columnChunkReader.readValue(bytes.slice(offsets[index], lengths[index]));
+    return new Values<ReadAs>() {
+      @Override
+      public ReadAs get(final int index) {
+        return columnChunkReader.readValue(bytes.slice(offsets[index], lengths[index]));
+      }
+
+      @Override
+      public int count() {
+        return expectedValues;
+      }
+    };
   }
 
   @Override

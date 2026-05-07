@@ -4,8 +4,8 @@ import com.markosindustries.parquito.ColumnChunkReader;
 import com.markosindustries.parquito.ColumnChunkWriter;
 import com.markosindustries.parquito.ParquetPredicate;
 import com.markosindustries.parquito.arrays.FastDictionary;
-import com.markosindustries.parquito.page.PredicateMatcher;
 import com.markosindustries.parquito.page.Values;
+import com.markosindustries.parquito.rows.PredicateMaterialisedMatches;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -32,11 +32,13 @@ public class DictionaryEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
       }
 
       @Override
-      public PredicateMatcher matcher(final ParquetPredicate<ReadAs> predicate) {
-        if (predicate instanceof ParquetPredicate.All<ReadAs>) {
-          return index -> true;
-        }
+      public int count() {
+        return expectedValues;
+      }
 
+      @Override
+      public PredicateMaterialisedMatches materialise(
+          final ParquetPredicate.Leaf<ReadAs> predicate) {
         final var dictionaryPage = columnChunkReader.getDictionaryPage();
         final var dictionaryPageValues = dictionaryPage.getValues();
 

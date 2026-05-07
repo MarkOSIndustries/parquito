@@ -23,7 +23,17 @@ public abstract class BooleanType<ReadAs> extends ParquetType<ReadAs> {
       throws IOException {
     final int[] values =
         IntEncodings.INT_ENCODING_BIT_PACKED.decode(expectedValues, 1, inputStream);
-    return index -> wrap(values[index] != 0);
+    return new Values<ReadAs>() {
+      @Override
+      public ReadAs get(final int index) {
+        return wrap(values[index] != 0);
+      }
+
+      @Override
+      public int count() {
+        return expectedValues;
+      }
+    };
   }
 
   @Override

@@ -16,16 +16,11 @@ public class NoOpFieldIterator implements ParquetFieldIterator<Void> {
   }
 
   @Override
-  public boolean nextRowMatches() {
-    return false;
-  }
-
-  @Override
   public void skipNextRow() {}
 
   @Override
   public boolean hasNext() {
-    return false;
+    return true;
   }
 
   @SuppressFBWarnings("IT_NO_SUCH_ELEMENT")

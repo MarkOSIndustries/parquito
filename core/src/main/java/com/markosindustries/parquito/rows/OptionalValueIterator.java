@@ -1,30 +1,28 @@
 package com.markosindustries.parquito.rows;
 
-import com.markosindustries.parquito.ParquetPredicate;
 import com.markosindustries.parquito.ParquetSchemaNode;
-import com.markosindustries.parquito.RowReadSpec;
 import com.markosindustries.parquito.page.DataPageReader;
-import com.markosindustries.parquito.page.PredicateMatcher;
 import java.util.Iterator;
 
-public class OptionalValueIterator<ReadAs, Value> implements ParquetFieldIterator<ReadAs> {
+public class OptionalValueIterator<ReadAs, Value>
+    implements ParquetFieldIterator<ReadAs>, DataPageCursor<ReadAs> {
   private final EOFDataPage<ReadAs> eofDataPage = new EOFDataPage<>();
 
   private final Iterator<DataPageReader<ReadAs>> dataPageIterator;
   private final ParquetSchemaNode schemaNode;
-  private final ParquetPredicate<ReadAs> predicate;
+  private final PushdownPredicates pushdownPredicates;
+
   private DataPageReader<ReadAs> dataPage = null;
-  private PredicateMatcher dataPageMatcher = null;
   private int valueIndex = 0;
   private int definitionIndex = 0;
 
   public OptionalValueIterator(
       Iterator<DataPageReader<ReadAs>> dataPageIterator,
       ParquetSchemaNode schemaNode,
-      RowReadSpec<?, Value, ReadAs> rowReadSpec) {
+      PushdownPredicates pushdownPredicates) {
     this.dataPageIterator = dataPageIterator;
     this.schemaNode = schemaNode;
-    this.predicate = rowReadSpec.predicate();
+    this.pushdownPredicates = pushdownPredicates;
     advancePageIfNecessary();
   }
 
@@ -39,6 +37,26 @@ public class OptionalValueIterator<ReadAs, Value> implements ParquetFieldIterato
   }
 
   @Override
+  public DataPageReader<ReadAs> getDataPage() {
+    return dataPage;
+  }
+
+  @Override
+  public ParquetSchemaNode getSchemaNode() {
+    return schemaNode;
+  }
+
+  @Override
+  public int getDefinitionIndex() {
+    return definitionIndex;
+  }
+
+  @Override
+  public int getValueIndex() {
+    return valueIndex;
+  }
+
+  @Override
   public boolean hasNext() {
     return dataPage != eofDataPage;
   }
@@ -47,22 +65,13 @@ public class OptionalValueIterator<ReadAs, Value> implements ParquetFieldIterato
     if (dataPage == null || definitionIndex == dataPage.getDefinitionLevels().length) {
       if (dataPageIterator.hasNext()) {
         dataPage = dataPageIterator.next();
-        dataPageMatcher = dataPage.getValues().matcher(predicate);
+        pushdownPredicates.newPage(this);
       } else {
         dataPage = eofDataPage;
       }
       definitionIndex = 0;
       valueIndex = 0;
     }
-  }
-
-  @Override
-  public boolean nextRowMatches() {
-    if (dataPage.getDefinitionLevels()[definitionIndex] == schemaNode.getDefinitionLevelMax()) {
-      return dataPageMatcher.matches(valueIndex);
-    }
-    // TODO - a way to match nulls?
-    return false;
   }
 
   @Override

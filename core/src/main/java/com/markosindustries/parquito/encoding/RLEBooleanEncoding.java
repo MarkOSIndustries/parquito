@@ -27,7 +27,17 @@ public class RLEBooleanEncoding implements ParquetEncoding<Boolean> {
     final var values =
         IntEncodings.INT_ENCODING_RLE.decode(expectedValues, 1, decompressedPageStream);
 
-    return index -> values[index] == 1;
+    return new Values<Boolean>() {
+      @Override
+      public Boolean get(final int index) {
+        return values[index] == 1;
+      }
+
+      @Override
+      public int count() {
+        return expectedValues;
+      }
+    };
   }
 
   @Override

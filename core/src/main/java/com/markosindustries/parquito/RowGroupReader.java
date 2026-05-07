@@ -4,6 +4,7 @@ import com.markosindustries.parquito.rows.NoOpFieldIterator;
 import com.markosindustries.parquito.rows.OptionalBranchIterator;
 import com.markosindustries.parquito.rows.OptionalValueIterator;
 import com.markosindustries.parquito.rows.ParquetFieldIterator;
+import com.markosindustries.parquito.rows.PushdownPredicates;
 import com.markosindustries.parquito.rows.RepeatedBranchIterator;
 import com.markosindustries.parquito.rows.RepeatedValueIterator;
 import com.markosindustries.parquito.rows.RowIterator;
@@ -16,32 +17,68 @@ import org.apache.parquet.format.RowGroup;
 import org.apache.parquet.format.SortingColumn;
 
 public record RowGroupReader(RowGroup rowGroupHeader, ParquetSchemaNode.Root schemaRoot) {
+  record JoinedSchemaTraversalSpecs(SchemaTraversalSpec a, SchemaTraversalSpec b)
+      implements SchemaTraversalSpec {
+    @Override
+    public boolean includesChild(final int childFieldIndex) {
+      return a.includesChild(childFieldIndex) || b.includesChild(childFieldIndex);
+    }
+
+    @Override
+    public SchemaTraversalSpec forChild(final int childFieldIndex) {
+      return new JoinedSchemaTraversalSpecs(
+          a.forChild(childFieldIndex), b.forChild(childFieldIndex));
+    }
+  }
+
   public <Repeated, Value> Iterator<Value> getRowIterator(
-      final RowReadSpec<Repeated, Value, ?> rowReadSpec, final ByteRangeReader byteRangeReader) {
-    final var parquetFieldIterators = makeFieldIterators(rowReadSpec, schemaRoot, byteRangeReader);
+      final RowReadSpec<Repeated, Value> rowReadSpec, final ByteRangeReader byteRangeReader) {
+    final var schemaTraversalSpec =
+        new JoinedSchemaTraversalSpecs(
+            rowReadSpec.schemaTraversalSpec(), rowReadSpec.predicate().asSchemaTraversalSpec());
+    final var pushdownPredicates =
+        new PushdownPredicates(
+            rowReadSpec.predicate(),
+            rowReadSpec.predicate().leaves().toArray(ParquetPredicate.Leaf[]::new),
+            0);
+
+    final var parquetFieldIterators =
+        makeFieldIterators(
+            schemaTraversalSpec,
+            rowReadSpec.reader(),
+            pushdownPredicates,
+            schemaRoot,
+            byteRangeReader);
+
     return new RowIterator<>(
-        new OptionalBranchIterator<>(parquetFieldIterators, schemaRoot, rowReadSpec));
+        pushdownPredicates,
+        new OptionalBranchIterator<>(parquetFieldIterators, schemaRoot, rowReadSpec.reader()));
   }
 
   private <ReadAs, Repeated, Value> ParquetFieldIterator<?> iterateField(
-      final RowReadSpec<Repeated, Value, ReadAs> rowReadSpec,
+      final SchemaTraversalSpec schemaTraversalSpec,
+      final Reader<Repeated, Value> reader,
+      final PushdownPredicates pushdownPredicates,
       final ParquetSchemaNode parquetSchema,
       final ByteRangeReader byteRangeReader) {
     final var maybeColumnChunkReader =
         getColumnChunkReaderForSchemaPath(byteRangeReader, parquetSchema);
     if (maybeColumnChunkReader.isPresent()) {
       return iterateLeaf(
-          rowReadSpec,
+          reader,
+          pushdownPredicates,
           parquetSchema,
           (ColumnChunkReader<ReadAs>) maybeColumnChunkReader.get(),
           byteRangeReader);
     } else {
-      return iterateBranch(rowReadSpec, parquetSchema, byteRangeReader);
+      return iterateBranch(
+          schemaTraversalSpec, reader, pushdownPredicates, parquetSchema, byteRangeReader);
     }
   }
 
   private <ReadAs, Repeated, Value> ParquetFieldIterator<?> iterateLeaf(
-      final RowReadSpec<Repeated, Value, ReadAs> rowReadSpec,
+      final Reader<Repeated, Value> reader,
+      final PushdownPredicates pushdownPredicates,
       final ParquetSchemaNode parquetSchema,
       final ColumnChunkReader<ReadAs> columnChunkReader,
       final ByteRangeReader byteRangeReader) {
@@ -50,16 +87,19 @@ public record RowGroupReader(RowGroup rowGroupHeader, ParquetSchemaNode.Root sch
       case REQUIRED, OPTIONAL -> {
         // Required can be nested within Optional/Repeated, so we always have to respect definition
         // levels
-        yield new OptionalValueIterator<>(dataPageIterator, parquetSchema, rowReadSpec);
+        yield new OptionalValueIterator<>(dataPageIterator, parquetSchema, pushdownPredicates);
       }
       case REPEATED -> {
-        yield new RepeatedValueIterator<>(dataPageIterator, parquetSchema, rowReadSpec);
+        yield new RepeatedValueIterator<>(
+            dataPageIterator, parquetSchema, pushdownPredicates, reader);
       }
     };
   }
 
   private <Repeated, Value> ParquetFieldIterator<?> iterateBranch(
-      final RowReadSpec<Repeated, Value, ?> rowReadSpec,
+      final SchemaTraversalSpec schemaTraversalSpec,
+      final Reader<Repeated, Value> reader,
+      final PushdownPredicates pushdownPredicates,
       final ParquetSchemaNode parquetSchema,
       final ByteRangeReader byteRangeReader) {
     final var repetitionType =
@@ -67,25 +107,29 @@ public record RowGroupReader(RowGroup rowGroupHeader, ParquetSchemaNode.Root sch
             ? parquetSchema.getRepetitionType()
             : FieldRepetitionType.REQUIRED;
     final var parquetFieldIterators =
-        makeFieldIterators(rowReadSpec, parquetSchema, byteRangeReader);
+        makeFieldIterators(
+            schemaTraversalSpec, reader, pushdownPredicates, parquetSchema, byteRangeReader);
     return switch (repetitionType) {
       case REQUIRED, OPTIONAL ->
-          new OptionalBranchIterator<>(parquetFieldIterators, parquetSchema, rowReadSpec);
-      case REPEATED ->
-          new RepeatedBranchIterator<>(parquetFieldIterators, parquetSchema, rowReadSpec);
+          new OptionalBranchIterator<>(parquetFieldIterators, parquetSchema, reader);
+      case REPEATED -> new RepeatedBranchIterator<>(parquetFieldIterators, parquetSchema, reader);
     };
   }
 
   <Repeated, Value> ParquetFieldIterator<?>[] makeFieldIterators(
-      final RowReadSpec<Repeated, Value, ?> rowReadSpec,
+      final SchemaTraversalSpec schemaTraversalSpec,
+      final Reader<Repeated, Value> reader,
+      final PushdownPredicates pushdownPredicates,
       final ParquetSchemaNode parquetSchema,
       final ByteRangeReader byteRangeReader) {
     final var iterators = new ParquetFieldIterator<?>[parquetSchema.getChildren().length];
     for (var index = 0; index < parquetSchema.getChildren().length; index++) {
       iterators[index] =
-          rowReadSpec.includesChild(index)
+          schemaTraversalSpec.includesChild(index)
               ? iterateField(
-                  rowReadSpec.forChild(index),
+                  schemaTraversalSpec.forChild(index),
+                  reader.forChild(index),
+                  pushdownPredicates.forChild(index),
                   parquetSchema.getChildAtIndex(index),
                   byteRangeReader)
               : NoOpFieldIterator.INSTANCE;

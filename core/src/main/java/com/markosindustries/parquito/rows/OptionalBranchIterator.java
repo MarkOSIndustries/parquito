@@ -1,12 +1,12 @@
 package com.markosindustries.parquito.rows;
 
 import com.markosindustries.parquito.ParquetSchemaNode;
-import com.markosindustries.parquito.RowReadSpec;
+import com.markosindustries.parquito.Reader;
 
 public class OptionalBranchIterator<Branch> implements ParquetFieldIterator<Branch> {
   private final ParquetFieldIterator<?>[] childIterators;
   private final ParquetSchemaNode schemaNode;
-  private final RowReadSpec<?, Branch, ?> rowReadSpec;
+  private final Reader<?, Branch> reader;
   private boolean hasNext;
   private int definitionLevel;
   private int repetitionLevel;
@@ -14,9 +14,10 @@ public class OptionalBranchIterator<Branch> implements ParquetFieldIterator<Bran
   public OptionalBranchIterator(
       final ParquetFieldIterator<?>[] childIterators,
       final ParquetSchemaNode schemaNode,
-      final RowReadSpec<?, Branch, ?> rowReadSpec) {
+      final Reader<?, Branch> reader) {
     this.childIterators = childIterators;
     this.schemaNode = schemaNode;
+    this.reader = reader;
     this.hasNext = false;
     this.definitionLevel = 0;
     this.repetitionLevel = 0;
@@ -28,7 +29,6 @@ public class OptionalBranchIterator<Branch> implements ParquetFieldIterator<Bran
       definitionLevel = Math.max(definitionLevel, childIterator.peekDefinitionLevel());
       repetitionLevel = Math.max(repetitionLevel, childIterator.peekRepetitionLevel());
     }
-    this.rowReadSpec = rowReadSpec;
   }
 
   @Override
@@ -47,11 +47,6 @@ public class OptionalBranchIterator<Branch> implements ParquetFieldIterator<Bran
   }
 
   @Override
-  public boolean nextRowMatches() {
-    return rowReadSpec.predicate().branchMatches(child -> childIterators[child].nextRowMatches());
-  }
-
-  @Override
   public void skipNextRow() {
     for (final var childIterator : childIterators) {
       childIterator.skipNextRow();
@@ -64,7 +59,7 @@ public class OptionalBranchIterator<Branch> implements ParquetFieldIterator<Bran
   @Override
   public Branch next() {
     boolean isNull = definitionLevel < schemaNode.getDefinitionLevelMax();
-    final var result = isNull ? null : rowReadSpec.reader().branchBuilder();
+    final var result = isNull ? null : reader.branchBuilder();
     definitionLevel = 0;
     repetitionLevel = 0;
     for (var childIndex = 0; childIndex < childIterators.length; childIndex++) {

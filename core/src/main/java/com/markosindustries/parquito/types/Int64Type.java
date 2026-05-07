@@ -32,7 +32,18 @@ public abstract class Int64Type<ReadAs> extends ParquetType<ReadAs> {
     }
 
     final var longBuffer = buffer.order(ByteOrder.LITTLE_ENDIAN).asLongBuffer();
-    return index -> wrap(longBuffer.get(index));
+
+    return new Values<ReadAs>() {
+      @Override
+      public ReadAs get(final int index) {
+        return wrap(longBuffer.get(index));
+      }
+
+      @Override
+      public int count() {
+        return expectedValues;
+      }
+    };
   }
 
   @Override

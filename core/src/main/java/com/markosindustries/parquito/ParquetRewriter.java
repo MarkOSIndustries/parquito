@@ -1,6 +1,7 @@
 package com.markosindustries.parquito;
 
 import com.markosindustries.parquito.rows.OptionalBranchIterator;
+import com.markosindustries.parquito.rows.PushdownPredicates;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.BitSet;
@@ -9,11 +10,10 @@ import java.util.function.Function;
 import org.apache.parquet.format.RowGroup;
 
 public class ParquetRewriter {
-
-  private final Function<RowGroupReader, ParquetPredicate<?>> keepRowsPredicateProvider;
+  private final Function<RowGroupReader, ParquetPredicate> keepRowsPredicateProvider;
 
   public ParquetRewriter(
-      final Function<RowGroupReader, ParquetPredicate<?>> keepRowsPredicateProvider) {
+      final Function<RowGroupReader, ParquetPredicate> keepRowsPredicateProvider) {
     this.keepRowsPredicateProvider = keepRowsPredicateProvider;
   }
 
@@ -72,18 +72,30 @@ public class ParquetRewriter {
                                       boolean anyKeep = false, anyDiscard = false;
                                       final var keepRowsBitset = new BitSet();
 
-                                      final var rowReadSpec =
-                                          new RowReadSpec<>(NoOpReader.INSTANCE, keepRowsPredicate);
+                                      final var schemaTraversalSpec =
+                                          keepRowsPredicate.asSchemaTraversalSpec();
+                                      final var pushdownPredicates =
+                                          new PushdownPredicates(
+                                              keepRowsPredicate,
+                                              keepRowsPredicate
+                                                  .leaves()
+                                                  .toArray(ParquetPredicate.Leaf[]::new),
+                                              0);
+                                      final var reader = NoOpReader.INSTANCE;
                                       final var predicateIterator =
                                           new OptionalBranchIterator<>(
                                               rowGroupReader.makeFieldIterators(
-                                                  rowReadSpec, schema, sourceRangeReader),
+                                                  schemaTraversalSpec,
+                                                  reader,
+                                                  pushdownPredicates,
+                                                  schema,
+                                                  sourceRangeReader),
                                               schema,
-                                              rowReadSpec);
+                                              reader);
                                       var rowIndex = 0;
                                       var countOfRowsToKeep = 0L;
                                       while (predicateIterator.hasNext()) {
-                                        final var isMatch = predicateIterator.nextRowMatches();
+                                        final var isMatch = pushdownPredicates.matchesNextRow();
                                         anyKeep = anyKeep || isMatch;
                                         anyDiscard = anyDiscard || !isMatch;
                                         keepRowsBitset.set(rowIndex++, isMatch);

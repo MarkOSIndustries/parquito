@@ -30,7 +30,17 @@ public abstract class FixedLengthByteArrayType<ReadAs> extends ParquetType<ReadA
     final var values = ByteBuffer.allocate(totalBytes);
     inputStream.readNBytes(values.array(), 0, totalBytes);
 
-    return index -> wrap(values.slice(index * typeLength, typeLength));
+    return new Values<ReadAs>() {
+      @Override
+      public ReadAs get(final int index) {
+        return wrap(values.slice(index * typeLength, typeLength));
+      }
+
+      @Override
+      public int count() {
+        return expectedValues;
+      }
+    };
   }
 
   @Override

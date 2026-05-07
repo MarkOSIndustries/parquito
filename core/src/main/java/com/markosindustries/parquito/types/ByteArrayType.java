@@ -42,8 +42,17 @@ public abstract class ByteArrayType<ReadAs> extends ParquetType<ReadAs> {
       index += size;
     }
 
-    return index ->
-        sizes[index] == 0 ? emptyValue() : wrap(values.slice(indices[index], sizes[index]));
+    return new Values<ReadAs>() {
+      @Override
+      public ReadAs get(final int index) {
+        return sizes[index] == 0 ? emptyValue() : wrap(values.slice(indices[index], sizes[index]));
+      }
+
+      @Override
+      public int count() {
+        return expectedValues;
+      }
+    };
   }
 
   @Override

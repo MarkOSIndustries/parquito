@@ -1,20 +1,19 @@
 package com.markosindustries.parquito.rows;
 
 import com.markosindustries.parquito.ParquetSchemaNode;
-import com.markosindustries.parquito.RowReadSpec;
+import com.markosindustries.parquito.Reader;
 
 public class RepeatedBranchIterator<Repeated, Value> implements ParquetFieldIterator<Repeated> {
   private final OptionalBranchIterator<Value> optionalBranchIterator;
   private final ParquetSchemaNode schemaNode;
-  private final RowReadSpec<Repeated, Value, ?> rowReadSpec;
+  private final Reader<Repeated, Value> reader;
 
   public RepeatedBranchIterator(
       ParquetFieldIterator<?>[] childIterators,
       ParquetSchemaNode schemaNode,
-      RowReadSpec<Repeated, Value, ?> rowReadSpec) {
-    this.rowReadSpec = rowReadSpec;
-    this.optionalBranchIterator =
-        new OptionalBranchIterator<>(childIterators, schemaNode, rowReadSpec);
+      final Reader<Repeated, Value> reader) {
+    this.reader = reader;
+    this.optionalBranchIterator = new OptionalBranchIterator<>(childIterators, schemaNode, reader);
     this.schemaNode = schemaNode;
   }
 
@@ -34,18 +33,13 @@ public class RepeatedBranchIterator<Repeated, Value> implements ParquetFieldIter
   }
 
   @Override
-  public boolean nextRowMatches() {
-    return optionalBranchIterator.nextRowMatches();
-  }
-
-  @Override
   public void skipNextRow() {
     optionalBranchIterator.skipNextRow();
   }
 
   @Override
   public Repeated next() {
-    final var values = rowReadSpec.reader().repeatedBuilder();
+    final var values = reader.repeatedBuilder();
     if (optionalBranchIterator.peekDefinitionLevel() >= schemaNode.getDefinitionLevelMax()) {
       do {
         values.add(optionalBranchIterator.next());

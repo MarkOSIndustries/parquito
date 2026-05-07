@@ -29,11 +29,31 @@ public class DeltaBinaryPackedEncoding<ReadAs> implements ParquetEncoding<ReadAs
     final var readAsClass = columnChunkReader.getColumnType().parquetType().getReadAsClass();
     if (readAsClass.isAssignableFrom(Integer.class)) {
       final var values = DeltaBinaryPackedEncoding.decode32(expectedValues, decompressedPageStream);
-      return index -> readAsClass.cast(values[index]);
+      return new Values<ReadAs>() {
+        @Override
+        public ReadAs get(final int index) {
+          return readAsClass.cast(values[index]);
+        }
+
+        @Override
+        public int count() {
+          return values.length;
+        }
+      };
     }
     if (readAsClass.isAssignableFrom(Long.class)) {
       final var values = DeltaBinaryPackedEncoding.decode64(expectedValues, decompressedPageStream);
-      return index -> readAsClass.cast(values[index]);
+      return new Values<ReadAs>() {
+        @Override
+        public ReadAs get(final int index) {
+          return readAsClass.cast(values[index]);
+        }
+
+        @Override
+        public int count() {
+          return expectedValues;
+        }
+      };
     }
 
     throw new UnsupportedOperationException(

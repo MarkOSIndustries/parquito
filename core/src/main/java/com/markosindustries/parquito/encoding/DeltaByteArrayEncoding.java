@@ -35,22 +35,30 @@ public class DeltaByteArrayEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
     }
     final var bytes = ByteBuffer.wrap(decompressedPageStream.readAllBytes());
 
-    return index -> {
-      if (prefixLengths[index] == 0) {
-        return columnChunkReader.readValue(bytes.slice(offsets[index], suffixLengths[index]));
-      }
-      final var concat = ByteBuffer.allocate(prefixLengths[index] + suffixLengths[index]);
-      concat.put(prefixLengths[index], bytes, offsets[index], suffixLengths[index]);
-      int prevIndex = index, bytesNeeded = prefixLengths[index];
-      do {
-        prevIndex--;
-        if (bytesNeeded > prefixLengths[prevIndex]) {
-          final var bytesAvailable = bytesNeeded - prefixLengths[prevIndex];
-          concat.put(prefixLengths[prevIndex], bytes, offsets[prevIndex], bytesAvailable);
-          bytesNeeded -= bytesAvailable;
+    return new Values<ReadAs>() {
+      @Override
+      public ReadAs get(final int index) {
+        if (prefixLengths[index] == 0) {
+          return columnChunkReader.readValue(bytes.slice(offsets[index], suffixLengths[index]));
         }
-      } while (prefixLengths[prevIndex] != 0);
-      return columnChunkReader.readValue(concat);
+        final var concat = ByteBuffer.allocate(prefixLengths[index] + suffixLengths[index]);
+        concat.put(prefixLengths[index], bytes, offsets[index], suffixLengths[index]);
+        int prevIndex = index, bytesNeeded = prefixLengths[index];
+        do {
+          prevIndex--;
+          if (bytesNeeded > prefixLengths[prevIndex]) {
+            final var bytesAvailable = bytesNeeded - prefixLengths[prevIndex];
+            concat.put(prefixLengths[prevIndex], bytes, offsets[prevIndex], bytesAvailable);
+            bytesNeeded -= bytesAvailable;
+          }
+        } while (prefixLengths[prevIndex] != 0);
+        return columnChunkReader.readValue(concat);
+      }
+
+      @Override
+      public int count() {
+        return expectedValues;
+      }
     };
   }
 

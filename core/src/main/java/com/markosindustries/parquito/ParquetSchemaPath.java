@@ -7,8 +7,8 @@ import java.util.stream.Collectors;
 import org.apache.parquet.format.SchemaElement;
 
 public class ParquetSchemaPath {
-  final int[] pathAsFieldIndices;
-  final SchemaElement[] path;
+  public final int[] pathAsFieldIndices;
+  public final SchemaElement[] path;
 
   ParquetSchemaPath(final int[] pathAsFieldIndices, final SchemaElement[] path) {
     this.pathAsFieldIndices = pathAsFieldIndices;

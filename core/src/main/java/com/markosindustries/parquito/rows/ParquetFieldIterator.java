@@ -7,7 +7,5 @@ public interface ParquetFieldIterator<T> extends Iterator<T> {
 
   int peekRepetitionLevel();
 
-  boolean nextRowMatches();
-
   void skipNextRow();
 }

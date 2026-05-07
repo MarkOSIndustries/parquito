@@ -1,264 +1,217 @@
 package com.markosindustries.parquito;
 
-import static com.markosindustries.parquito.ParquetPredicates.all;
-
+import com.markosindustries.parquito.rows.DataPageCursor;
+import com.markosindustries.parquito.rows.PredicateRowMatcher;
 import com.markosindustries.parquito.types.ColumnType;
 import java.util.Arrays;
-import java.util.BitSet;
-import java.util.function.IntPredicate;
+import java.util.stream.Stream;
 
-public interface ParquetPredicate<ReadAs> {
-  BitSet includedChildren();
+public interface ParquetPredicate {
+  boolean matchesNextRow();
 
-  default boolean includesChild(final int childFieldIndex) {
-    return includedChildren().get(childFieldIndex);
-  }
+  SchemaTraversalSpec asSchemaTraversalSpec();
 
-  ParquetPredicate<?> forChild(final int childFieldIndex);
+  Stream<Leaf<?>> leaves();
 
-  default boolean objectMatches(final Object value) {
-    //noinspection unchecked
-    return valueMatches((ReadAs) value);
-  }
-
-  boolean valueMatches(final ReadAs value);
-
-  boolean branchMatches(final IntPredicate childMatchesNextRow);
-
-  default SchemaTraversalSpec asSchemaTraversalSpec() {
-    final ParquetPredicate<ReadAs> self = this;
-    return new SchemaTraversalSpec() {
-      @Override
-      public boolean includesChild(final int childFieldIndex) {
-        return self.includesChild(childFieldIndex);
-      }
-
-      @Override
-      public SchemaTraversalSpec forChild(final int childFieldIndex) {
-        return self.forChild(childFieldIndex).asSchemaTraversalSpec();
-      }
-    };
-  }
-
-  class All<ReadAs> implements ParquetPredicate<ReadAs> {
-    private static final BitSet EMPTY_BITSET = new BitSet();
-
+  class All implements ParquetPredicate {
     @Override
-    public BitSet includedChildren() {
-      return EMPTY_BITSET;
+    public boolean matchesNextRow() {
+      return true;
     }
 
     @Override
-    public boolean includesChild(final int childFieldIndex) {
+    public SchemaTraversalSpec asSchemaTraversalSpec() {
+      return SchemaTraversalSpecs.none();
+    }
+
+    @Override
+    public Stream<Leaf<?>> leaves() {
+      return Stream.empty();
+    }
+  }
+
+  class None implements ParquetPredicate {
+    @Override
+    public boolean matchesNextRow() {
       return false;
     }
 
     @Override
-    public ParquetPredicate<?> forChild(final int childFieldIndex) {
-      return this;
+    public SchemaTraversalSpec asSchemaTraversalSpec() {
+      return SchemaTraversalSpecs.none();
     }
 
     @Override
-    public boolean valueMatches(final ReadAs value) {
-      return true;
-    }
-
-    @Override
-    public boolean branchMatches(final IntPredicate childMatchesNextRow) {
-      return true;
+    public Stream<Leaf<?>> leaves() {
+      return Stream.empty();
     }
   }
 
-  class Union implements ParquetPredicate<Object> {
-    private final ParquetPredicate<?>[] predicates;
-    private final BitSet includedChildren;
+  abstract class CompoundPredicate implements ParquetPredicate {
+    protected final ParquetPredicate[] predicates;
 
-    public Union(ParquetPredicate<?>... predicates) {
+    public CompoundPredicate(ParquetPredicate... predicates) {
       this.predicates = predicates;
-      this.includedChildren = new BitSet();
-      for (final var predicate : predicates) {
-        includedChildren.or(predicate.includedChildren());
-      }
     }
 
     @Override
-    public BitSet includedChildren() {
-      return includedChildren;
-    }
-
-    @Override
-    public ParquetPredicate<?> forChild(final int childFieldIndex) {
-      final var childPredicates =
+    public SchemaTraversalSpec asSchemaTraversalSpec() {
+      return asSchemaTraversalSpec(
           Arrays.stream(predicates)
-              .filter(predicate -> predicate.includesChild(childFieldIndex))
-              .map(predicate -> predicate.forChild(childFieldIndex))
-              .toArray(ParquetPredicate[]::new);
-      if (childPredicates.length > 0) {
-        return new Union(childPredicates);
-      }
-      return all();
+              .map(ParquetPredicate::asSchemaTraversalSpec)
+              .toArray(SchemaTraversalSpec[]::new));
+    }
+
+    private SchemaTraversalSpec asSchemaTraversalSpec(final SchemaTraversalSpec[] childSpecs) {
+      return new SchemaTraversalSpec() {
+        @Override
+        public boolean includesChild(final int childFieldIndex) {
+          return Arrays.stream(childSpecs)
+              .anyMatch(childSpec -> childSpec.includesChild(childFieldIndex));
+        }
+
+        @Override
+        public SchemaTraversalSpec forChild(final int childFieldIndex) {
+          return asSchemaTraversalSpec(
+              Arrays.stream(childSpecs)
+                  .filter(childSpec -> childSpec.includesChild(childFieldIndex))
+                  .map(childSpec -> childSpec.forChild(childFieldIndex))
+                  .toArray(SchemaTraversalSpec[]::new));
+        }
+      };
     }
 
     @Override
-    public boolean valueMatches(final Object value) {
-      for (final ParquetPredicate<?> predicate : predicates) {
-        if (predicate.objectMatches(value)) {
+    public Stream<Leaf<?>> leaves() {
+      return Arrays.stream(predicates).flatMap(ParquetPredicate::leaves);
+    }
+  }
+
+  class Union extends CompoundPredicate {
+    public Union(ParquetPredicate... predicates) {
+      super(predicates);
+    }
+
+    @Override
+    public boolean matchesNextRow() {
+      for (final ParquetPredicate predicate : predicates) {
+        if (predicate.matchesNextRow()) {
           return true;
         }
       }
       return false;
     }
-
-    @Override
-    public boolean branchMatches(final IntPredicate childMatchesNextRow) {
-      return includedChildren.stream().anyMatch(childMatchesNextRow) || includedChildren.isEmpty();
-    }
   }
 
-  class Intersection implements ParquetPredicate<Object> {
-    private final ParquetPredicate<?>[] predicates;
-    private final BitSet includedChildren;
-
-    public Intersection(ParquetPredicate<?>... predicates) {
-      this.predicates = predicates;
-      this.includedChildren = new BitSet();
-      for (final var predicate : predicates) {
-        includedChildren.or(predicate.includedChildren());
-      }
+  class Intersection extends CompoundPredicate {
+    public Intersection(ParquetPredicate... predicates) {
+      super(predicates);
     }
 
     @Override
-    public BitSet includedChildren() {
-      return includedChildren;
-    }
-
-    @Override
-    public ParquetPredicate<?> forChild(final int childFieldIndex) {
-      final var childPredicates =
-          Arrays.stream(predicates)
-              .filter(predicate -> predicate.includesChild(childFieldIndex))
-              .map(predicate -> predicate.forChild(childFieldIndex))
-              .toArray(ParquetPredicate[]::new);
-      if (childPredicates.length > 0) {
-        return new Intersection(childPredicates);
-      }
-      return all();
-    }
-
-    @Override
-    public boolean valueMatches(final Object value) {
-      for (final ParquetPredicate<?> predicate : predicates) {
-        if (!predicate.objectMatches(value)) {
+    public boolean matchesNextRow() {
+      for (final ParquetPredicate predicate : predicates) {
+        if (!predicate.matchesNextRow()) {
           return false;
         }
       }
       return true;
     }
-
-    @Override
-    public boolean branchMatches(final IntPredicate childMatchesNextRow) {
-      return includedChildren.stream().allMatch(childMatchesNextRow);
-    }
   }
 
-  class Not<ReadAs> implements ParquetPredicate<ReadAs> {
-    private final ParquetPredicate<ReadAs> predicate;
+  class Not extends CompoundPredicate {
+    private final ParquetPredicate predicate;
 
-    public Not(final ParquetPredicate<ReadAs> predicate) {
+    public Not(final ParquetPredicate predicate) {
+      super(predicate);
       this.predicate = predicate;
     }
 
     @Override
-    public BitSet includedChildren() {
-      return predicate.includedChildren();
-    }
-
-    @Override
-    public ParquetPredicate<?> forChild(final int childFieldIndex) {
-      return predicate.forChild(childFieldIndex);
-    }
-
-    @Override
-    public boolean valueMatches(final ReadAs value) {
-      return !predicate.valueMatches(value);
-    }
-
-    @Override
-    public boolean branchMatches(final IntPredicate childMatchesNextRow) {
-      return !predicate.branchMatches(childMatchesNextRow);
+    public boolean matchesNextRow() {
+      return !predicate.matchesNextRow();
     }
   }
 
-  abstract class Leaf<ReadAs, L extends Leaf<ReadAs, L>> implements ParquetPredicate<ReadAs> {
+  // TODO 3/2 different kinds of leaf now - Any/All/None (for repeateds)
+  abstract class Leaf<ReadAs> implements ParquetPredicate {
     private final ColumnType<ReadAs> columnType;
-    private final LeafConstructor<ReadAs, L> constructor;
     private final ReadAs comparator;
-    private final int offset;
     private final ParquetSchemaPath schemaPath;
-    private final BitSet includedChildren;
-
-    @FunctionalInterface
-    interface LeafConstructor<ReadAs, L> {
-      L construct(
-          final ReadAs comparator,
-          final ColumnType<ReadAs> columnType,
-          final ParquetSchemaPath schemaPath,
-          final int offset);
-    }
+    private PredicateRowMatcher rowMatcher;
 
     Leaf(
-        final LeafConstructor<ReadAs, L> constructor,
         final ReadAs comparator,
         final ColumnType<ReadAs> columnType,
-        final ParquetSchemaPath schemaPath,
-        final int offset) {
-      this.constructor = constructor;
+        final ParquetSchemaPath schemaPath) {
       this.comparator = comparator;
       this.columnType = columnType;
-      this.offset = offset;
       this.schemaPath = schemaPath;
-      this.includedChildren = new BitSet();
-      if (schemaPath.path.length > offset) {
-        includedChildren.set(schemaPath.pathAsFieldIndices[offset]);
-      }
     }
 
-    public BitSet includedChildren() {
-      return includedChildren;
+    public SchemaTraversalSpec asSchemaTraversalSpec() {
+      return asSchemaTraversalSpec(0);
     }
 
-    @Override
-    public ParquetPredicate<?> forChild(final int childFieldIndex) {
-      if (!includesChild(childFieldIndex)) {
-        return all();
-      }
-      if (schemaPath.path.length > offset) {
-        return constructor.construct(comparator, columnType, schemaPath, offset + 1);
-      }
+    private SchemaTraversalSpec asSchemaTraversalSpec(final int offset) {
+      return new SchemaTraversalSpec() {
+        @Override
+        public boolean includesChild(final int childFieldIndex) {
+          return schemaPath.path.length > offset
+              && schemaPath.pathAsFieldIndices[offset] == childFieldIndex;
+        }
 
-      return all();
+        @Override
+        public SchemaTraversalSpec forChild(final int childFieldIndex) {
+          return asSchemaTraversalSpec(offset + 1);
+        }
+      };
+    }
+
+    public ParquetSchemaPath getSchemaPath() {
+      return schemaPath;
     }
 
     protected int compare(ReadAs value) {
       return columnType.compare(value, comparator);
     }
 
+    public abstract boolean valueMatches(final ReadAs value);
+
     @Override
-    public boolean branchMatches(final IntPredicate childMatchesNextRow) {
-      if (schemaPath.path.length > offset) {
-        return childMatchesNextRow.test(schemaPath.pathAsFieldIndices[offset]);
+    public boolean matchesNextRow() {
+      if (rowMatcher == null) {
+        throw new RuntimeException("Something went wrong");
       }
-      return true;
+      return rowMatcher.rowMatches();
+    }
+
+    @Override
+    public Stream<Leaf<?>> leaves() {
+      return Stream.of(this);
+    }
+
+    // TODO - can we split this visit stuff off into a separate class so predicate definition
+    // doesn't really know mechanics of visiting data pages?
+    public void newPageUnsafe(final DataPageCursor<?> dataPageCursor) {
+      //noinspection unchecked
+      newPage((DataPageCursor<ReadAs>) dataPageCursor);
+    }
+
+    public void newPage(final DataPageCursor<ReadAs> dataPageCursor) {
+      final var materialisedMatches = dataPageCursor.getDataPage().getValues().materialise(this);
+      final var matchesNull = valueMatches(null);
+      this.rowMatcher =
+          new PredicateRowMatcher.AnyMatch<>(dataPageCursor, materialisedMatches, matchesNull);
     }
   }
 
-  class Equals<ReadAs> extends Leaf<ReadAs, Equals<ReadAs>> {
+  class Equals<ReadAs> extends Leaf<ReadAs> {
     public Equals(
         final ReadAs comparator,
         final ColumnType<ReadAs> columnType,
-        ParquetSchemaPath schemaPath,
-        int offset) {
-      super(Equals::new, comparator, columnType, schemaPath, offset);
+        ParquetSchemaPath schemaPath) {
+      super(comparator, columnType, schemaPath);
     }
 
     @Override
@@ -267,13 +220,12 @@ public interface ParquetPredicate<ReadAs> {
     }
   }
 
-  class NotEquals<ReadAs> extends Leaf<ReadAs, NotEquals<ReadAs>> {
+  class NotEquals<ReadAs> extends Leaf<ReadAs> {
     public NotEquals(
         final ReadAs comparator,
         final ColumnType<ReadAs> columnType,
-        ParquetSchemaPath schemaPath,
-        int offset) {
-      super(NotEquals::new, comparator, columnType, schemaPath, offset);
+        ParquetSchemaPath schemaPath) {
+      super(comparator, columnType, schemaPath);
     }
 
     @Override
@@ -282,13 +234,12 @@ public interface ParquetPredicate<ReadAs> {
     }
   }
 
-  class GreaterThan<ReadAs> extends Leaf<ReadAs, GreaterThan<ReadAs>> {
+  class GreaterThan<ReadAs> extends Leaf<ReadAs> {
     public GreaterThan(
         final ReadAs comparator,
         final ColumnType<ReadAs> columnType,
-        ParquetSchemaPath schemaPath,
-        int offset) {
-      super(GreaterThan::new, comparator, columnType, schemaPath, offset);
+        ParquetSchemaPath schemaPath) {
+      super(comparator, columnType, schemaPath);
     }
 
     @Override
@@ -297,13 +248,12 @@ public interface ParquetPredicate<ReadAs> {
     }
   }
 
-  class GreaterThanOrEqual<ReadAs> extends Leaf<ReadAs, GreaterThanOrEqual<ReadAs>> {
+  class GreaterThanOrEqual<ReadAs> extends Leaf<ReadAs> {
     public GreaterThanOrEqual(
         final ReadAs comparator,
         final ColumnType<ReadAs> columnType,
-        ParquetSchemaPath schemaPath,
-        int offset) {
-      super(GreaterThanOrEqual::new, comparator, columnType, schemaPath, offset);
+        ParquetSchemaPath schemaPath) {
+      super(comparator, columnType, schemaPath);
     }
 
     @Override
@@ -312,13 +262,12 @@ public interface ParquetPredicate<ReadAs> {
     }
   }
 
-  class LessThan<ReadAs> extends Leaf<ReadAs, LessThan<ReadAs>> {
+  class LessThan<ReadAs> extends Leaf<ReadAs> {
     public LessThan(
         final ReadAs comparator,
         final ColumnType<ReadAs> columnType,
-        ParquetSchemaPath schemaPath,
-        int offset) {
-      super(LessThan::new, comparator, columnType, schemaPath, offset);
+        ParquetSchemaPath schemaPath) {
+      super(comparator, columnType, schemaPath);
     }
 
     @Override
@@ -327,13 +276,12 @@ public interface ParquetPredicate<ReadAs> {
     }
   }
 
-  class LessThanOrEqual<ReadAs> extends Leaf<ReadAs, LessThanOrEqual<ReadAs>> {
+  class LessThanOrEqual<ReadAs> extends Leaf<ReadAs> {
     public LessThanOrEqual(
         final ReadAs comparator,
         final ColumnType<ReadAs> columnType,
-        ParquetSchemaPath schemaPath,
-        int offset) {
-      super(LessThanOrEqual::new, comparator, columnType, schemaPath, offset);
+        ParquetSchemaPath schemaPath) {
+      super(comparator, columnType, schemaPath);
     }
 
     @Override
