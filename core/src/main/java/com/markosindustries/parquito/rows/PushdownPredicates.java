@@ -39,8 +39,8 @@ public class PushdownPredicates {
 
   private boolean shouldPushDown(
       final ParquetPredicate.Leaf<?> leafPredicate, final int childIndex) {
-    if (pathOffset < leafPredicate.getSchemaPath().pathAsFieldIndices.length) {
-      return leafPredicate.getSchemaPath().pathAsFieldIndices[pathOffset] == childIndex;
+    if (pathOffset < leafPredicate.getSchemaPath().getPathLength()) {
+      return leafPredicate.getSchemaPath().getFieldIndexDepth(pathOffset) == childIndex;
     }
     return false;
   }

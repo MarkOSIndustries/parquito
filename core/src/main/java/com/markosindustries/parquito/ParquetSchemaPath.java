@@ -7,12 +7,20 @@ import java.util.stream.Collectors;
 import org.apache.parquet.format.SchemaElement;
 
 public class ParquetSchemaPath {
-  public final int[] pathAsFieldIndices;
-  public final SchemaElement[] path;
+  final int[] pathAsFieldIndices;
+  final SchemaElement[] path;
 
   ParquetSchemaPath(final int[] pathAsFieldIndices, final SchemaElement[] path) {
     this.pathAsFieldIndices = pathAsFieldIndices;
     this.path = path;
+  }
+
+  public int getPathLength() {
+    return pathAsFieldIndices.length;
+  }
+
+  public int getFieldIndexDepth(int depth) {
+    return pathAsFieldIndices[depth];
   }
 
   private static final ParquetSchemaPath EMPTY =
