@@ -13,20 +13,18 @@ public class SplitBlockBloomFilterImplementation implements BloomFilterImplement
 
   public static int blocksRequiredFor(
       final long distinctValueCount, final double falsePositiveProbability) {
-    final var bitsRequired =
-        (int)
-            Math.ceil(
-                WORDS_IN_A_BLOCK
-                    * distinctValueCount
-                    / Math.log(1 - Math.pow(falsePositiveProbability, ONE_OVER_WORDS_IN_A_BLOCK)));
-    return Math.ceilDiv(
-        Maths.nextPowerOfTwo(Math.ceilDiv(bitsRequired, WORDS_IN_A_BLOCK)), Maths.BITS_PER_INT);
+    final double bitsRequired =
+        -Math.ceil(
+            WORDS_IN_A_BLOCK
+                * distinctValueCount
+                / Math.log(1 - Math.pow(falsePositiveProbability, ONE_OVER_WORDS_IN_A_BLOCK)));
+    return Math.ceilDiv(Maths.nextPowerOfTwo((int) (bitsRequired / Maths.BITS_PER_BYTE)), 64);
   }
 
   public static int bytesRequiredFor(
       final long distinctValueCount, final double falsePositiveProbability) {
     final var blocksRequired = blocksRequiredFor(distinctValueCount, falsePositiveProbability);
-    return blocksRequired * WORDS_IN_A_BLOCK * Maths.BITS_PER_INT;
+    return blocksRequired * WORDS_IN_A_BLOCK * 4;
   }
 
   private final ByteBuffer bitset;
