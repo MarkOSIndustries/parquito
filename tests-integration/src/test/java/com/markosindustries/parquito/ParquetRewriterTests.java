@@ -153,7 +153,13 @@ public class ParquetRewriterTests {
           .rewrite(
               byteRangeReader,
               outputStream,
-              WriteSpec.newBuilder().withCompressionCodec(CompressionCodec.SNAPPY).build())
+              schema ->
+                  WriteSpec.newBuilder()
+                      .withCompressionCodec(CompressionCodec.SNAPPY)
+                      .withBloomFilterSelector(
+                          BloomFilterSelector.fpp(
+                              Map.of(schema.parseDotSeparatedPath("some_string"), 0.001)))
+                      .build())
           .join();
     }
 

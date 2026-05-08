@@ -42,19 +42,20 @@ public class ParquetRewriter {
    *
    * @param sourceRangeReader A byte range reader to read from the existing parquet file
    * @param targetOutputStream An output stream to write the filtered file to
-   * @param writeSpec Only applies to row groups that need to be modified
+   * @param writeSpecProvider Given a schema, provide a {@link WriteSpec}. This only applies to row
+   *     groups that need to be modified.
    * @return A future which will complete once the file has been fully rewritten to the output
    *     stream
    */
   public CompletableFuture<Void> rewrite(
       final ByteRangeReader sourceRangeReader,
       final OutputStream targetOutputStream,
-      final WriteSpec writeSpec) {
+      final Function<ParquetSchemaNode.Root, WriteSpec> writeSpecProvider) {
     return ParquetFooter.read(sourceRangeReader)
         .thenAccept(
             footer -> {
               final var schema = ParquetSchemaNode.from(footer.schema);
-
+              final var writeSpec = writeSpecProvider.apply(schema);
               try (final var writer =
                   new RowGroupWriter<>(
                       targetOutputStream, writeSpec, new NoOpWriter(footer.schema, schema))) {

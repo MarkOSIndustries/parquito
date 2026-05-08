@@ -3,6 +3,7 @@ package com.markosindustries.parquito;
 import it.unimi.dsi.fastutil.objects.Object2IntArrayMap;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -46,12 +47,24 @@ public class ParquetSchemaNode {
       return ParquetSchemaPath.parsePathElements(this, path);
     }
 
+    public Optional<ParquetSchemaPath> tryParsePathElements(List<String> path) {
+      return ParquetSchemaPath.tryParsePathElements(this, path);
+    }
+
     public ParquetSchemaPath parsePathElements(String... path) {
       return ParquetSchemaPath.parsePathElements(this, path);
     }
 
+    public Optional<ParquetSchemaPath> tryParsePathElements(String... path) {
+      return ParquetSchemaPath.tryParsePathElements(this, path);
+    }
+
     public ParquetSchemaPath parseDotSeparatedPath(String dotSeparatedPath) {
       return ParquetSchemaPath.parseDotSeparatedPath(this, dotSeparatedPath);
+    }
+
+    public Optional<ParquetSchemaPath> tryParseDotSeparatedPath(String dotSeparatedPath) {
+      return ParquetSchemaPath.tryParseDotSeparatedPath(this, dotSeparatedPath);
     }
 
     public List<ParquetSchemaNode> findLeafNodes() {

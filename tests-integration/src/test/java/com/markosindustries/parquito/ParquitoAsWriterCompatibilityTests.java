@@ -15,7 +15,7 @@ import java.io.FileOutputStream;
 import java.nio.file.Files;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 import java.util.stream.Stream;
 import org.apache.parquet.format.CompressionCodec;
 import org.apache.parquet.proto.ProtoParquetReader;
@@ -134,6 +134,10 @@ public class ParquitoAsWriterCompatibilityTests {
                 .build(),
             Example.newBuilder().build());
 
+    final var protobufWriter =
+        ProtobufWriter.<Example>fromDescriptor(
+            Example.getDescriptor(), ProtobufParquetConfig.newBuilder().build());
+
     final var outputStream = new ByteBufferOutputStream();
     try (final var writer =
         new RowGroupWriter<>(
@@ -142,13 +146,12 @@ public class ParquitoAsWriterCompatibilityTests {
                 .withTargetBytesPerRowGroup(10)
                 .withCompressionCodec(compressionCodec)
                 .withBloomFilterSelector(
-                    (type, schemaPath, distinctValues, totalValues, totalNulls) ->
-                        schemaPath.path[schemaPath.path.length - 1].name.contains("some_string")
-                            ? Optional.of(BloomFilterSelector.bytesRequiredFor(10, 0.001))
-                            : Optional.empty())
+                    BloomFilterSelector.fpp(
+                        Map.of(
+                            protobufWriter.getSchemaRoot().parseDotSeparatedPath("some_string"),
+                            0.001)))
                 .build(),
-            ProtobufWriter.<Example>fromDescriptor(
-                Example.getDescriptor(), ProtobufParquetConfig.newBuilder().build()))) {
+            protobufWriter)) {
       writer.putMetaData(PB_CLASS, Example.class.getName());
       writer.write(inputProtobufs.iterator());
     }

@@ -14,8 +14,9 @@ import com.markosindustries.parquito.schemas.Example;
 import com.markosindustries.parquito.schemas.ExampleChild;
 import com.markosindustries.parquito.schemas.ExampleEnum;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Stream;
 import org.apache.parquet.format.CompressionCodec;
@@ -142,6 +143,10 @@ public class ParquitoRoundTripTests {
                 .build(),
             Example.newBuilder().build());
 
+    final var protobufWriter =
+        ProtobufWriter.<Example>fromDescriptor(
+            Example.getDescriptor(), ProtobufParquetConfig.newBuilder().build());
+
     final var outputStream = new ByteBufferOutputStream();
     try (final var writer =
         new RowGroupWriter<>(
@@ -150,13 +155,16 @@ public class ParquitoRoundTripTests {
                 .withTargetBytesPerRowGroup(10)
                 .withCompressionCodec(compressionCodec)
                 .withBloomFilterSelector(
-                    (type, schemaPath, distinctValues, totalValues, totalNulls) ->
-                        schemaPath.path[schemaPath.path.length - 1].name.contains("some_string")
-                            ? Optional.of(BloomFilterSelector.bytesRequiredFor(10, 0.001))
-                            : Optional.empty())
+                    BloomFilterSelector.fpp(
+                        Map.of(
+                            protobufWriter.getSchemaRoot().parseDotSeparatedPath("some_string"),
+                            0.001,
+                            protobufWriter
+                                .getSchemaRoot()
+                                .parseDotSeparatedPath("some_child.some_string"),
+                            0.001)))
                 .build(),
-            ProtobufWriter.<Example>fromDescriptor(
-                Example.getDescriptor(), ProtobufParquetConfig.newBuilder().build()))) {
+            protobufWriter)) {
       writer.write(expectedProtobufs.iterator());
     }
 
@@ -315,17 +323,30 @@ public class ParquitoRoundTripTests {
         protobufSchemaConverter.convertDescriptorToSchema(Example.getDescriptor());
     final var writeSchema = fullSchema.trim(makeSchemaTraversalSpec.apply(fullSchema));
     final var protobufWriter = new ProtobufWriter<Example>(Example.getDescriptor(), writeSchema);
+
+    final var bloomFilterFPPs = new HashMap<ParquetSchemaPath, Double>();
+    protobufWriter
+        .getSchemaRoot()
+        .tryParsePathElements("some_string")
+        .ifPresent(
+            someString -> {
+              bloomFilterFPPs.put(someString, 0.001);
+            });
+    protobufWriter
+        .getSchemaRoot()
+        .tryParsePathElements("some_child.some_string")
+        .ifPresent(
+            someString -> {
+              bloomFilterFPPs.put(someString, 0.001);
+            });
+
     try (final var writer =
         new RowGroupWriter<>(
             outputStream,
             WriteSpec.newBuilder()
                 .withTargetBytesPerRowGroup(10)
                 .withCompressionCodec(compressionCodec)
-                .withBloomFilterSelector(
-                    (type, schemaPath, distinctValues, totalValues, totalNulls) ->
-                        schemaPath.path[schemaPath.path.length - 1].name.contains("some_string")
-                            ? Optional.of(BloomFilterSelector.bytesRequiredFor(10, 0.001))
-                            : Optional.empty())
+                .withBloomFilterSelector(BloomFilterSelector.fpp(bloomFilterFPPs))
                 .build(),
             protobufWriter)) {
       writer.write(inputProtobufs.iterator());
@@ -475,10 +496,10 @@ public class ParquitoRoundTripTests {
                 .withTargetBytesPerRowGroup(10)
                 .withCompressionCodec(compressionCodec)
                 .withBloomFilterSelector(
-                    (type, schemaPath, distinctValues, totalValues, totalNulls) ->
-                        schemaPath.path[schemaPath.path.length - 1].name.contains("some_string")
-                            ? Optional.of(BloomFilterSelector.bytesRequiredFor(10, 0.001))
-                            : Optional.empty())
+                    BloomFilterSelector.fpp(
+                        Map.of(
+                            protobufWriter.getSchemaRoot().parseDotSeparatedPath("some_string"),
+                            0.001)))
                 .build(),
             protobufWriter)) {
       writer.write(inputProtobufs.iterator());

@@ -3,6 +3,7 @@ package com.markosindustries.parquito;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.parquet.format.SchemaElement;
 
@@ -68,57 +69,49 @@ public class ParquetSchemaPath {
 
   static ParquetSchemaPath parsePathElements(
       final ParquetSchemaNode.Root schema, final List<String> path) {
+    return tryParsePathElements(schema, path)
+        .orElseThrow(
+            () ->
+                new IndexOutOfBoundsException(
+                    "Field " + String.join(".", path) + " does not exist"));
+  }
+
+  static Optional<ParquetSchemaPath> tryParsePathElements(
+      final ParquetSchemaNode.Root schema, final List<String> path) {
     final int[] pathAsFieldIndices = new int[path.size()];
     final SchemaElement[] pathSchemaElements = new SchemaElement[path.size()];
     ParquetSchemaNode currentSchemaNode = schema;
     for (var i = 0; i < path.size(); i++) {
       final var fieldName = path.get(i);
-      final var nextIndex =
-          currentSchemaNode
-              .findIndexOfChildByName(fieldName)
-              .orElseThrow(
-                  () ->
-                      new IndexOutOfBoundsException(
-                          "Field "
-                              + fieldName
-                              + " does not exist (in given path "
-                              + String.join(".", path)
-                              + ")"));
+      final var maybeNextIndex = currentSchemaNode.findIndexOfChildByName(fieldName);
+      if (maybeNextIndex.isEmpty()) {
+        return Optional.empty();
+      }
+      final var nextIndex = maybeNextIndex.getAsInt();
       final var nextSchemaNode = currentSchemaNode.getChildAtIndex(nextIndex);
       pathAsFieldIndices[i] = nextIndex;
       pathSchemaElements[i] = nextSchemaNode.getElement();
       currentSchemaNode = nextSchemaNode;
     }
-    return new ParquetSchemaPath(pathAsFieldIndices, pathSchemaElements);
+    return Optional.of(new ParquetSchemaPath(pathAsFieldIndices, pathSchemaElements));
   }
 
   static ParquetSchemaPath parsePathElements(ParquetSchemaNode.Root schema, String... path) {
-    final int[] pathAsFieldIndices = new int[path.length];
-    final SchemaElement[] pathSchemaElements = new SchemaElement[path.length];
-    ParquetSchemaNode currentSchemaNode = schema;
-    for (var i = 0; i < path.length; i++) {
-      final var fieldName = path[i];
-      final var nextIndex =
-          currentSchemaNode
-              .findIndexOfChildByName(fieldName)
-              .orElseThrow(
-                  () ->
-                      new IndexOutOfBoundsException(
-                          "Field "
-                              + fieldName
-                              + " does not exist (in given path "
-                              + String.join(".", path)
-                              + ")"));
-      final var nextSchemaNode = currentSchemaNode.getChildAtIndex(nextIndex);
-      pathAsFieldIndices[i] = nextIndex;
-      pathSchemaElements[i] = nextSchemaNode.getElement();
-      currentSchemaNode = nextSchemaNode;
-    }
-    return new ParquetSchemaPath(pathAsFieldIndices, pathSchemaElements);
+    return parsePathElements(schema, List.of(path));
+  }
+
+  static Optional<ParquetSchemaPath> tryParsePathElements(
+      ParquetSchemaNode.Root schema, String... path) {
+    return tryParsePathElements(schema, List.of(path));
   }
 
   static ParquetSchemaPath parseDotSeparatedPath(
       ParquetSchemaNode.Root schema, String dotSeparatedPath) {
     return parsePathElements(schema, dotSeparatedPath.split("\\."));
+  }
+
+  static Optional<ParquetSchemaPath> tryParseDotSeparatedPath(
+      ParquetSchemaNode.Root schema, String dotSeparatedPath) {
+    return tryParsePathElements(schema, dotSeparatedPath.split("\\."));
   }
 }
