@@ -1,19 +1,33 @@
 package com.markosindustries.parquito;
 
+import com.markosindustries.parquito.predicates.AllEquals;
+import com.markosindustries.parquito.predicates.AnyEquals;
+import com.markosindustries.parquito.predicates.AnyGreaterThan;
+import com.markosindustries.parquito.predicates.AnyGreaterThanOrEqual;
+import com.markosindustries.parquito.predicates.AnyLessThan;
+import com.markosindustries.parquito.predicates.AnyLessThanOrEqual;
+import com.markosindustries.parquito.predicates.AnyNotEquals;
+import com.markosindustries.parquito.predicates.Intersection;
+import com.markosindustries.parquito.predicates.MatchAll;
+import com.markosindustries.parquito.predicates.MatchNone;
+import com.markosindustries.parquito.predicates.NoneEquals;
+import com.markosindustries.parquito.predicates.Not;
+import com.markosindustries.parquito.predicates.ParquetPredicate;
+import com.markosindustries.parquito.predicates.Union;
 import com.markosindustries.parquito.types.ColumnType;
 import java.util.Collection;
 
 public class ParquetPredicates {
-  static ParquetPredicate.All all() {
-    return new ParquetPredicate.All();
+  static MatchAll matchAll() {
+    return new MatchAll();
   }
 
-  static ParquetPredicate.None none() {
-    return new ParquetPredicate.None();
+  static MatchNone matchNone() {
+    return new MatchNone();
   }
 
   public static ParquetPredicate union(ParquetPredicate... predicates) {
-    return new ParquetPredicate.Union(predicates);
+    return new Union(predicates);
   }
 
   public static ParquetPredicate union(Collection<? extends ParquetPredicate> predicates) {
@@ -21,7 +35,7 @@ public class ParquetPredicates {
   }
 
   public static ParquetPredicate intersection(ParquetPredicate... predicates) {
-    return new ParquetPredicate.Intersection(predicates);
+    return new Intersection(predicates);
   }
 
   public static ParquetPredicate intersection(Collection<? extends ParquetPredicate> predicates) {
@@ -29,96 +43,134 @@ public class ParquetPredicates {
   }
 
   public static ParquetPredicate not(ParquetPredicate predicate) {
-    return new ParquetPredicate.Not(predicate);
+    return new Not(predicate);
   }
 
-  public static <ReadAs> ParquetPredicate equals(
+  public static <ReadAs> ParquetPredicate allEquals(
       final Object comparator,
       final ColumnType<ReadAs> columnType,
       final ParquetSchemaPath schemaPath) {
-    return new ParquetPredicate.Equals<>((ReadAs) comparator, columnType, schemaPath);
+    return new AllEquals<>(
+        columnType.parquetType().getReadAsClass().cast(comparator), columnType, schemaPath);
   }
 
-  public static ParquetPredicate equals(
+  public static ParquetPredicate allEquals(
       final RowGroupReader rowGroupReader,
       final Object comparator,
       final ParquetSchemaPath schemaPath) {
     final var columnType = rowGroupReader.getColumnType(schemaPath).orElseThrow();
-    return equals(comparator, columnType, schemaPath);
+    return allEquals(comparator, columnType, schemaPath);
   }
 
-  public static <ReadAs> ParquetPredicate notEquals(
+  public static <ReadAs> ParquetPredicate anyEquals(
       final Object comparator,
       final ColumnType<ReadAs> columnType,
       final ParquetSchemaPath schemaPath) {
-    return new ParquetPredicate.NotEquals<>((ReadAs) comparator, columnType, schemaPath);
+    return new AnyEquals<>(
+        columnType.parquetType().getReadAsClass().cast(comparator), columnType, schemaPath);
   }
 
-  public static ParquetPredicate notEquals(
+  public static ParquetPredicate anyEquals(
       final RowGroupReader rowGroupReader,
       final Object comparator,
       final ParquetSchemaPath schemaPath) {
     final var columnType = rowGroupReader.getColumnType(schemaPath).orElseThrow();
-    return notEquals(comparator, columnType, schemaPath);
+    return anyEquals(comparator, columnType, schemaPath);
   }
 
-  public static <ReadAs> ParquetPredicate greaterThan(
+  public static <ReadAs> ParquetPredicate anyNotEquals(
       final Object comparator,
       final ColumnType<ReadAs> columnType,
       final ParquetSchemaPath schemaPath) {
-    return new ParquetPredicate.GreaterThan<>((ReadAs) comparator, columnType, schemaPath);
+    return new AnyNotEquals<>(
+        columnType.parquetType().getReadAsClass().cast(comparator), columnType, schemaPath);
   }
 
-  public static ParquetPredicate greaterThan(
+  public static ParquetPredicate anyNotEquals(
       final RowGroupReader rowGroupReader,
       final Object comparator,
       final ParquetSchemaPath schemaPath) {
     final var columnType = rowGroupReader.getColumnType(schemaPath).orElseThrow();
-    return greaterThan(comparator, columnType, schemaPath);
+    return anyNotEquals(comparator, columnType, schemaPath);
   }
 
-  public static <ReadAs> ParquetPredicate greaterThanOrEqual(
+  public static <ReadAs> ParquetPredicate noneEquals(
       final Object comparator,
       final ColumnType<ReadAs> columnType,
       final ParquetSchemaPath schemaPath) {
-    return new ParquetPredicate.GreaterThanOrEqual<>((ReadAs) comparator, columnType, schemaPath);
+    return new NoneEquals<>(
+        columnType.parquetType().getReadAsClass().cast(comparator), columnType, schemaPath);
   }
 
-  public static ParquetPredicate greaterThanOrEqual(
+  public static ParquetPredicate noneEquals(
       final RowGroupReader rowGroupReader,
       final Object comparator,
       final ParquetSchemaPath schemaPath) {
     final var columnType = rowGroupReader.getColumnType(schemaPath).orElseThrow();
-    return greaterThanOrEqual(comparator, columnType, schemaPath);
+    return noneEquals(comparator, columnType, schemaPath);
   }
 
-  public static <ReadAs> ParquetPredicate lessThan(
+  public static <ReadAs> ParquetPredicate anyGreaterThan(
       final Object comparator,
       final ColumnType<ReadAs> columnType,
       final ParquetSchemaPath schemaPath) {
-    return new ParquetPredicate.LessThan<>((ReadAs) comparator, columnType, schemaPath);
+    return new AnyGreaterThan<>(
+        columnType.parquetType().getReadAsClass().cast(comparator), columnType, schemaPath);
   }
 
-  public static ParquetPredicate lessThan(
+  public static ParquetPredicate anyGreaterThan(
       final RowGroupReader rowGroupReader,
       final Object comparator,
       final ParquetSchemaPath schemaPath) {
     final var columnType = rowGroupReader.getColumnType(schemaPath).orElseThrow();
-    return lessThan(comparator, columnType, schemaPath);
+    return anyGreaterThan(comparator, columnType, schemaPath);
   }
 
-  public static <ReadAs> ParquetPredicate lessThanOrEqual(
+  public static <ReadAs> ParquetPredicate anyGreaterThanOrEqual(
       final Object comparator,
       final ColumnType<ReadAs> columnType,
       final ParquetSchemaPath schemaPath) {
-    return new ParquetPredicate.LessThanOrEqual<>((ReadAs) comparator, columnType, schemaPath);
+    return new AnyGreaterThanOrEqual<>(
+        columnType.parquetType().getReadAsClass().cast(comparator), columnType, schemaPath);
   }
 
-  public static ParquetPredicate lessThanOrEqual(
+  public static ParquetPredicate anyGreaterThanOrEqual(
       final RowGroupReader rowGroupReader,
       final Object comparator,
       final ParquetSchemaPath schemaPath) {
     final var columnType = rowGroupReader.getColumnType(schemaPath).orElseThrow();
-    return lessThanOrEqual(comparator, columnType, schemaPath);
+    return anyGreaterThanOrEqual(comparator, columnType, schemaPath);
+  }
+
+  public static <ReadAs> ParquetPredicate anyLessThan(
+      final Object comparator,
+      final ColumnType<ReadAs> columnType,
+      final ParquetSchemaPath schemaPath) {
+    return new AnyLessThan<>(
+        columnType.parquetType().getReadAsClass().cast(comparator), columnType, schemaPath);
+  }
+
+  public static ParquetPredicate anyLessThan(
+      final RowGroupReader rowGroupReader,
+      final Object comparator,
+      final ParquetSchemaPath schemaPath) {
+    final var columnType = rowGroupReader.getColumnType(schemaPath).orElseThrow();
+    return anyLessThan(comparator, columnType, schemaPath);
+  }
+
+  public static <ReadAs> ParquetPredicate anyLessThanOrEqual(
+      final Object comparator,
+      final ColumnType<ReadAs> columnType,
+      final ParquetSchemaPath schemaPath) {
+    return new AnyLessThanOrEqual<>(
+        columnType.parquetType().getReadAsClass().cast(comparator), columnType, schemaPath);
+  }
+
+  public static ParquetPredicate anyLessThanOrEqual(
+      final RowGroupReader rowGroupReader,
+      final Object comparator,
+      final ParquetSchemaPath schemaPath) {
+    final var columnType = rowGroupReader.getColumnType(schemaPath).orElseThrow();
+    return anyLessThanOrEqual(comparator, columnType, schemaPath);
   }
 }

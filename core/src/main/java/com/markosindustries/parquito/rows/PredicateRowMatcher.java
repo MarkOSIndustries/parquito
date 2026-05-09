@@ -1,7 +1,6 @@
 package com.markosindustries.parquito.rows;
 
-public sealed interface PredicateRowMatcher
-    permits PredicateRowMatcher.AllMatch, PredicateRowMatcher.AnyMatch {
+public interface PredicateRowMatcher {
   boolean rowMatches();
 
   final class AnyMatch<T> implements PredicateRowMatcher {
@@ -59,6 +58,40 @@ public sealed interface PredicateRowMatcher
         if (dataPageCursor.getDataPage().getDefinitionLevels()[dIndex]
             == dataPageCursor.getSchemaNode().getDefinitionLevelMax()) {
           if (!materialisedMatches.matches(vIndex++)) {
+            return false;
+          }
+        } else if (matchesNull) {
+          return false;
+        }
+        dIndex++;
+      } while (dIndex < dataPageCursor.getDataPage().getDefinitionLevels().length
+          && dataPageCursor.getDataPage().getRepetitionLevels()[dIndex] != 0);
+
+      return true;
+    }
+  }
+
+  final class NoneMatch<T> implements PredicateRowMatcher {
+    private final DataPageCursor<T> dataPageCursor;
+    private final PredicateMaterialisedMatches materialisedMatches;
+    private final boolean matchesNull;
+
+    public NoneMatch(
+        final DataPageCursor<T> dataPageCursor,
+        final PredicateMaterialisedMatches materialisedMatches,
+        final boolean matchesNull) {
+      this.dataPageCursor = dataPageCursor;
+      this.materialisedMatches = materialisedMatches;
+      this.matchesNull = matchesNull;
+    }
+
+    @Override
+    public boolean rowMatches() {
+      int dIndex = dataPageCursor.getDefinitionIndex(), vIndex = dataPageCursor.getValueIndex();
+      do {
+        if (dataPageCursor.getDataPage().getDefinitionLevels()[dIndex]
+            == dataPageCursor.getSchemaNode().getDefinitionLevelMax()) {
+          if (materialisedMatches.matches(vIndex++)) {
             return false;
           }
         } else if (matchesNull) {

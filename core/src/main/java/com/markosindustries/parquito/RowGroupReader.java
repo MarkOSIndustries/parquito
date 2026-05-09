@@ -8,6 +8,7 @@ import com.markosindustries.parquito.rows.PushdownPredicates;
 import com.markosindustries.parquito.rows.RepeatedBranchIterator;
 import com.markosindustries.parquito.rows.RepeatedValueIterator;
 import com.markosindustries.parquito.rows.RowIterator;
+import com.markosindustries.parquito.schematraversal.SchemaTraversalSpec;
 import com.markosindustries.parquito.types.ColumnType;
 import java.util.Iterator;
 import java.util.Optional;
@@ -17,30 +18,14 @@ import org.apache.parquet.format.RowGroup;
 import org.apache.parquet.format.SortingColumn;
 
 public record RowGroupReader(RowGroup rowGroupHeader, ParquetSchemaNode.Root schemaRoot) {
-  record JoinedSchemaTraversalSpecs(SchemaTraversalSpec a, SchemaTraversalSpec b)
-      implements SchemaTraversalSpec {
-    @Override
-    public boolean includesChild(final int childFieldIndex) {
-      return a.includesChild(childFieldIndex) || b.includesChild(childFieldIndex);
-    }
-
-    @Override
-    public SchemaTraversalSpec forChild(final int childFieldIndex) {
-      return new JoinedSchemaTraversalSpecs(
-          a.forChild(childFieldIndex), b.forChild(childFieldIndex));
-    }
-  }
-
   public <Repeated, Value> Iterator<Value> getRowIterator(
       final RowReadSpec<Repeated, Value> rowReadSpec, final ByteRangeReader byteRangeReader) {
     final var schemaTraversalSpec =
-        new JoinedSchemaTraversalSpecs(
-            rowReadSpec.schemaTraversalSpec(), rowReadSpec.predicate().asSchemaTraversalSpec());
-    final var pushdownPredicates =
-        new PushdownPredicates(
-            rowReadSpec.predicate(),
-            rowReadSpec.predicate().leaves().toArray(ParquetPredicate.Leaf[]::new),
-            0);
+        rowReadSpec
+            .schemaTraversalSpec()
+            .combineWith(rowReadSpec.predicate().asSchemaTraversalSpec());
+
+    final var pushdownPredicates = new PushdownPredicates(rowReadSpec.predicate());
 
     final var parquetFieldIterators =
         makeFieldIterators(

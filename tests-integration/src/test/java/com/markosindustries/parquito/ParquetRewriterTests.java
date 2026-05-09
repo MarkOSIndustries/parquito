@@ -141,7 +141,7 @@ public class ParquetRewriterTests {
     final var rewriter =
         new ParquetRewriter(
             rowGroupReader ->
-                ParquetPredicates.equals(
+                ParquetPredicates.anyEquals(
                     rowGroupReader,
                     "stra",
                     rowGroupReader.schemaRoot().parseDotSeparatedPath("some_string")));

@@ -20,7 +20,7 @@ public class ParquetSchemaPath {
     return pathAsFieldIndices.length;
   }
 
-  public int getFieldIndexDepth(int depth) {
+  public int getFieldIndexAtDepth(int depth) {
     return pathAsFieldIndices[depth];
   }
 

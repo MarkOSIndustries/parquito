@@ -2,9 +2,9 @@ package com.markosindustries.parquito.encoding;
 
 import com.markosindustries.parquito.ColumnChunkReader;
 import com.markosindustries.parquito.ColumnChunkWriter;
-import com.markosindustries.parquito.ParquetPredicate;
 import com.markosindustries.parquito.arrays.FastDictionary;
 import com.markosindustries.parquito.page.Values;
+import com.markosindustries.parquito.predicates.ColumnPredicate;
 import com.markosindustries.parquito.rows.PredicateMaterialisedMatches;
 import java.io.IOException;
 import java.io.InputStream;
@@ -37,8 +37,7 @@ public class DictionaryEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
       }
 
       @Override
-      public PredicateMaterialisedMatches materialise(
-          final ParquetPredicate.Leaf<ReadAs> predicate) {
+      public PredicateMaterialisedMatches materialise(final ColumnPredicate<ReadAs, ?> predicate) {
         final var dictionaryPage = columnChunkReader.getDictionaryPage();
         final var dictionaryPageValues = dictionaryPage.getValues();
 

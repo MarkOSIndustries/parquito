@@ -391,11 +391,11 @@ public class ParquitoAsReaderCompatibilityTests {
                           new RowReadSpec<>(
                               new ProtobufReader<Example>(Example::newBuilder, schema),
                               ParquetPredicates.intersection(
-                                  ParquetPredicates.equals(
+                                  ParquetPredicates.anyEquals(
                                       rowGroupReader,
                                       Integer.MAX_VALUE - 974456,
                                       schema.parsePathElements("some_child", "some_int32")),
-                                  ParquetPredicates.greaterThan(
+                                  ParquetPredicates.anyGreaterThan(
                                       rowGroupReader,
                                       "str",
                                       schema.parsePathElements("some_child", "some_string")))),

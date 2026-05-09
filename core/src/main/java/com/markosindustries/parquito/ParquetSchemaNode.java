@@ -1,5 +1,6 @@
 package com.markosindustries.parquito;
 
+import com.markosindustries.parquito.schematraversal.SchemaTraversalSpec;
 import it.unimi.dsi.fastutil.objects.Object2IntArrayMap;
 import java.util.Arrays;
 import java.util.List;

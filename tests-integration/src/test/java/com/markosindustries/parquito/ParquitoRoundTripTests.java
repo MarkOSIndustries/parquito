@@ -13,6 +13,7 @@ import com.markosindustries.parquito.protobuf.ProtobufWriter;
 import com.markosindustries.parquito.schemas.Example;
 import com.markosindustries.parquito.schemas.ExampleChild;
 import com.markosindustries.parquito.schemas.ExampleEnum;
+import com.markosindustries.parquito.schematraversal.SchemaTraversalSpec;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;

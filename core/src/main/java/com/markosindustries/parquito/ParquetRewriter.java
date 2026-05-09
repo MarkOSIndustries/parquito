@@ -1,5 +1,6 @@
 package com.markosindustries.parquito;
 
+import com.markosindustries.parquito.predicates.ParquetPredicate;
 import com.markosindustries.parquito.rows.OptionalBranchIterator;
 import com.markosindustries.parquito.rows.PushdownPredicates;
 import java.io.IOException;
@@ -73,26 +74,20 @@ public class ParquetRewriter {
                                       boolean anyKeep = false, anyDiscard = false;
                                       final var keepRowsBitset = new BitSet();
 
-                                      final var schemaTraversalSpec =
-                                          keepRowsPredicate.asSchemaTraversalSpec();
-                                      final var pushdownPredicates =
-                                          new PushdownPredicates(
-                                              keepRowsPredicate,
-                                              keepRowsPredicate
-                                                  .leaves()
-                                                  .toArray(ParquetPredicate.Leaf[]::new),
-                                              0);
                                       final var reader = NoOpReader.INSTANCE;
+                                      final var pushdownPredicates =
+                                          new PushdownPredicates(keepRowsPredicate);
                                       final var predicateIterator =
                                           new OptionalBranchIterator<>(
                                               rowGroupReader.makeFieldIterators(
-                                                  schemaTraversalSpec,
+                                                  keepRowsPredicate.asSchemaTraversalSpec(),
                                                   reader,
                                                   pushdownPredicates,
                                                   schema,
                                                   sourceRangeReader),
                                               schema,
                                               reader);
+
                                       var rowIndex = 0;
                                       var countOfRowsToKeep = 0L;
                                       while (predicateIterator.hasNext()) {

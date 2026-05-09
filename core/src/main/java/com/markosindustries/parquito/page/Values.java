@@ -1,6 +1,6 @@
 package com.markosindustries.parquito.page;
 
-import com.markosindustries.parquito.ParquetPredicate;
+import com.markosindustries.parquito.predicates.ColumnPredicate;
 import com.markosindustries.parquito.rows.PredicateMaterialisedMatches;
 import java.util.BitSet;
 
@@ -9,7 +9,7 @@ public interface Values<ReadAs> {
 
   int count();
 
-  default PredicateMaterialisedMatches materialise(final ParquetPredicate.Leaf<ReadAs> predicate) {
+  default PredicateMaterialisedMatches materialise(final ColumnPredicate<ReadAs, ?> predicate) {
     final var matchingIndices = new BitSet(count());
     for (var index = 0; index < count(); index++) {
       matchingIndices.set(index, predicate.valueMatches(get(index)));

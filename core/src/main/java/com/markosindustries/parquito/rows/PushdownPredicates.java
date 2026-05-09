@@ -1,20 +1,26 @@
 package com.markosindustries.parquito.rows;
 
-import com.markosindustries.parquito.ParquetPredicate;
+import com.markosindustries.parquito.predicates.ColumnPredicate;
+import com.markosindustries.parquito.predicates.ParquetPredicate;
 import java.util.Arrays;
 
 /** Takes a set of leaf predicates and gets them to the leaf iterators */
 public class PushdownPredicates {
   private final ParquetPredicate topLevelPredicate;
-  private final ParquetPredicate.Leaf<?>[] leafPredicates;
+  private final ColumnPredicate<?, ?>[] columnPredicates;
   private final int pathOffset;
 
-  public PushdownPredicates(
+  public PushdownPredicates(final ParquetPredicate topLevelPredicate) {
+    this(
+        topLevelPredicate, topLevelPredicate.columnPredicates().toArray(ColumnPredicate[]::new), 0);
+  }
+
+  private PushdownPredicates(
       final ParquetPredicate topLevelPredicate,
-      final ParquetPredicate.Leaf<?>[] leafPredicates,
+      final ColumnPredicate<?, ?>[] columnPredicates,
       final int pathOffset) {
     this.topLevelPredicate = topLevelPredicate;
-    this.leafPredicates = leafPredicates;
+    this.columnPredicates = columnPredicates;
     this.pathOffset = pathOffset;
   }
 
@@ -23,24 +29,25 @@ public class PushdownPredicates {
   }
 
   public void newPage(final DataPageCursor<?> dataPageCursor) {
-    for (final var leafPredicate : leafPredicates) {
-      leafPredicate.newPageUnsafe(dataPageCursor);
+    for (final var columnPredicate : columnPredicates) {
+      columnPredicate.newPageUnsafe(dataPageCursor);
     }
   }
 
   public PushdownPredicates forChild(final int childIndex) {
     return new PushdownPredicates(
         topLevelPredicate,
-        Arrays.stream(leafPredicates)
-            .filter(leafPredicate -> shouldPushDown(leafPredicate, childIndex))
-            .toArray(ParquetPredicate.Leaf[]::new),
+        Arrays.stream(columnPredicates)
+            .filter(columnPredicate -> shouldPushDown(columnPredicate, childIndex))
+            .toArray(ColumnPredicate[]::new),
         pathOffset + 1);
   }
 
   private boolean shouldPushDown(
-      final ParquetPredicate.Leaf<?> leafPredicate, final int childIndex) {
-    if (pathOffset < leafPredicate.getSchemaPath().getPathLength()) {
-      return leafPredicate.getSchemaPath().getFieldIndexDepth(pathOffset) == childIndex;
+      final ColumnPredicate<?, ?> columnPredicatePredicate, final int childIndex) {
+    if (pathOffset < columnPredicatePredicate.getSchemaPath().getPathLength()) {
+      return columnPredicatePredicate.getSchemaPath().getFieldIndexAtDepth(pathOffset)
+          == childIndex;
     }
     return false;
   }
