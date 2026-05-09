@@ -3,7 +3,6 @@ package com.markosindustries.parquito.rows;
 import com.markosindustries.parquito.ColumnChunkWriter;
 import com.markosindustries.parquito.ParquetSchemaNode;
 import com.markosindustries.parquito.WriteTranslator;
-import com.markosindustries.parquito.Writer;
 import java.util.Objects;
 
 public class LeafAccumulator<Leaf, WriteAs> {
@@ -14,12 +13,12 @@ public class LeafAccumulator<Leaf, WriteAs> {
   public LeafAccumulator(
       final WriteTranslator<Leaf, WriteAs> writeTranslator,
       final ParquetSchemaNode schemaNode,
-      final Writer.DataPageAccumulator dataPageAccumulator) {
+      final ValueAccumulator valueAccumulator) {
     this.writeTranslator = writeTranslator;
     this.schemaNode = schemaNode;
     //noinspection unchecked
     this.columnChunkWriter =
-        (ColumnChunkWriter<WriteAs>) dataPageAccumulator.getColumnChunkWriter(schemaNode.getPath());
+        (ColumnChunkWriter<WriteAs>) valueAccumulator.getColumnChunkWriter(schemaNode.getPath());
   }
 
   public int accumulateNull(final int repetitionLevel, final int definitionLevel) {
@@ -56,8 +55,8 @@ public class LeafAccumulator<Leaf, WriteAs> {
     public Optional(
         final WriteTranslator<Leaf, WriteAs> writeTranslator,
         final ParquetSchemaNode schemaNode,
-        final Writer.DataPageAccumulator dataPageAccumulator) {
-      super(writeTranslator, schemaNode, dataPageAccumulator);
+        final ValueAccumulator valueAccumulator) {
+      super(writeTranslator, schemaNode, valueAccumulator);
     }
 
     @Override
@@ -71,8 +70,8 @@ public class LeafAccumulator<Leaf, WriteAs> {
     public Repeated(
         final WriteTranslator<Leaf, WriteAs> writeTranslator,
         final ParquetSchemaNode schemaNode,
-        final Writer.DataPageAccumulator dataPageAccumulator) {
-      super(writeTranslator, schemaNode, dataPageAccumulator);
+        final ValueAccumulator valueAccumulator) {
+      super(writeTranslator, schemaNode, valueAccumulator);
     }
 
     @Override

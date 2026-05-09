@@ -5,6 +5,7 @@ import static java.util.stream.Collectors.toMap;
 
 import com.markosindustries.parquito.encoding.LittleEndian;
 import com.markosindustries.parquito.rows.RowAccumulator;
+import com.markosindustries.parquito.rows.ValueAccumulator;
 import com.markosindustries.parquito.types.ColumnType;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -20,7 +21,7 @@ import org.apache.parquet.format.KeyValue;
 import org.apache.parquet.format.RowGroup;
 import org.apache.parquet.format.SortingColumn;
 
-public class RowGroupWriter<Row> implements AutoCloseable, Writer.DataPageAccumulator {
+public class RowGroupWriter<Row> implements AutoCloseable, ValueAccumulator {
   private static final String CREATED_BY_STRING;
 
   static {

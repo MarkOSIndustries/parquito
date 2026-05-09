@@ -2,7 +2,6 @@ package com.markosindustries.parquito.rows;
 
 import com.markosindustries.parquito.ParquetSchemaNode;
 import com.markosindustries.parquito.WriteTranslator;
-import com.markosindustries.parquito.Writer;
 
 public abstract class BranchAccumulator<Branch, WriteAs> {
   private final WriteTranslator<Branch, WriteAs> writeTranslator;
@@ -12,7 +11,7 @@ public abstract class BranchAccumulator<Branch, WriteAs> {
   public BranchAccumulator(
       final WriteTranslator<Branch, WriteAs> writeTranslator,
       final ParquetSchemaNode schemaNode,
-      final Writer.DataPageAccumulator dataPageAccumulator) {
+      final ValueAccumulator valueAccumulator) {
     this.writeTranslator = writeTranslator;
     this.schemaNode = schemaNode;
     this.fieldAccumulatorsByChildIndex =
@@ -25,20 +24,20 @@ public abstract class BranchAccumulator<Branch, WriteAs> {
             switch (childSchemaNode.getRepetitionType()) {
               case REQUIRED, OPTIONAL ->
                   new LeafAccumulator.Optional<>(
-                      childWriteTranslator, childSchemaNode, dataPageAccumulator);
+                      childWriteTranslator, childSchemaNode, valueAccumulator);
               case REPEATED ->
                   new LeafAccumulator.Repeated<>(
-                      childWriteTranslator, childSchemaNode, dataPageAccumulator);
+                      childWriteTranslator, childSchemaNode, valueAccumulator);
             };
       } else {
         fieldAccumulatorsByChildIndex[childIndex] =
             switch (childSchemaNode.getRepetitionType()) {
               case REQUIRED, OPTIONAL ->
                   new BranchAccumulator.Optional<>(
-                      childWriteTranslator, childSchemaNode, dataPageAccumulator);
+                      childWriteTranslator, childSchemaNode, valueAccumulator);
               case REPEATED ->
                   new BranchAccumulator.Repeated<>(
-                      childWriteTranslator, childSchemaNode, dataPageAccumulator);
+                      childWriteTranslator, childSchemaNode, valueAccumulator);
             };
       }
     }
@@ -99,8 +98,8 @@ public abstract class BranchAccumulator<Branch, WriteAs> {
     public Optional(
         final WriteTranslator<Branch, WriteAs> writeTranslator,
         final ParquetSchemaNode schemaNode,
-        final Writer.DataPageAccumulator dataPageAccumulator) {
-      super(writeTranslator, schemaNode, dataPageAccumulator);
+        final ValueAccumulator valueAccumulator) {
+      super(writeTranslator, schemaNode, valueAccumulator);
     }
 
     @Override
@@ -115,8 +114,8 @@ public abstract class BranchAccumulator<Branch, WriteAs> {
     public Repeated(
         final WriteTranslator<Branch, WriteAs> writeTranslator,
         final ParquetSchemaNode schemaNode,
-        final Writer.DataPageAccumulator dataPageAccumulator) {
-      super(writeTranslator, schemaNode, dataPageAccumulator);
+        final ValueAccumulator valueAccumulator) {
+      super(writeTranslator, schemaNode, valueAccumulator);
     }
 
     @Override
