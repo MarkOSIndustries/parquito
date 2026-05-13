@@ -9,14 +9,19 @@ import java.util.Map;
 
 public class MapReader implements Reader<List<Map<String, Object>>, Map<String, Object>> {
   private final ParquetSchemaNode parquetSchemaNode;
+  private final MapReader[] childReadersByFieldIndex;
 
   public MapReader(final ParquetSchemaNode parquetSchemaNode) {
     this.parquetSchemaNode = parquetSchemaNode;
+    this.childReadersByFieldIndex = new MapReader[parquetSchemaNode.getChildren().length];
+    for (var i = 0; i < this.childReadersByFieldIndex.length; i++) {
+      childReadersByFieldIndex[i] = new MapReader(parquetSchemaNode.getChildAtIndex(i));
+    }
   }
 
   @Override
   public Reader<?, ?> forChild(final int childFieldIndex) {
-    return this;
+    return childReadersByFieldIndex[childFieldIndex];
   }
 
   @Override
