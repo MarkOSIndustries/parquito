@@ -70,6 +70,7 @@ public abstract class DoubleType<ReadAs> extends ParquetType<ReadAs> {
   @Override
   public void writeToByteBuffer(final ReadAs value, final ByteBuffer byteBuffer) {
     byteBuffer.order(ByteOrder.LITTLE_ENDIAN).asDoubleBuffer().put(unwrap(value));
+    byteBuffer.position(byteBuffer.position() + 8);
   }
 
   protected abstract ReadAs wrap(final double value);

@@ -70,6 +70,7 @@ public abstract class FloatType<ReadAs> extends ParquetType<ReadAs> {
   @Override
   public void writeToByteBuffer(final ReadAs value, final ByteBuffer byteBuffer) {
     byteBuffer.order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer().put(unwrap(value));
+    byteBuffer.position(byteBuffer.position() + 4);
   }
 
   protected abstract ReadAs wrap(final float value);

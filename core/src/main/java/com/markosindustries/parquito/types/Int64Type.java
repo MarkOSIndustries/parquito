@@ -72,6 +72,7 @@ public abstract class Int64Type<ReadAs> extends ParquetType<ReadAs> {
   @Override
   public void writeToByteBuffer(final ReadAs value, final ByteBuffer byteBuffer) {
     byteBuffer.order(ByteOrder.LITTLE_ENDIAN).asLongBuffer().put(unwrap(value));
+    byteBuffer.position(byteBuffer.position() + 8);
   }
 
   protected abstract ReadAs wrap(final long value);

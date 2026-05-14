@@ -72,6 +72,7 @@ public abstract class Int32Type<ReadAs> extends ParquetType<ReadAs> {
   @Override
   public void writeToByteBuffer(final ReadAs value, final ByteBuffer byteBuffer) {
     byteBuffer.order(ByteOrder.LITTLE_ENDIAN).asIntBuffer().put(unwrap(value));
+    byteBuffer.position(byteBuffer.position() + 4);
   }
 
   protected abstract ReadAs wrap(final int value);

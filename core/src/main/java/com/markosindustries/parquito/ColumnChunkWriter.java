@@ -85,11 +85,13 @@ public class ColumnChunkWriter<Value> {
       final var minBuffer =
           ByteBuffer.allocate(columnType.parquetType().getRequiredBytesToWrite(minValue));
       columnType.parquetType().writeToByteBuffer(minValue, minBuffer);
+      minBuffer.flip();
       this.currentHeader.meta_data.statistics.setMin_value(minBuffer);
 
       final var maxBuffer =
           ByteBuffer.allocate(columnType.parquetType().getRequiredBytesToWrite(maxValue));
       columnType.parquetType().writeToByteBuffer(maxValue, maxBuffer);
+      maxBuffer.flip();
       this.currentHeader.meta_data.statistics.setMax_value(maxBuffer);
     }
 

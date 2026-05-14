@@ -61,6 +61,7 @@ public abstract class BooleanType<ReadAs> extends ParquetType<ReadAs> {
   @Override
   public void writeToByteBuffer(final ReadAs value, final ByteBuffer byteBuffer) {
     byteBuffer.order(ByteOrder.LITTLE_ENDIAN).asIntBuffer().put(unwrap(value) ? 1 : 0);
+    byteBuffer.position(byteBuffer.position() + 4);
   }
 
   protected abstract ReadAs wrap(final boolean value);

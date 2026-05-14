@@ -78,7 +78,7 @@ public abstract class FixedLengthByteArrayType<ReadAs> extends ParquetType<ReadA
 
     @Override
     protected ByteBuffer wrap(final ByteBuffer bytes) {
-      return bytes;
+      return bytes.asReadOnlyBuffer();
     }
 
     @Override

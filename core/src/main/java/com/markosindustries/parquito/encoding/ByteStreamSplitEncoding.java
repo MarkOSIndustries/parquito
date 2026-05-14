@@ -81,6 +81,7 @@ public class ByteStreamSplitEncoding<ReadAs> implements ParquetEncoding<ReadAs> 
       for (var byteIndex = 0; byteIndex < byteWidth; byteIndex++) {
         splitStreams[byteIndex][valueIndex] = buffer.array()[byteIndex];
       }
+      buffer.rewind();
     }
 
     for (final var splitStream : splitStreams) {

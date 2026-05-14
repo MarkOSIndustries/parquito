@@ -24,6 +24,13 @@ public abstract class ParquetType<ReadAs> {
       final int expectedValues, final int decompressedPageBytes, final InputStream inputStream)
       throws IOException;
 
+  /**
+   * Read a value from the given byte buffer. After execution, the byteBuffer's position, limit and
+   * mark remain unchanged.
+   *
+   * @param byteBuffer The buffer to read a value from
+   * @return The value read
+   */
   public abstract ReadAs readFromByteBuffer(final ByteBuffer byteBuffer);
 
   public abstract void writePlainPage(
@@ -39,6 +46,13 @@ public abstract class ParquetType<ReadAs> {
     return getPlainBytesOverhead() + getRequiredBytesToWrite(value);
   }
 
+  /**
+   * Write a value to the given byteBuffer. After execution, the buffer's position and limit will
+   * have advanced to accommodate the written value, while mark will remain unchanged.
+   *
+   * @param value The value to write
+   * @param byteBuffer The buffer to write to
+   */
   public abstract void writeToByteBuffer(final ReadAs value, final ByteBuffer byteBuffer);
 
   /**

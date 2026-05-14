@@ -153,7 +153,6 @@ public class ParquitoRoundTripTests {
         new RowGroupWriter<>(
             outputStream,
             WriteSpec.newBuilder()
-                .withTargetBytesPerRowGroup(10)
                 .withCompressionCodec(compressionCodec)
                 .withBloomFilterSelector(
                     BloomFilterSelector.fpp(
@@ -188,6 +187,8 @@ public class ParquitoRoundTripTests {
                           .get();
                   assertTrue(someStringColumnChunkReader.hasBloomFilter());
                   assertFalse(someStringColumnChunkReader.getBloomFilter().mightContain("strx"));
+                  assertEquals("stra", someStringColumnChunkReader.getStatsMin());
+                  assertEquals("strc", someStringColumnChunkReader.getStatsMax());
                   final var rowIterator =
                       rowGroupReader.getRowIterator(
                           new RowReadSpec<>(new ProtobufReader<>(Example::newBuilder, schema)),

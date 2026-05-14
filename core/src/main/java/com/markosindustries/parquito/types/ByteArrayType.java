@@ -129,7 +129,7 @@ public abstract class ByteArrayType<ReadAs> extends ParquetType<ReadAs> {
       new ByteArrayType<ByteBuffer>(ByteBuffer.class) {
         @Override
         protected ByteBuffer wrap(final ByteBuffer bytes) {
-          return bytes;
+          return bytes.asReadOnlyBuffer();
         }
 
         @Override
