@@ -23,6 +23,9 @@ message Example {
     string some_string = 1;
     ExampleEnum some_enum = 2;
   }
+
+  repeated ExampleEnum some_enums = 8;
+  repeated bytes some_binaries = 9;
 }
 
 message ExampleChild {

@@ -5,6 +5,7 @@ import com.google.protobuf.Descriptors;
 import com.google.protobuf.Message;
 import com.markosindustries.parquito.rows.BranchBuilder;
 import java.nio.ByteBuffer;
+import java.util.List;
 
 class ProtobufBranchBuilder<M extends Message> implements BranchBuilder<M> {
   private final Message.Builder builder;
@@ -34,17 +35,42 @@ class ProtobufBranchBuilder<M extends Message> implements BranchBuilder<M> {
 
   private static Object mapToProtobuf(final Descriptors.FieldDescriptor field, final Object value) {
     return switch (field.getType()) {
-      case BYTES -> ByteString.copyFrom((ByteBuffer) value);
-      case ENUM -> {
-        if (value instanceof String) {
-          yield field.getEnumType().findValueByName((String) value);
-        }
-        if (value instanceof Integer) {
-          yield field.getEnumType().findValueByNumber((int) value);
-        }
-        yield value;
-      }
+      case BYTES -> mapBytesToProtobuf(field, value);
+      case ENUM -> mapEnumsToProtobuf(field, value);
       default -> value;
     };
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Object mapBytesToProtobuf(
+      final Descriptors.FieldDescriptor field, final Object value) {
+    if (field.isRepeated()) {
+      return ((List<ByteBuffer>) value).stream().map(ByteString::copyFrom).toList();
+    } else {
+      return ByteString.copyFrom((ByteBuffer) value);
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Object mapEnumsToProtobuf(
+      final Descriptors.FieldDescriptor field, final Object value) {
+    final var enumType = field.getEnumType();
+    if (field.isRepeated()) {
+      return ((List<Object>) value).stream().map(v -> mapEnumToProtobuf(enumType, v)).toList();
+    } else {
+      return mapEnumToProtobuf(enumType, value);
+    }
+  }
+
+  private static Object mapEnumToProtobuf(
+      final Descriptors.EnumDescriptor enumType, final Object value) {
+    if (value instanceof String) {
+      return enumType.findValueByName((String) value);
+    }
+    if (value instanceof Integer) {
+      return enumType.findValueByNumber((int) value);
+    }
+    throw new UnsupportedOperationException(
+        "Setting a protobuf enum from a " + value.getClass().getName() + " is not supported");
   }
 }

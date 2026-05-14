@@ -145,7 +145,7 @@ public class ParquitoAsReaderCompatibilityTests {
     final var expectedJson =
         parquetSpecsCompliant
             ? "{\"some_string\":\"\",\"some_bool\":false}"
-            : "{\"some_string\":\"\",\"some_repeated\":[],\"some_map\":[],\"some_bool\":false}";
+            : "{\"some_string\":\"\",\"some_repeated\":[],\"some_map\":[],\"some_bool\":false,\"some_enums\":[],\"some_binaries\":[]}";
     try (final var byteRangeReader = new FileByteRangeReader(file)) {
       final var actuallyReadTheFile = new AtomicBoolean(false);
       ParquetFooter.read(byteRangeReader)
@@ -213,6 +213,10 @@ public class ParquitoAsReaderCompatibilityTests {
                                 .setSomeString("stry")
                                 .addAllSomeStrings(List.of("str1", "str2"))
                                 .build()))
+                .addSomeEnums(ExampleEnum.EXAMPLE_ENUM_ONE)
+                .addSomeEnums(ExampleEnum.EXAMPLE_ENUM_TWO)
+                .addSomeBinaries(ByteString.copyFromUtf8("just some bytes"))
+                .addSomeBinaries(ByteString.copyFromUtf8("just some other bytes"))
                 .build(),
             Example.newBuilder()
                 .setSomeChild(
