@@ -1,0 +1,50 @@
+plugins {
+  id 'java-platform'
+  id 'maven-publish'
+  id 'signing'
+  id 'com.gradleup.nmcp'
+}
+
+dependencies {
+  constraints {
+    project.rootProject.subprojects.findAll {it != project && it.hasProperty("pom_name") }.forEach { subproject ->
+      api(subproject)
+    }
+  }
+}
+
+publishing {
+  publications {
+    bom(MavenPublication) {
+      from components.javaPlatform
+      artifactId = "parquito-${project.name}"
+      pom {
+        name = "${pom_name}"
+        description = "${pom_description}"
+        url = 'https://github.com/MarkOSIndustries/parquito'
+        licenses {
+          license {
+            name = 'MIT License'
+            url = 'https://github.com/MarkOSIndustries/parquito/blob/master/LICENSE'
+          }
+        }
+        developers {
+          developer {
+            id = 'markosindustries'
+            name = 'Mark Green'
+            email = 'markosindustries@gmail.com'
+          }
+        }
+        scm {
+          connection = 'scm:git:git://github.com/MarkOSIndustries/parquito.git'
+          url = 'https://github.com/MarkOSIndustries/parquito'
+        }
+      }
+    }
+  }
+}
+
+signing {
+  required { !project.hasProperty("disableSigning") }
+  sign publishing.publications.bom
+}
