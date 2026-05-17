@@ -19,6 +19,7 @@ publishing {
   publications {
     mavenJava(MavenPublication) {
       from components.java
+      artifactId = "parquito-${project.name}"
       versionMapping {
         usage('java-api') {
           fromResolutionOf('runtimeClasspath')
