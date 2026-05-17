@@ -6,7 +6,7 @@
 
 A lightweight library for working with parquet files.
 
-Currently supports reading parquet files. Write support is not yet implemented.
+Supports reading and writing parquet files.
 
 ## Usage
 
