@@ -47,7 +47,7 @@ public class ParquitoAsWriterCompatibilityTests {
       writer.write(Collections.emptyIterator());
     }
 
-    final var tempFile = Files.createTempFile("parquito.as.writer", ".parquet");
+    final var tempFile = Files.createTempFile("parquito.as.writer." + compressionCodec, ".parquet");
 
     try (final var fileOutputStream = new FileOutputStream(tempFile.toFile())) {
       outputStream.writeTo(fileOutputStream);

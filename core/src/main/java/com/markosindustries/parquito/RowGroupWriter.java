@@ -193,6 +193,10 @@ public class RowGroupWriter<Row> implements AutoCloseable, ValueAccumulator {
     // - so depth first
 
     if (schemaNode.getColumnIndex().isPresent()) {
+      if (schemaNode.getElement().type == null) {
+        throw new UnsupportedOperationException(
+            "Can't write schemas with empty groups - " + schemaNode.getPath());
+      }
       final var columnMetadata =
           new ColumnMetaData(
               schemaNode.getElement().type,
