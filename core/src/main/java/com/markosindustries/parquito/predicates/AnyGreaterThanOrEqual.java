@@ -6,19 +6,24 @@ import com.markosindustries.parquito.types.ColumnType;
 
 /**
  * Matches a row if at least one value for the given column is greater than or equal to the
- * comparator
+ * referenceValue
  *
  * @param <ReadAs> The type of value
  */
 public class AnyGreaterThanOrEqual<ReadAs>
     extends ColumnPredicate<ReadAs, PredicateRowMatcher.AnyMatch<ReadAs>> {
+  private final ReadAs referenceValue;
+
   public AnyGreaterThanOrEqual(
-      final ReadAs comparator, final ColumnType<ReadAs> columnType, ParquetSchemaPath schemaPath) {
-    super(comparator, columnType, schemaPath, PredicateRowMatcher.AnyMatch::new);
+      final ReadAs referenceValue,
+      final ColumnType<ReadAs> columnType,
+      ParquetSchemaPath schemaPath) {
+    super(columnType, schemaPath, PredicateRowMatcher.AnyMatch::new);
+    this.referenceValue = referenceValue;
   }
 
   @Override
   public boolean valueMatches(final ReadAs value) {
-    return compare(value) >= 0;
+    return compare(value, referenceValue) >= 0;
   }
 }

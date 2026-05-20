@@ -5,19 +5,24 @@ import com.markosindustries.parquito.rows.PredicateRowMatcher;
 import com.markosindustries.parquito.types.ColumnType;
 
 /**
- * Matches a row if at least one value for the given column equals the comparator
+ * Matches a row if at least one value for the given column equals the referenceValue
  *
  * @param <ReadAs> The type of value
  */
 public class AnyEquals<ReadAs>
     extends ColumnPredicate<ReadAs, PredicateRowMatcher.AnyMatch<ReadAs>> {
+  private final ReadAs referenceValue;
+
   public AnyEquals(
-      final ReadAs comparator, final ColumnType<ReadAs> columnType, ParquetSchemaPath schemaPath) {
-    super(comparator, columnType, schemaPath, PredicateRowMatcher.AnyMatch::new);
+      final ReadAs referenceValue,
+      final ColumnType<ReadAs> columnType,
+      ParquetSchemaPath schemaPath) {
+    super(columnType, schemaPath, PredicateRowMatcher.AnyMatch::new);
+    this.referenceValue = referenceValue;
   }
 
   @Override
   public boolean valueMatches(final ReadAs value) {
-    return compare(value) == 0;
+    return compare(value, referenceValue) == 0;
   }
 }

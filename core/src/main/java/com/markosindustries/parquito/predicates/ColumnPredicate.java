@@ -16,7 +16,6 @@ import java.util.stream.Stream;
 public abstract class ColumnPredicate<ReadAs, RowMatcher extends PredicateRowMatcher>
     implements ParquetPredicate {
   private final ColumnType<ReadAs> columnType;
-  private final ReadAs comparator;
   private final ParquetSchemaPath schemaPath;
   private final RowMatcherConstructor<ReadAs, RowMatcher> rowMatcherConstructor;
   private PredicateRowMatcher rowMatcher;
@@ -29,12 +28,10 @@ public abstract class ColumnPredicate<ReadAs, RowMatcher extends PredicateRowMat
         final boolean matchesNull);
   }
 
-  ColumnPredicate(
-      final ReadAs comparator,
+  public ColumnPredicate(
       final ColumnType<ReadAs> columnType,
       final ParquetSchemaPath schemaPath,
       final RowMatcherConstructor<ReadAs, RowMatcher> rowMatcherConstructor) {
-    this.comparator = comparator;
     this.columnType = columnType;
     this.schemaPath = schemaPath;
     this.rowMatcherConstructor = rowMatcherConstructor;
@@ -63,7 +60,7 @@ public abstract class ColumnPredicate<ReadAs, RowMatcher extends PredicateRowMat
     return schemaPath;
   }
 
-  protected int compare(ReadAs value) {
+  protected int compare(ReadAs value, ReadAs comparator) {
     return columnType.compare(value, comparator);
   }
 
