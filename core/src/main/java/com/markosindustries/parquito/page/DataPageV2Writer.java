@@ -91,7 +91,6 @@ public class DataPageV2Writer<Value> implements DataPageWriter<Value> {
 
     var valuesIndex = 0;
     for (var levelsIndex = 0; levelsIndex < repetitionLevels.length(); ) {
-      //    for (var i = 0; i < pageCount; i++) {
       var nextValuesIndex = Math.min(values.length(), valuesIndex + valuesPerPage);
       var valueCount = nextValuesIndex - valuesIndex;
 

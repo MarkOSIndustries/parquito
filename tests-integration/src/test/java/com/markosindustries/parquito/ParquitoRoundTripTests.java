@@ -178,13 +178,15 @@ public class ParquitoRoundTripTests {
                 var rowIndex = 0;
                 for (RowGroup rowGroup : footer.row_groups) {
                   final var rowGroupReader = new RowGroupReader(rowGroup, schema);
+                  final var rowGroupByteRangeReader =
+                      rowGroupReader.preloadRowGroup(byteRangeReader).join();
                   final ColumnChunkReader<?> someStringColumnChunkReader =
                       rowGroupReader
                           .getColumnChunkReaderForSchemaPath(
-                              byteRangeReader,
+                              rowGroupByteRangeReader,
                               ParquetSchemaPath.parseDotSeparatedPath(
                                   schema, "some_child.some_string"))
-                          .get();
+                          .orElseThrow();
                   assertTrue(someStringColumnChunkReader.hasBloomFilter());
                   assertFalse(someStringColumnChunkReader.getBloomFilter().mightContain("strx"));
                   assertEquals("stra", someStringColumnChunkReader.getStatsMin());
@@ -192,7 +194,7 @@ public class ParquitoRoundTripTests {
                   final var rowIterator =
                       rowGroupReader.getRowIterator(
                           new RowReadSpec<>(new ProtobufReader<>(Example::newBuilder, schema)),
-                          byteRangeReader);
+                          rowGroupByteRangeReader);
                   while (rowIterator.hasNext()) {
                     final var row = rowIterator.next();
                     final var expectedProtobuf = expectedProtobufs.get(rowIndex);

@@ -5,6 +5,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.nio.channels.WritableByteChannel;
 import java.util.concurrent.CompletableFuture;
 
 public interface ByteRangeReader extends AutoCloseable {
@@ -61,4 +62,7 @@ public interface ByteRangeReader extends AutoCloseable {
             },
             Concurrency.DEFAULT_EXECUTOR);
   }
+
+  void transferTo(long startByteOffset, int bytesToRetrieve, WritableByteChannel destination)
+      throws IOException;
 }

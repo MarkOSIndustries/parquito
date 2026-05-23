@@ -9,6 +9,7 @@ import com.markosindustries.parquito.rows.ValueAccumulator;
 import com.markosindustries.parquito.types.ColumnType;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.channels.Channels;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -117,13 +118,10 @@ public class RowGroupWriter<Row> implements AutoCloseable, ValueAccumulator {
     final var alterredRowGroup = foreignRowGroup.deepCopy();
     alterredRowGroup.setFile_offset(byteCountingStream.getBytesWritten());
 
-    try (final var rowGroupInputStream =
-        byteRangeReader
-            .readAsInputStream(
-                foreignRowGroup.file_offset, (int) foreignRowGroup.total_compressed_size)
-            .join()) {
-      rowGroupInputStream.transferTo(byteCountingStream);
-    }
+    byteRangeReader.transferTo(
+        foreignRowGroup.file_offset,
+        (int) foreignRowGroup.total_compressed_size,
+        Channels.newChannel(byteCountingStream));
 
     for (final var column : alterredRowGroup.columns) {
       if (column.meta_data.isSetData_page_offset()) {

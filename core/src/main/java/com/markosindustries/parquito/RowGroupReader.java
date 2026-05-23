@@ -13,11 +13,26 @@ import com.markosindustries.parquito.types.ColumnType;
 import java.util.Iterator;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.concurrent.CompletableFuture;
 import org.apache.parquet.format.FieldRepetitionType;
 import org.apache.parquet.format.RowGroup;
 import org.apache.parquet.format.SortingColumn;
 
 public record RowGroupReader(RowGroup rowGroupHeader, ParquetSchemaNode.Root schemaRoot) {
+  public CompletableFuture<ByteRangeReader> preloadRowGroup(final ByteRangeReader byteRangeReader) {
+    return byteRangeReader
+        .readAsBuffer(rowGroupHeader().file_offset, (int) rowGroupHeader.total_compressed_size)
+        .thenApplyAsync(
+            entireRowGroupBuffer ->
+                new TieredCompositeByteRangeReader(
+                    new ByteBufferByteRangeReader(
+                        entireRowGroupBuffer, rowGroupHeader().file_offset),
+                    rowGroupHeader().file_offset,
+                    rowGroupHeader().file_offset + rowGroupHeader.total_compressed_size,
+                    byteRangeReader),
+            Concurrency.DEFAULT_EXECUTOR);
+  }
+
   public <Repeated, Value> Iterator<Value> getRowIterator(
       final RowReadSpec<Repeated, Value> rowReadSpec, final ByteRangeReader byteRangeReader) {
     final var schemaTraversalSpec =

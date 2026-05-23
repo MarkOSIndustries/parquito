@@ -53,70 +53,21 @@ public class ParquetRewriter {
       final OutputStream targetOutputStream,
       final Function<ParquetSchemaNode.Root, WriteSpec> writeSpecProvider) {
     return ParquetFooter.read(sourceRangeReader)
-        .thenAccept(
+        .thenAcceptAsync(
             footer -> {
               final var schema = ParquetSchemaNode.from(footer.schema);
               final var writeSpec = writeSpecProvider.apply(schema);
               try (final var writer =
                   new RowGroupWriter<>(
                       targetOutputStream, writeSpec, new NoOpWriter(footer.schema, schema))) {
-                final var rowGroupActions =
-                    footer.row_groups.stream()
-                        .map(
-                            rowGroup ->
-                                CompletableFuture.<RowGroupAction>supplyAsync(
-                                    () -> {
-                                      final var rowGroupReader =
-                                          new RowGroupReader(rowGroup, schema);
-                                      final var keepRowsPredicate =
-                                          keepRowsPredicateProvider.apply(rowGroupReader);
+                // Keeping this here to avoid re-allocating for each row group
+                final var reusableBitSet = new BitSet();
+                for (final var rowGroup : footer.row_groups) {
+                  reusableBitSet.clear();
+                  final var rowGroupAction =
+                      determineRowGroupAction(rowGroup, schema, sourceRangeReader, reusableBitSet);
 
-                                      boolean anyKeep = false, anyDiscard = false;
-                                      final var keepRowsBitset = new BitSet();
-
-                                      final var reader = NoOpReader.INSTANCE;
-                                      final var pushdownPredicates =
-                                          new PushdownPredicates(keepRowsPredicate);
-                                      final var predicateIterator =
-                                          new OptionalBranchIterator<>(
-                                              rowGroupReader.makeFieldIterators(
-                                                  keepRowsPredicate.asSchemaTraversalSpec(),
-                                                  reader,
-                                                  pushdownPredicates,
-                                                  schema,
-                                                  sourceRangeReader),
-                                              schema,
-                                              reader);
-
-                                      var rowIndex = 0;
-                                      var countOfRowsToKeep = 0L;
-                                      while (predicateIterator.hasNext()) {
-                                        final var isMatch = pushdownPredicates.matchesNextRow();
-                                        anyKeep = anyKeep || isMatch;
-                                        anyDiscard = anyDiscard || !isMatch;
-                                        keepRowsBitset.set(rowIndex++, isMatch);
-                                        if (isMatch) {
-                                          countOfRowsToKeep++;
-                                        }
-                                        predicateIterator.next();
-                                      }
-
-                                      if (anyKeep) {
-                                        if (anyDiscard) {
-                                          return new RowGroupAction.Rewrite(
-                                              rowGroup, keepRowsBitset, countOfRowsToKeep);
-                                        } else {
-                                          return new RowGroupAction.Copy(rowGroup);
-                                        }
-                                      } else {
-                                        return new RowGroupAction.Drop();
-                                      }
-                                    },
-                                    Concurrency.DEFAULT_EXECUTOR))
-                        .toList();
-
-                for (final var rowGroupAction : rowGroupActions) {
-                  switch (rowGroupAction.join()) {
+                  switch (rowGroupAction) {
                     case RowGroupAction.Copy copy ->
                         copyRowGroup(copy.rowGroup, sourceRangeReader, writer);
                     case RowGroupAction.Drop drop -> {}
@@ -139,7 +90,62 @@ public class ParquetRewriter {
               } catch (Exception e) {
                 throw new RuntimeException(e);
               }
-            });
+            },
+            Concurrency.DEFAULT_EXECUTOR);
+  }
+
+  private RowGroupAction determineRowGroupAction(
+      final RowGroup rowGroup,
+      final ParquetSchemaNode.Root schema,
+      final ByteRangeReader sourceRangeReader,
+      final BitSet keepRowsBitset) {
+    final var rowGroupReader = new RowGroupReader(rowGroup, schema);
+    final var keepRowsPredicate = keepRowsPredicateProvider.apply(rowGroupReader);
+
+    boolean anyKeep = false, anyDiscard = false;
+
+    final var reader = NoOpReader.INSTANCE;
+    final var pushdownPredicates = new PushdownPredicates(keepRowsPredicate);
+    final var predicateIterator =
+        new OptionalBranchIterator<>(
+            rowGroupReader.makeFieldIterators(
+                keepRowsPredicate.asSchemaTraversalSpec(),
+                reader,
+                pushdownPredicates,
+                schema,
+                sourceRangeReader),
+            schema,
+            reader);
+
+    RowGroupAction currentAction = null;
+    var rowIndex = 0;
+    var countOfRowsToKeep = 0L;
+    while (predicateIterator.hasNext()) {
+      final var isMatch = pushdownPredicates.matchesNextRow();
+      switch (currentAction) {
+        case RowGroupAction.Copy copy -> {}
+        case RowGroupAction.Drop drop -> {}
+        case RowGroupAction.Rewrite rewrite -> {}
+        case null -> {}
+      }
+      anyKeep = anyKeep || isMatch;
+      anyDiscard = anyDiscard || !isMatch;
+      keepRowsBitset.set(rowIndex++, isMatch);
+      if (isMatch) {
+        countOfRowsToKeep++;
+      }
+      predicateIterator.next();
+    }
+
+    if (anyKeep) {
+      if (anyDiscard) {
+        return new RowGroupAction.Rewrite(rowGroup, keepRowsBitset, countOfRowsToKeep);
+      } else {
+        return new RowGroupAction.Copy(rowGroup);
+      }
+    } else {
+      return new RowGroupAction.Drop();
+    }
   }
 
   private static void rewriteRowGroup(
@@ -151,18 +157,19 @@ public class ParquetRewriter {
       final RowGroupWriter<Object> writer)
       throws IOException {
     final var columnSchemaNodes = schemaRoot.findLeafNodes();
+    final var rowGroupRangeReader = rowGroupReader.preloadRowGroup(byteRangeReader).join();
 
     final var valuePumps = new ValuePump[columnSchemaNodes.size()];
     for (var columnIndex = 0; columnIndex < valuePumps.length; columnIndex++) {
       final var columnSchemaNode = columnSchemaNodes.get(columnIndex);
       final var columnChunkReader =
           rowGroupReader
-              .getColumnChunkReaderForSchemaPath(byteRangeReader, columnSchemaNode)
+              .getColumnChunkReaderForSchemaPath(rowGroupRangeReader, columnSchemaNode)
               .orElseThrow();
       valuePumps[columnIndex] =
           ValuePump.createCasting(
               columnChunkReader,
-              byteRangeReader,
+              rowGroupRangeReader,
               writer.getColumnChunkWriter(columnSchemaNode.getPath()),
               columnSchemaNode);
     }

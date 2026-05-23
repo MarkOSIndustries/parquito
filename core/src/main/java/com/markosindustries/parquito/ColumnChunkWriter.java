@@ -78,9 +78,11 @@ public class ColumnChunkWriter<Value> {
   public ColumnChunk writeAllAndReset(
       final OutputStream rowGroupOutputStream, final OutputStream bloomOutputStream)
       throws IOException {
-    if (dictionaryPageWriter.getNumValues() > 0) {
-      final var minValue = dictionaryPageWriter.getDistinctValues().first();
-      final var maxValue = dictionaryPageWriter.getDistinctValues().last();
+    final var dictionaryPageReadyToWrite = dictionaryPageWriter.makeReadyToWrite();
+
+    if (dictionaryPageReadyToWrite.getNumDistinctValues() > 0) {
+      final var minValue = dictionaryPageReadyToWrite.getMinValue();
+      final var maxValue = dictionaryPageReadyToWrite.getMaxValue();
 
       final var minBuffer =
           ByteBuffer.allocate(columnType.parquetType().getRequiredBytesToWrite(minValue));
@@ -101,14 +103,15 @@ public class ColumnChunkWriter<Value> {
             : encodingSelector.selectEncoding(
                 this.columnMetaData.type,
                 this.columnType.schemaNode().getPath(),
-                dictionaryPageWriter.getNumValues(),
+                dictionaryPageReadyToWrite.getNumDistinctValues(),
                 dataPageWriter.getNumValues(),
                 dataPageWriter.getNumNulls());
     currentHeader.meta_data.addToEncodings(selectedEncoding);
 
     if (selectedEncoding == Encoding.RLE_DICTIONARY) {
       final var dictionaryOutputStream = new ByteCountingOutputStream(rowGroupOutputStream);
-      final var pageHeader = dictionaryPageWriter.writePage(columnMetaData, dictionaryOutputStream);
+      final var pageHeader =
+          dictionaryPageReadyToWrite.writePage(columnMetaData, dictionaryOutputStream);
       this.currentHeader.meta_data.total_compressed_size +=
           dictionaryOutputStream.getBytesWritten();
       this.currentHeader.meta_data.total_uncompressed_size +=
@@ -123,7 +126,7 @@ public class ColumnChunkWriter<Value> {
     final var dataPageOutputStream = new ByteCountingOutputStream(rowGroupOutputStream);
     final var pageHeaders =
         dataPageWriter.writePages(
-            dictionaryPageWriter.makeFastDictionary(),
+            dictionaryPageReadyToWrite.makeFastDictionary(),
             dictionaryPageWriter.getEstimatedBytesRequired(),
             selectedEncoding,
             this.currentHeader.meta_data,
@@ -146,7 +149,7 @@ public class ColumnChunkWriter<Value> {
             dataPageWriter.getNumNulls());
     if (bloomFilterSizeInBytes.isPresent()) {
       final var bloomFilter = BloomFilter.createEmpty(bloomFilterSizeInBytes.get());
-      bloomFilter.insertAll(dictionaryPageWriter.getDistinctValues());
+      bloomFilter.insertAll(dictionaryPageReadyToWrite.getDistinctValues());
       writeBloomFilter(bloomFilter, bloomOutputStream);
       this.currentHeader.meta_data.setBloom_filter_offset(0);
     }
