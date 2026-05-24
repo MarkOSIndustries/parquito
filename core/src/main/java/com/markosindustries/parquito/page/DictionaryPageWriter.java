@@ -8,12 +8,14 @@ import com.markosindustries.parquito.arrays.FastArray;
 import com.markosindustries.parquito.arrays.FastDictionary;
 import com.markosindustries.parquito.encoding.PlainEncoding;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
-import it.unimi.dsi.fastutil.objects.Object2ObjectAVLTreeMap;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.util.ArrayList;
+import java.util.AbstractList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
-import java.util.SortedSet;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
 import org.apache.parquet.format.ColumnMetaData;
 import org.apache.parquet.format.DictionaryPageHeader;
 import org.apache.parquet.format.Encoding;
@@ -74,25 +76,22 @@ public class DictionaryPageWriter<Value> {
   }
 
   public class ReadyToWrite {
-    private final Object2ObjectAVLTreeMap<Value, ValueWithOriginalIndices<Value>>
-        sortedValuesWithOriginalIndices;
+    private final ValueWithOriginalIndices<Value>[] sortedValuesWithOriginalIndices;
 
-    ReadyToWrite(
-        final Object2ObjectAVLTreeMap<Value, ValueWithOriginalIndices<Value>>
-            sortedValuesWithOriginalIndices) {
+    ReadyToWrite(final ValueWithOriginalIndices<Value>[] sortedValuesWithOriginalIndices) {
       this.sortedValuesWithOriginalIndices = sortedValuesWithOriginalIndices;
     }
 
     public long getNumDistinctValues() {
-      return sortedValuesWithOriginalIndices.size();
+      return sortedValuesWithOriginalIndices.length;
     }
 
     public Value getMinValue() {
-      return sortedValuesWithOriginalIndices.keySet().first();
+      return sortedValuesWithOriginalIndices[0].value;
     }
 
     public Value getMaxValue() {
-      return sortedValuesWithOriginalIndices.keySet().last();
+      return sortedValuesWithOriginalIndices[sortedValuesWithOriginalIndices.length - 1].value;
     }
 
     public PageHeader writePage(
@@ -105,7 +104,7 @@ public class DictionaryPageWriter<Value> {
               CompressionCodecs.compress(columnMetaData.codec, compressedValuesOutputStream));
 
       plainEncoding.encode(
-          sortedValuesWithOriginalIndices.keySet(),
+          new ValuesArrayList<>(sortedValuesWithOriginalIndices),
           uncompressedValuesOutputStream,
           columnChunkWriter);
       uncompressedValuesOutputStream.close();
@@ -116,7 +115,7 @@ public class DictionaryPageWriter<Value> {
               uncompressedValuesOutputStream.getBytesWrittenAsInt(),
               compressedValuesOutputStream.getBytesWrittenAsInt());
       pageHeader.setDictionary_page_header(
-          new DictionaryPageHeader(sortedValuesWithOriginalIndices.size(), Encoding.PLAIN));
+          new DictionaryPageHeader(sortedValuesWithOriginalIndices.length, Encoding.PLAIN));
 
       Util.writePageHeader(pageHeader, outputStream);
       pageOutputBufferStream.writeTo(outputStream);
@@ -124,33 +123,73 @@ public class DictionaryPageWriter<Value> {
       return pageHeader;
     }
 
-    public SortedSet<Value> getDistinctValues() {
-      return sortedValuesWithOriginalIndices.keySet();
+    public Collection<Value> getDistinctValues() {
+      return new ValuesArrayList<>(sortedValuesWithOriginalIndices);
     }
 
     public FastDictionary<Value, ?> makeFastDictionary() {
-      final var values = new ArrayList<Value>(sortedValuesWithOriginalIndices.size());
       int[] indices = new int[totalValues];
       var dictionaryIndex = 0;
-      for (final var valueWithOriginalIndices : sortedValuesWithOriginalIndices.values()) {
-        values.add(valueWithOriginalIndices.value());
+      for (final var valueWithOriginalIndices : sortedValuesWithOriginalIndices) {
         for (final var originalIndex : valueWithOriginalIndices.originalIndices()) {
           indices[originalIndex] = dictionaryIndex;
         }
         dictionaryIndex++;
       }
       return FastDictionary.wrap(
-          values,
+          new ValuesArrayList<>(sortedValuesWithOriginalIndices),
           FastArray.wrap(indices),
           columnChunkWriter.getColumnType().parquetType().getReadAsClass());
     }
   }
 
   public ReadyToWrite makeReadyToWrite() {
-    final var sortedValueSet =
-        new Object2ObjectAVLTreeMap<Value, ValueWithOriginalIndices<Value>>(
-            columnChunkWriter.getColumnType().getComparator());
-    sortedValueSet.putAll(dictionaryWithOriginalIndices);
-    return new ReadyToWrite(sortedValueSet);
+    final ValueWithOriginalIndices<Value>[] sortedValues =
+        new ValueWithOriginalIndices[dictionaryWithOriginalIndices.size()];
+    int index = 0;
+    for (final var value : dictionaryWithOriginalIndices.values()) {
+      sortedValues[index++] = value;
+    }
+    Arrays.parallelSort(
+        sortedValues, (v1, v2) -> columnChunkWriter.getColumnType().compare(v1.value, v2.value));
+    return new ReadyToWrite(sortedValues);
+  }
+
+  private static class ValuesArrayList<Value> extends AbstractList<Value> {
+    private final ValueWithOriginalIndices<Value>[] valuesWithOriginalIndices;
+
+    public ValuesArrayList(final ValueWithOriginalIndices<Value>[] valuesWithOriginalIndices) {
+      this.valuesWithOriginalIndices = valuesWithOriginalIndices;
+    }
+
+    @Override
+    public Value get(final int index) {
+      return valuesWithOriginalIndices[index].value;
+    }
+
+    @Override
+    public Iterator<Value> iterator() {
+      return new Iterator<Value>() {
+        int index = 0;
+
+        @Override
+        public boolean hasNext() {
+          return index < valuesWithOriginalIndices.length;
+        }
+
+        @Override
+        public Value next() {
+          if (index >= valuesWithOriginalIndices.length) {
+            throw new NoSuchElementException();
+          }
+          return valuesWithOriginalIndices[index++].value;
+        }
+      };
+    }
+
+    @Override
+    public int size() {
+      return valuesWithOriginalIndices.length;
+    }
   }
 }

@@ -7,7 +7,7 @@ import com.markosindustries.parquito.page.Values;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.SortedSet;
+import java.util.Collection;
 
 public class PlainEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
   @Override
@@ -33,7 +33,7 @@ public class PlainEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
   }
 
   public void encode(
-      final SortedSet<ReadAs> values,
+      final Collection<ReadAs> values,
       final OutputStream uncompressedPageStream,
       final ColumnChunkWriter<ReadAs> columnChunkWriter)
       throws IOException {
