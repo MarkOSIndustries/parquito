@@ -4,6 +4,8 @@ import com.markosindustries.parquito.ParquetSchemaPath;
 import com.markosindustries.parquito.rows.PredicateRowMatcher;
 import com.markosindustries.parquito.types.ColumnType;
 import it.unimi.dsi.fastutil.objects.ObjectAVLTreeSet;
+
+import java.util.HashSet;
 import java.util.Set;
 import java.util.SortedSet;
 
@@ -15,25 +17,10 @@ import java.util.SortedSet;
  */
 public class AnyInSet<ReadAs>
     extends ColumnPredicate<ReadAs, PredicateRowMatcher.AnyMatch<ReadAs>> {
-  private final SortedSet<ReadAs> referenceValues;
-
-  public AnyInSet(
-      final Set<ReadAs> referenceValues,
-      final ColumnType<ReadAs> columnType,
-      ParquetSchemaPath schemaPath) {
-    this(
-        referenceValues instanceof SortedSet<ReadAs>
-                && columnType
-                    .getComparator()
-                    .equals(((SortedSet<ReadAs>) referenceValues).comparator())
-            ? (SortedSet<ReadAs>) referenceValues
-            : asSortedSet(referenceValues, columnType),
-        columnType,
-        schemaPath);
-  }
+  private final Set<ReadAs> referenceValues;
 
   private AnyInSet(
-      SortedSet<ReadAs> referenceValues,
+      Set<ReadAs> referenceValues,
       final ColumnType<ReadAs> columnType,
       ParquetSchemaPath schemaPath) {
     super(columnType, schemaPath, PredicateRowMatcher.AnyMatch::new);
@@ -46,9 +33,9 @@ public class AnyInSet<ReadAs>
     return referenceValues.contains(value);
   }
 
-  private static <ReadAs> ObjectAVLTreeSet<ReadAs> asSortedSet(
+  private static <ReadAs> Set<ReadAs> asTypedSet(
       final Set<?> referenceValues, final ColumnType<ReadAs> columnType) {
-    final var set = new ObjectAVLTreeSet<>(columnType.getComparator());
+    final var set = new HashSet<ReadAs>(referenceValues.size());
     final var caster = columnType.parquetType().getReadAsClass();
     for (final var referenceValue : referenceValues) {
       set.add(caster.cast(referenceValue));
@@ -60,6 +47,6 @@ public class AnyInSet<ReadAs>
       final Set<?> referenceValues,
       final ColumnType<ReadAs> columnType,
       final ParquetSchemaPath schemaPath) {
-    return new AnyInSet<>(asSortedSet(referenceValues, columnType), columnType, schemaPath);
+    return new AnyInSet<>(asTypedSet(referenceValues, columnType), columnType, schemaPath);
   }
 }
