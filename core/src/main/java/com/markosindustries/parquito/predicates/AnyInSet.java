@@ -3,11 +3,8 @@ package com.markosindustries.parquito.predicates;
 import com.markosindustries.parquito.ParquetSchemaPath;
 import com.markosindustries.parquito.rows.PredicateRowMatcher;
 import com.markosindustries.parquito.types.ColumnType;
-import it.unimi.dsi.fastutil.objects.ObjectAVLTreeSet;
-
 import java.util.HashSet;
 import java.util.Set;
-import java.util.SortedSet;
 
 /**
  * Matches a row if at least one value for the given column equals one of the values in the

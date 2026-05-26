@@ -3,7 +3,6 @@ package com.markosindustries.parquito.predicates;
 import com.markosindustries.parquito.ParquetSchemaPath;
 import com.markosindustries.parquito.rows.PredicateRowMatcher;
 import com.markosindustries.parquito.types.ColumnType;
-
 import java.util.HashSet;
 import java.util.Set;
 
