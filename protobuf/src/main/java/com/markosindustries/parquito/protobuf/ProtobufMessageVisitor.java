@@ -8,7 +8,6 @@ import com.markosindustries.parquito.rows.AbstractFieldVisitor;
 import com.markosindustries.parquito.rows.FieldVisitor;
 import com.markosindustries.parquito.rows.NoOpFieldVisitor;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -113,14 +112,8 @@ class ProtobufMessageVisitor extends AbstractFieldVisitor {
   private static Object mapEnumToProtobuf(
       final Descriptors.EnumDescriptor enumType, final Object value) {
     if (value instanceof final ByteBuffer valueAsByteBuffer) {
-      final var asString =
-          new String(
-              valueAsByteBuffer.array(),
-              valueAsByteBuffer.arrayOffset() + valueAsByteBuffer.position(),
-              valueAsByteBuffer.remaining(),
-              StandardCharsets.UTF_8);
-      final var asEnum = enumType.findValueByName(asString);
-      return asEnum;
+      final var asString = ByteString.copyFrom(valueAsByteBuffer).toStringUtf8();
+      return enumType.findValueByName(asString);
     }
     if (value instanceof Integer) {
       return enumType.findValueByNumber((int) value);

@@ -22,7 +22,9 @@ public class StringConverter extends AbstractLogicalTypeConverter<String> {
 
   @Override
   public String fromByteBuffer(final ByteBuffer value) {
-    return new String(value.array(), value.arrayOffset(), value.capacity(), StandardCharsets.UTF_8);
+    final var bytes = new byte[value.remaining()];
+    value.get(bytes);
+    return new String(bytes, StandardCharsets.UTF_8);
   }
 
   @Override

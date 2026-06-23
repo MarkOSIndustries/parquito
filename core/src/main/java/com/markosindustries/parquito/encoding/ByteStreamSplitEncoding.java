@@ -3,7 +3,6 @@ package com.markosindustries.parquito.encoding;
 import com.markosindustries.parquito.ColumnChunkReader;
 import com.markosindustries.parquito.page.Values;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -14,13 +13,13 @@ public class ByteStreamSplitEncoding implements ParquetEncoding {
   @Override
   public Values decode(
       final int expectedValues,
-      final int decompressedPageBytes,
-      final InputStream decompressedPageStream,
+      final ByteBuffer decompressedPageBuffer,
       final ColumnChunkReader columnChunkReader)
       throws IOException {
     final var type = columnChunkReader.getColumnType().getType();
     final var byteWidth = FixedTypeLengths.BYTES_BY_TYPE.get(type);
 
+    final int decompressedPageBytes = decompressedPageBuffer.remaining();
     if (decompressedPageBytes % byteWidth != 0) {
       throw new IllegalArgumentException(
           "Number of bytes should be divisible by byteWidth - but "
@@ -36,12 +35,6 @@ public class ByteStreamSplitEncoding implements ParquetEncoding {
               + expectedValues * byteWidth
               + " bytes, but we only have "
               + decompressedPageBytes);
-    }
-
-    final var bytes = decompressedPageStream.readAllBytes();
-    if (bytes.length != decompressedPageBytes) {
-      throw new IllegalArgumentException(
-          "There should be " + decompressedPageBytes + " bytes, but we only have " + bytes.length);
     }
 
     final var buffer = ByteBuffer.allocate(byteWidth).order(ByteOrder.LITTLE_ENDIAN);
@@ -60,9 +53,9 @@ public class ByteStreamSplitEncoding implements ParquetEncoding {
       public void visit(final int pageIndex, final int valueIndex, final Visitor visitor) {
         var byteIndex = 0;
         for (var streamIndex = valueIndex;
-            streamIndex < bytes.length;
+            streamIndex < decompressedPageBuffer.remaining();
             streamIndex += expectedValues) {
-          buffer.put(byteIndex++, bytes[streamIndex]);
+          buffer.put(byteIndex++, decompressedPageBuffer.get(streamIndex));
         }
         visitBuffer.accept(pageIndex, visitor);
       }

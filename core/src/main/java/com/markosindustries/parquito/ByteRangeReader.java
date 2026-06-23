@@ -55,7 +55,8 @@ public interface ByteRangeReader extends AutoCloseable {
         .thenApplyAsync(
             buffer -> {
               if (buffer.hasArray()) {
-                return new ByteArrayInputStream(buffer.array(), 0, bytesToRetrieve);
+                return new ByteArrayInputStream(
+                    buffer.array(), buffer.arrayOffset(), bytesToRetrieve);
               } else {
                 return new ByteBufferInputStream(buffer);
               }

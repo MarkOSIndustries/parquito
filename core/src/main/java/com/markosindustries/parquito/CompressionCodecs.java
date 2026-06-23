@@ -2,26 +2,22 @@ package com.markosindustries.parquito;
 
 import com.markosindustries.parquito.compression.SnappyCompressOnFlushOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.zip.DataFormatException;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
-import net.jpountz.lz4.LZ4BlockInputStream;
-import net.jpountz.lz4.LZ4BlockOutputStream;
-import org.anarres.lzo.LzoCompressor1x_1;
-import org.anarres.lzo.LzoDecompressor1x;
-import org.anarres.lzo.LzoInputStream;
-import org.anarres.lzo.LzoOutputStream;
+import java.util.zip.Inflater;
 import org.apache.parquet.format.CompressionCodec;
-import org.brotli.dec.BrotliInputStream;
-import org.xerial.snappy.SnappyInputStream;
+import org.xerial.snappy.Snappy;
 
 public final class CompressionCodecs {
   @FunctionalInterface
   public interface StreamDecompressor {
-    InputStream decompress(InputStream inputStream) throws IOException;
+    ByteBuffer decompress(ByteBuffer byteBuffer) throws IOException;
   }
 
   @FunctionalInterface
@@ -36,26 +32,58 @@ public final class CompressionCodecs {
         {
           put(
               CompressionCodec.UNCOMPRESSED,
-              new Codec(inputStream -> inputStream, outputStream -> outputStream));
+              new Codec(byteBuffer -> byteBuffer, outputStream -> outputStream));
           put(
               CompressionCodec.SNAPPY,
-              new Codec(SnappyInputStream::new, SnappyCompressOnFlushOutputStream::new));
+              new Codec(
+                  compressed -> {
+                    if (compressed.isDirect()) {
+                      final var uncompressed =
+                          ByteBuffer.allocateDirect(Snappy.uncompressedLength(compressed));
+                      Snappy.uncompress(compressed, uncompressed);
+                      return uncompressed;
+                    } else {
+                      final var uncompressed =
+                          ByteBuffer.allocate(
+                              Snappy.uncompressedLength(
+                                  compressed.array(),
+                                  compressed.arrayOffset() + compressed.position(),
+                                  compressed.remaining()));
+                      Snappy.uncompress(
+                          compressed.array(),
+                          compressed.arrayOffset() + compressed.position(),
+                          compressed.remaining(),
+                          uncompressed.array(),
+                          0);
+                      return uncompressed;
+                    }
+                  },
+                  SnappyCompressOnFlushOutputStream::new));
           put(
               CompressionCodec.GZIP,
-              new Codec(GZIPInputStream::new, outputStream -> new GZIPOutputStream(outputStream)));
-          put(
-              CompressionCodec.LZO,
               new Codec(
-                  inputStream -> new LzoInputStream(inputStream, new LzoDecompressor1x()),
-                  outputStream -> new LzoOutputStream(outputStream, new LzoCompressor1x_1())));
-          put(
-              CompressionCodec.BROTLI,
-              new Codec(
-                  BrotliInputStream::new,
-                  outputStream -> {
-                    throw new UnsupportedOperationException("No Brotli write support yet");
-                  }));
-          put(CompressionCodec.LZ4, new Codec(LZ4BlockInputStream::new, LZ4BlockOutputStream::new));
+                  compressed -> {
+                    // GZIPInputStream constructor reads the header (its size varies)
+                    new GZIPInputStream(new ByteBufferInputStream(compressed));
+
+                    // GZIP puts the uncompressed size as a little endian int at the end of the
+                    // trailer
+                    final var uncompressedSize =
+                        compressed
+                            .slice()
+                            .order(ByteOrder.LITTLE_ENDIAN)
+                            .getInt(compressed.remaining() - 4);
+                    final var uncompressed = ByteBuffer.allocateDirect(uncompressedSize);
+                    final var gzip = new Inflater(true);
+                    gzip.setInput(compressed);
+                    try {
+                      gzip.inflate(uncompressed);
+                    } catch (DataFormatException e) {
+                      throw new ParquetIOException(e);
+                    }
+                    return uncompressed.flip();
+                  },
+                  GZIPOutputStream::new));
         }
       };
 
@@ -78,9 +106,9 @@ public final class CompressionCodecs {
     return codec;
   }
 
-  public static InputStream decompress(
-      final CompressionCodec compressionCodec, final InputStream inputStream) throws IOException {
-    return getCodec(compressionCodec).streamDecompressor().decompress(inputStream);
+  public static ByteBuffer decompress(
+      final CompressionCodec compressionCodec, final ByteBuffer byteBuffer) throws IOException {
+    return getCodec(compressionCodec).streamDecompressor().decompress(byteBuffer);
   }
 
   public static OutputStream compress(

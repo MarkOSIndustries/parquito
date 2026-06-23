@@ -13,7 +13,7 @@ public class ByteBufferOutputStream extends ByteArrayOutputStream implements Wri
   }
 
   public ByteBuffer asByteBuffer() {
-    return ByteBuffer.wrap(buf, 0, count).asReadOnlyBuffer();
+    return ByteBuffer.wrap(buf, 0, count);
   }
 
   @Override

@@ -5,7 +5,6 @@ import com.markosindustries.parquito.page.Values;
 import com.markosindustries.parquito.predicates.ColumnPredicate;
 import com.markosindustries.parquito.rows.PredicateMaterialisedMatches;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.BitSet;
@@ -14,15 +13,14 @@ public class DictionaryEncoding implements ParquetEncoding {
   @Override
   public Values decode(
       final int expectedValues,
-      final int decompressedPageBytes,
-      final InputStream decompressedPageStream,
+      final ByteBuffer decompressedPageBuffer,
       final ColumnChunkReader columnChunkReader)
       throws IOException {
-    final var bitWidth = decompressedPageStream.read();
+    final var bitWidth = decompressedPageBuffer.get();
 
     final var dictionaryIndices =
         IntEncodings.INT_ENCODING_DICTIONARY_INDICES.decode(
-            expectedValues, bitWidth, decompressedPageStream);
+            expectedValues, bitWidth, decompressedPageBuffer);
 
     return new Values() {
       @Override

@@ -2,7 +2,6 @@ package com.markosindustries.parquito.rows;
 
 import com.markosindustries.parquito.ParquetSchemaNode;
 import com.markosindustries.parquito.RowGroupWriter;
-
 import java.util.Arrays;
 import java.util.function.Consumer;
 

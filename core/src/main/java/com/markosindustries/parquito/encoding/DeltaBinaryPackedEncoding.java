@@ -4,18 +4,16 @@ import com.clearspring.analytics.util.Varint;
 import com.markosindustries.parquito.ColumnChunkReader;
 import com.markosindustries.parquito.arrays.FastArray;
 import com.markosindustries.parquito.page.Values;
-import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
 
 public class DeltaBinaryPackedEncoding implements ParquetEncoding {
   @Override
   public Values decode(
       final int expectedValues,
-      final int decompressedPageBytes,
-      final InputStream decompressedPageStream,
+      final ByteBuffer decompressedPageBuffer,
       final ColumnChunkReader columnChunkReader)
       throws IOException {
     if (expectedValues == 0) {
@@ -26,7 +24,7 @@ public class DeltaBinaryPackedEncoding implements ParquetEncoding {
     return switch (type) {
       case INT32 -> {
         final var values =
-            DeltaBinaryPackedEncoding.decode32(expectedValues, decompressedPageStream);
+            DeltaBinaryPackedEncoding.decode32(expectedValues, decompressedPageBuffer);
         yield new Values() {
           @Override
           public void visit(final int pageIndex, final int valueIndex, final Visitor visitor) {
@@ -41,7 +39,7 @@ public class DeltaBinaryPackedEncoding implements ParquetEncoding {
       }
       case INT64 -> {
         final var values =
-            DeltaBinaryPackedEncoding.decode64(expectedValues, decompressedPageStream);
+            DeltaBinaryPackedEncoding.decode64(expectedValues, decompressedPageBuffer);
         yield new Values() {
           @Override
           public void visit(final int pageIndex, final int valueIndex, final Visitor visitor) {
@@ -60,33 +58,34 @@ public class DeltaBinaryPackedEncoding implements ParquetEncoding {
     };
   }
 
-  public static int[] decode32(final int expectedValues, final InputStream decompressedPageStream)
+  public static int[] decode32(final int expectedValues, final ByteBuffer decompressedPageBuffer)
       throws IOException {
     final var values = new int[expectedValues];
     if (expectedValues == 0) {
       return values;
     }
 
-    decodeInto(FastArray.wrap(values), decompressedPageStream);
+    decodeInto(FastArray.wrap(values), decompressedPageBuffer);
 
     return values;
   }
 
-  public static long[] decode64(final int expectedValues, final InputStream decompressedPageStream)
+  public static long[] decode64(final int expectedValues, final ByteBuffer decompressedPageBuffer)
       throws IOException {
     final var values = new long[expectedValues];
     if (expectedValues == 0) {
       return values;
     }
 
-    decodeInto(FastArray.wrap(values), decompressedPageStream);
+    decodeInto(FastArray.wrap(values), decompressedPageBuffer);
 
     return values;
   }
 
-  static void decodeInto(FastArray targetArray, final InputStream decompressedPageStream)
+  static void decodeInto(FastArray targetArray, final ByteBuffer decompressedPageBuffer)
       throws IOException {
-    final var dataInputStream = new DataInputStream(decompressedPageStream);
+
+    final var dataInputStream = new DataInputFromByteBuffer(decompressedPageBuffer);
     final var valuesPerBlock = Varint.readUnsignedVarInt(dataInputStream);
     final var miniBlocksPerBlock = Varint.readUnsignedVarInt(dataInputStream);
     final var totalValueCount = Varint.readUnsignedVarInt(dataInputStream);
@@ -126,7 +125,8 @@ public class DeltaBinaryPackedEncoding implements ParquetEncoding {
         final var miniBlockSlice =
             targetArray.slice(
                 valuesSeen, Math.min(valuesPerMiniBlock, totalValueCount - valuesSeen));
-        RLEIntEncoding.readBitPacked(miniBlockSlice, bitWidth, valuesPerMiniBlock, dataInputStream);
+        RLEIntEncoding.readBitPacked(
+            miniBlockSlice, bitWidth, valuesPerMiniBlock, decompressedPageBuffer);
         for (var i = 0; i < miniBlockSlice.length(); i++) {
           previousValue += miniBlockSlice.get(i) + minDelta;
           miniBlockSlice.set(i, previousValue);

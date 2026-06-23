@@ -1,8 +1,8 @@
 package com.markosindustries.parquito.page;
 
-import com.markosindustries.parquito.ByteBufferInputStream;
 import com.markosindustries.parquito.ColumnChunkReader;
 import com.markosindustries.parquito.CompressionCodecs;
+import com.markosindustries.parquito.ParquetIOException;
 import com.markosindustries.parquito.encoding.Encodings;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -20,16 +20,16 @@ public class DictionaryPageReader implements ParquetPageReader {
       throws IOException {
     this.pageHeader = pageHeader;
 
-    final var decompressedPageStream =
-        CompressionCodecs.decompress(
-            columnChunkReader.getHeader().meta_data.codec, new ByteBufferInputStream(pageBuffer));
-
+    final var decompressedPageBuffer =
+        CompressionCodecs.decompress(columnChunkReader.getHeader().meta_data.codec, pageBuffer);
+    if (decompressedPageBuffer.remaining() < pageHeader.uncompressed_page_size) {
+      throw new ParquetIOException("There are insufficient bytes to read the data page");
+    }
     this.values =
         Encodings.getEncoding(Encoding.PLAIN)
             .decode(
                 pageHeader.dictionary_page_header.num_values,
-                pageHeader.uncompressed_page_size,
-                decompressedPageStream,
+                decompressedPageBuffer,
                 columnChunkReader);
   }
 

@@ -6,16 +6,15 @@ import com.markosindustries.parquito.ColumnChunkReader;
 import com.markosindustries.parquito.page.Values;
 import it.unimi.dsi.fastutil.ints.AbstractIntList;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
 import org.apache.parquet.format.Type;
 
 public class RLEBooleanEncoding implements ParquetEncoding {
   @Override
   public Values decode(
       final int expectedValues,
-      final int decompressedPageBytes,
-      final InputStream decompressedPageStream,
+      final ByteBuffer decompressedPageBuffer,
       final ColumnChunkReader columnChunkReader)
       throws IOException {
     final var type = columnChunkReader.getColumnType().getType();
@@ -24,7 +23,7 @@ public class RLEBooleanEncoding implements ParquetEncoding {
     }
 
     final var values =
-        IntEncodings.INT_ENCODING_RLE.decode(expectedValues, 1, decompressedPageStream);
+        IntEncodings.INT_ENCODING_RLE.decode(expectedValues, 1, decompressedPageBuffer);
 
     return new Values() {
       @Override

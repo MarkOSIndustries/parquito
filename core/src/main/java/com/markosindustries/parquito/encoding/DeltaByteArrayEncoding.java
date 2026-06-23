@@ -4,7 +4,6 @@ import com.markosindustries.parquito.ByteBufferOutputStream;
 import com.markosindustries.parquito.ColumnChunkReader;
 import com.markosindustries.parquito.page.Values;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
@@ -15,14 +14,13 @@ public class DeltaByteArrayEncoding implements ParquetEncoding {
   @Override
   public Values decode(
       final int expectedValues,
-      final int decompressedPageBytes,
-      final InputStream decompressedPageStream,
+      final ByteBuffer decompressedPageBuffer,
       final ColumnChunkReader columnChunkReader)
       throws IOException {
     final var prefixLengths =
-        DeltaBinaryPackedEncoding.decode32(expectedValues, decompressedPageStream);
+        DeltaBinaryPackedEncoding.decode32(expectedValues, decompressedPageBuffer);
     final var suffixLengths =
-        DeltaBinaryPackedEncoding.decode32(expectedValues, decompressedPageStream);
+        DeltaBinaryPackedEncoding.decode32(expectedValues, decompressedPageBuffer);
     final var offsets = new int[suffixLengths.length];
     {
       int offset = 0;
@@ -31,7 +29,7 @@ public class DeltaByteArrayEncoding implements ParquetEncoding {
         offset += suffixLengths[i];
       }
     }
-    final var bytes = ByteBuffer.wrap(decompressedPageStream.readAllBytes());
+    final var bytes = decompressedPageBuffer.slice();
 
     return new Values() {
       @Override

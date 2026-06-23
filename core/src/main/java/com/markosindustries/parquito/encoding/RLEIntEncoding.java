@@ -3,14 +3,13 @@ package com.markosindustries.parquito.encoding;
 import com.clearspring.analytics.util.Varint;
 import com.markosindustries.parquito.ByteBufferOutputStream;
 import com.markosindustries.parquito.ParquetIOException;
-import com.markosindustries.parquito.SpecifiedByteCountInputStream;
 import com.markosindustries.parquito.arrays.FastArray;
 import com.markosindustries.parquito.arrays.FastArray32;
-import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Arrays;
 
 /**
@@ -30,7 +29,7 @@ public class RLEIntEncoding implements ParquetIntEncoding {
 
   @Override
   public int[] decode(
-      final int expectedValues, final int bitWidth, final InputStream decompressedPageStream)
+      final int expectedValues, final int bitWidth, final ByteBuffer decompressedPageBuffer)
       throws IOException {
     if (bitWidth < 0) {
       throw new IllegalArgumentException("Can't decode a bitWidth less than 0");
@@ -42,17 +41,18 @@ public class RLEIntEncoding implements ParquetIntEncoding {
       return values;
     }
 
-    DataInputStream dataInput;
+    decompressedPageBuffer.order(ByteOrder.LITTLE_ENDIAN);
+
+    final ByteBuffer pageBuffer;
     if (hasLengthHeader) {
-      final var length = LittleEndian.readInt(decompressedPageStream);
-      dataInput =
-          new DataInputStream(new SpecifiedByteCountInputStream(decompressedPageStream, length));
-    } else {
-      dataInput = new DataInputStream(decompressedPageStream);
+      final var length = decompressedPageBuffer.getInt();
+      if (decompressedPageBuffer.remaining() < length) {
+        throw new ParquetIOException("Not enough bytes to decode " + getClass().getSimpleName());
+      }
     }
 
     for (int index = 0; index < expectedValues; ) {
-      index += decodeNextRun(values, index, bitWidth, dataInput);
+      index += decodeNextRun(values, index, bitWidth, decompressedPageBuffer);
     }
 
     return values;
@@ -62,13 +62,15 @@ public class RLEIntEncoding implements ParquetIntEncoding {
       final int[] values,
       final int offset,
       final int bitWidth,
-      final DataInputStream dataInputStream)
+      final ByteBuffer decompressedPageBuffer)
       throws IOException {
-    final var header = Varint.readUnsignedVarInt(dataInputStream);
+    final var header =
+        Varint.readUnsignedVarInt(new DataInputFromByteBuffer(decompressedPageBuffer));
     if ((header & HEADER_FLAG_BIT_PACKED) == HEADER_FLAG_BIT_PACKED) {
-      return decodeBitPackedRun(values, offset, (header >>> 1) << 3, bitWidth, dataInputStream);
+      return decodeBitPackedRun(
+          values, offset, (header >>> 1) << 3, bitWidth, decompressedPageBuffer);
     } else {
-      return decodeRepeatedRun(values, offset, header >>> 1, bitWidth, dataInputStream);
+      return decodeRepeatedRun(values, offset, header >>> 1, bitWidth, decompressedPageBuffer);
     }
   }
 
@@ -77,12 +79,14 @@ public class RLEIntEncoding implements ParquetIntEncoding {
       final int offset,
       final int runLength,
       final int bitWidth,
-      final InputStream inputStream)
-      throws IOException {
+      final ByteBuffer decompressedPageBuffer) {
     final var expectedValues = Math.min(values.length - offset, runLength);
 
     readBitPacked(
-        FastArray.slice(values, offset, expectedValues), bitWidth, runLength, inputStream);
+        FastArray.slice(values, offset, expectedValues),
+        bitWidth,
+        runLength,
+        decompressedPageBuffer);
 
     return expectedValues;
   }
@@ -92,13 +96,12 @@ public class RLEIntEncoding implements ParquetIntEncoding {
       final int offset,
       final int runLength,
       final int bitWidth,
-      final InputStream inputStream)
-      throws IOException {
+      final ByteBuffer decompressedPageBuffer) {
     final var expectedValues = Math.min(values.length - offset, runLength);
 
     int repeatedValue = 0;
     for (int shift = 0; shift < bitWidth; shift += 8) {
-      repeatedValue |= (inputStream.read() << shift);
+      repeatedValue |= ((0xFF & decompressedPageBuffer.get()) << shift);
     }
 
     for (int i = 0; i < expectedValues; i++) {
@@ -233,8 +236,7 @@ public class RLEIntEncoding implements ParquetIntEncoding {
       final FastArray targetArray,
       final int bitWidth,
       final int runLength,
-      final InputStream inputStream)
-      throws IOException {
+      final ByteBuffer decompressedPageBuffer) {
     if (Maths.remainderDivPow2(runLength, 3) != 0) {
       throw new IllegalArgumentException(
           "Bit packed runs must have length which is a multiple of 8");
@@ -246,9 +248,10 @@ public class RLEIntEncoding implements ParquetIntEncoding {
     final var next8Buffer = new byte[bitWidth];
     int valueIndex = 0;
     for (int bytesRead = 0; bytesRead < expectedBytes; bytesRead += next8Buffer.length) {
-      if (inputStream.readNBytes(next8Buffer, 0, next8Buffer.length) != next8Buffer.length) {
+      if (decompressedPageBuffer.remaining() < next8Buffer.length) {
         throw new ParquetIOException("Not enough bytes available");
       }
+      decompressedPageBuffer.get(next8Buffer, 0, next8Buffer.length);
       int byteIndex = 0, bitIndex = 0;
       for (var i = 0; i < 8 && valueIndex < valuesLength; i++) {
         long nextValue = 0;

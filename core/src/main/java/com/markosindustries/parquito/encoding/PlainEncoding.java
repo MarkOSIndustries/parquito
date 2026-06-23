@@ -4,7 +4,6 @@ import com.markosindustries.parquito.ColumnChunkReader;
 import com.markosindustries.parquito.page.Values;
 import java.io.EOFException;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -16,8 +15,7 @@ public class PlainEncoding implements ParquetEncoding {
   @Override
   public Values decode(
       final int expectedValues,
-      final int decompressedPageBytes,
-      final InputStream decompressedPageStream,
+      final ByteBuffer decompressedPageBuffer,
       final ColumnChunkReader columnChunkReader)
       throws IOException {
     if (expectedValues == 0) {
@@ -25,26 +23,25 @@ public class PlainEncoding implements ParquetEncoding {
     }
 
     return switch (columnChunkReader.getColumnType().getType()) {
-      case BOOLEAN -> decodeBooleans(expectedValues, decompressedPageStream);
-      case INT32 -> decodeInt32s(expectedValues, decompressedPageStream);
-      case INT64 -> decodeInt64s(expectedValues, decompressedPageStream);
+      case BOOLEAN -> decodeBooleans(expectedValues, decompressedPageBuffer);
+      case INT32 -> decodeInt32s(expectedValues, decompressedPageBuffer);
+      case INT64 -> decodeInt64s(expectedValues, decompressedPageBuffer);
       case INT96 -> throw new UnsupportedOperationException("Can't handle int96 yet");
-      case FLOAT -> decodeFloats(expectedValues, decompressedPageStream);
-      case DOUBLE -> decodeDoubles(expectedValues, decompressedPageStream);
-      case BYTE_ARRAY ->
-          decodeVariableBytes(expectedValues, decompressedPageBytes, decompressedPageStream);
+      case FLOAT -> decodeFloats(expectedValues, decompressedPageBuffer);
+      case DOUBLE -> decodeDoubles(expectedValues, decompressedPageBuffer);
+      case BYTE_ARRAY -> decodeVariableBytes(expectedValues, decompressedPageBuffer);
       case FIXED_LEN_BYTE_ARRAY ->
           decodeFixedBytes(
               columnChunkReader.getColumnType().schemaNode().getTypeLength(),
               expectedValues,
-              decompressedPageStream);
+              decompressedPageBuffer);
     };
   }
 
-  private Values decodeBooleans(final int expectedValues, final InputStream decompressedPageStream)
+  private Values decodeBooleans(final int expectedValues, final ByteBuffer decompressedPageBuffer)
       throws IOException {
     final int[] values =
-        IntEncodings.INT_ENCODING_BIT_PACKED.decode(expectedValues, 1, decompressedPageStream);
+        IntEncodings.INT_ENCODING_BIT_PACKED.decode(expectedValues, 1, decompressedPageBuffer);
     return new Values() {
       @Override
       public void visit(final int pageIndex, final int valueIndex, final Visitor visitor) {
@@ -58,15 +55,14 @@ public class PlainEncoding implements ParquetEncoding {
     };
   }
 
-  private Values decodeInt32s(final int expectedValues, final InputStream decompressedPageStream)
+  private Values decodeInt32s(final int expectedValues, final ByteBuffer decompressedPageBuffer)
       throws IOException {
     final var expectedBytes = expectedValues * 4;
-    final var buffer = ByteBuffer.allocate(expectedBytes);
-    if (decompressedPageStream.readNBytes(buffer.array(), 0, expectedBytes) != expectedBytes) {
+    if (decompressedPageBuffer.remaining() < expectedBytes) {
       throw new EOFException("Not enough bytes to read " + expectedValues + " Int32s");
     }
-
-    final var intBuffer = buffer.order(ByteOrder.LITTLE_ENDIAN).asIntBuffer();
+    final var intBuffer =
+        decompressedPageBuffer.slice(0, expectedBytes).order(ByteOrder.LITTLE_ENDIAN).asIntBuffer();
 
     return new Values() {
       @Override
@@ -81,15 +77,17 @@ public class PlainEncoding implements ParquetEncoding {
     };
   }
 
-  private Values decodeInt64s(final int expectedValues, final InputStream decompressedPageStream)
+  private Values decodeInt64s(final int expectedValues, final ByteBuffer decompressedPageBuffer)
       throws IOException {
     final var expectedBytes = expectedValues * 8;
-    final var buffer = ByteBuffer.allocate(expectedBytes);
-    if (decompressedPageStream.readNBytes(buffer.array(), 0, expectedBytes) != expectedBytes) {
+    if (decompressedPageBuffer.remaining() < expectedBytes) {
       throw new EOFException("Not enough bytes to read " + expectedValues + " Int64s");
     }
-
-    final var longBuffer = buffer.order(ByteOrder.LITTLE_ENDIAN).asLongBuffer();
+    final var longBuffer =
+        decompressedPageBuffer
+            .slice(0, expectedBytes)
+            .order(ByteOrder.LITTLE_ENDIAN)
+            .asLongBuffer();
 
     return new Values() {
       @Override
@@ -104,15 +102,17 @@ public class PlainEncoding implements ParquetEncoding {
     };
   }
 
-  private Values decodeFloats(final int expectedValues, final InputStream decompressedPageStream)
+  private Values decodeFloats(final int expectedValues, final ByteBuffer decompressedPageBuffer)
       throws IOException {
     final var expectedBytes = expectedValues * 4;
-    final var buffer = ByteBuffer.allocate(expectedBytes);
-    if (decompressedPageStream.readNBytes(buffer.array(), 0, expectedBytes) != expectedBytes) {
+    if (decompressedPageBuffer.remaining() < expectedBytes) {
       throw new EOFException("Not enough bytes to read " + expectedValues + " Floats");
     }
-
-    final var floatBuffer = buffer.order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer();
+    final var floatBuffer =
+        decompressedPageBuffer
+            .slice(0, expectedBytes)
+            .order(ByteOrder.LITTLE_ENDIAN)
+            .asFloatBuffer();
 
     return new Values() {
       @Override
@@ -127,15 +127,17 @@ public class PlainEncoding implements ParquetEncoding {
     };
   }
 
-  private Values decodeDoubles(final int expectedValues, final InputStream decompressedPageStream)
+  private Values decodeDoubles(final int expectedValues, final ByteBuffer decompressedPageBuffer)
       throws IOException {
     final var expectedBytes = expectedValues * 8;
-    final var buffer = ByteBuffer.allocate(expectedBytes);
-    if (decompressedPageStream.readNBytes(buffer.array(), 0, expectedBytes) != expectedBytes) {
+    if (decompressedPageBuffer.remaining() < expectedBytes) {
       throw new EOFException("Not enough bytes to read " + expectedValues + " Doubles");
     }
-
-    final var doubleBuffer = buffer.order(ByteOrder.LITTLE_ENDIAN).asDoubleBuffer();
+    final var doubleBuffer =
+        decompressedPageBuffer
+            .slice(0, expectedBytes)
+            .order(ByteOrder.LITTLE_ENDIAN)
+            .asDoubleBuffer();
 
     return new Values() {
       @Override
@@ -151,15 +153,15 @@ public class PlainEncoding implements ParquetEncoding {
   }
 
   private Values decodeVariableBytes(
-      final int expectedValues,
-      final int decompressedPageBytes,
-      final InputStream decompressedPageStream)
-      throws IOException {
+      final int expectedValues, final ByteBuffer decompressedPageBuffer) throws IOException {
+    decompressedPageBuffer.order(ByteOrder.LITTLE_ENDIAN);
     final var buffers = new ByteBuffer[expectedValues];
-    for (int i = 0; i < expectedValues; i++) {
-      final var size = LittleEndian.readInt(decompressedPageStream);
+    for (int bufferIndex = decompressedPageBuffer.position(), i = 0; i < expectedValues; i++) {
+      final var size = decompressedPageBuffer.getInt(bufferIndex);
+      bufferIndex += 4;
       if (size > 0) {
-        buffers[i] = ByteBuffer.wrap(decompressedPageStream.readNBytes(size)).mark();
+        buffers[i] = decompressedPageBuffer.slice(bufferIndex, size).mark();
+        bufferIndex += size;
       } else {
         buffers[i] = EMPTY_BUFFER;
       }
@@ -179,21 +181,21 @@ public class PlainEncoding implements ParquetEncoding {
   }
 
   private Values decodeFixedBytes(
-      final int typeLength, final int expectedValues, final InputStream decompressedPageStream)
+      final int typeLength, final int expectedValues, final ByteBuffer decompressedPageBuffer)
       throws IOException {
     final var totalBytes = expectedValues * typeLength;
-    final var bytes = decompressedPageStream.readNBytes(totalBytes);
+    final var bytes = decompressedPageBuffer.slice(decompressedPageBuffer.position(), totalBytes);
     final var buffers = new ByteBuffer[expectedValues];
     var offset = 0;
     for (var i = 0; i < expectedValues; i++) {
-      buffers[i] = ByteBuffer.wrap(bytes, offset, typeLength);
+      buffers[i] = bytes.slice(offset, typeLength).mark();
       offset += typeLength;
     }
 
     return new Values() {
       @Override
       public void visit(final int pageIndex, final int valueIndex, final Visitor visitor) {
-        visitor.visit(pageIndex, buffers[valueIndex]);
+        visitor.visit(pageIndex, buffers[valueIndex].reset());
       }
 
       @Override

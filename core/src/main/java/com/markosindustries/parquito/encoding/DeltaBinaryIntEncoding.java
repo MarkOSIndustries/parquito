@@ -2,15 +2,15 @@ package com.markosindustries.parquito.encoding;
 
 import com.markosindustries.parquito.arrays.FastArray32;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
 
 public class DeltaBinaryIntEncoding implements ParquetIntEncoding {
   @Override
   public int[] decode(
-      final int expectedValues, final int bitWidthIgnored, final InputStream decompressedPageStream)
+      final int expectedValues, final int bitWidthIgnored, final ByteBuffer decompressedPageBuffer)
       throws IOException {
-    return DeltaBinaryPackedEncoding.decode32(expectedValues, decompressedPageStream);
+    return DeltaBinaryPackedEncoding.decode32(expectedValues, decompressedPageBuffer);
   }
 
   @Override

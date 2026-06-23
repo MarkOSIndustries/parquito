@@ -1,9 +1,8 @@
 package com.markosindustries.parquito.page;
 
-import com.markosindustries.parquito.ByteBufferInputStream;
-import com.markosindustries.parquito.ByteCountingInputStream;
 import com.markosindustries.parquito.ColumnChunkReader;
 import com.markosindustries.parquito.CompressionCodecs;
+import com.markosindustries.parquito.ParquetIOException;
 import com.markosindustries.parquito.encoding.Encodings;
 import com.markosindustries.parquito.encoding.IntEncodings;
 import com.markosindustries.parquito.encoding.Maths;
@@ -26,20 +25,16 @@ public class DataPageV2Reader implements DataPageReader {
       throws IOException {
     this.pageHeader = pageHeader;
 
-    final var pageStream = new ByteCountingInputStream(new ByteBufferInputStream(pageBuffer));
-
     this.repetitionLevels =
         IntEncodings.INT_ENCODING_DATA_PAGE_V2_LEVELS.decode(
             pageHeader.data_page_header_v2.num_values,
             Maths.bitWidth(columnChunkReader.getColumnType().schemaNode().getRepetitionLevelMax()),
-            pageStream);
+            pageBuffer);
     this.definitionLevels =
         IntEncodings.INT_ENCODING_DATA_PAGE_V2_LEVELS.decode(
             pageHeader.data_page_header_v2.num_values,
             Maths.bitWidth(columnChunkReader.getColumnType().schemaNode().getDefinitionLevelMax()),
-            pageStream);
-
-    final var bytesInLevels = pageStream.getBytesReadAsInt();
+            pageBuffer);
 
     this.totalValues = pageHeader.data_page_header_v2.num_values;
     this.nonNullValues =
@@ -48,19 +43,24 @@ public class DataPageV2Reader implements DataPageReader {
     if (nonNullValues == 0) {
       this.values = Values.empty();
     } else {
-      final var decompressedPageStream =
+      final var decompressedPageBuffer =
           (pageHeader.data_page_header_v2.isSetIs_compressed()
                   && !pageHeader.data_page_header_v2.is_compressed)
-              ? pageStream
+              ? pageBuffer.slice()
               : CompressionCodecs.decompress(
-                  columnChunkReader.getHeader().meta_data.codec, pageStream);
+                  columnChunkReader.getHeader().meta_data.codec, pageBuffer.slice());
+      final var decompressedBytesRequired =
+          pageHeader.uncompressed_page_size - pageBuffer.position();
+      if (decompressedPageBuffer.remaining() < decompressedBytesRequired) {
+        throw new ParquetIOException(
+            "There are insufficient decompressed bytes to read the data page - need "
+                + decompressedBytesRequired
+                + " but got "
+                + decompressedPageBuffer.remaining());
+      }
       this.values =
           Encodings.getEncoding(pageHeader.data_page_header_v2.encoding)
-              .decode(
-                  nonNullValues,
-                  pageHeader.uncompressed_page_size - bytesInLevels,
-                  decompressedPageStream,
-                  columnChunkReader);
+              .decode(nonNullValues, decompressedPageBuffer, columnChunkReader);
     }
   }
 

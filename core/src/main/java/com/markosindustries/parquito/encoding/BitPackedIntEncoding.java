@@ -2,13 +2,13 @@ package com.markosindustries.parquito.encoding;
 
 import com.markosindustries.parquito.arrays.FastArray32;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
 
 public class BitPackedIntEncoding implements ParquetIntEncoding {
   @Override
   public int[] decode(
-      final int expectedValues, final int bitWidth, final InputStream decompressedPageStream)
+      final int expectedValues, final int bitWidth, final ByteBuffer decompressedPageBuffer)
       throws IOException {
     if (bitWidth < 0) {
       throw new IllegalArgumentException("Can't decode a bitWidth less than 0");
@@ -27,7 +27,7 @@ public class BitPackedIntEncoding implements ParquetIntEncoding {
     for (int index = 0; index < expectedValues; index++) {
       while (availableBits < bitWidth) {
         buffer <<= Maths.BITS_PER_BYTE;
-        buffer |= decompressedPageStream.read();
+        buffer |= decompressedPageBuffer.get();
         availableBits += Maths.BITS_PER_BYTE;
       }
       availableBits -= bitWidth;

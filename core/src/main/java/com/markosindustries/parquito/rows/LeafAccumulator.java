@@ -2,9 +2,8 @@ package com.markosindustries.parquito.rows;
 
 import com.markosindustries.parquito.ColumnChunkWriter;
 import com.markosindustries.parquito.ParquetSchemaNode;
-import java.nio.ByteBuffer;
-
 import com.markosindustries.parquito.RowGroupWriter;
+import java.nio.ByteBuffer;
 import org.apache.parquet.format.Type;
 
 public class LeafAccumulator implements ParquetFieldAccumulator {

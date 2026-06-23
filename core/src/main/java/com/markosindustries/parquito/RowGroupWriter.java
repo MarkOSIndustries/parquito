@@ -5,7 +5,6 @@ import static java.util.stream.Collectors.toMap;
 
 import com.markosindustries.parquito.encoding.LittleEndian;
 import com.markosindustries.parquito.rows.RowAccumulator;
-import com.markosindustries.parquito.rows.ValueAccumulator;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.channels.Channels;
@@ -250,7 +249,6 @@ public class RowGroupWriter<Row> implements AutoCloseable {
     byteCountingStream.flush();
   }
 
-  @Override
   public ColumnChunkWriter getColumnChunkWriter(final ParquetSchemaPath parquetSchemaPath) {
     return columnChunkWritersByPath.get(parquetSchemaPath);
   }

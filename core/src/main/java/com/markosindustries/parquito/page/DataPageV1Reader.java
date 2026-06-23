@@ -1,8 +1,8 @@
 package com.markosindustries.parquito.page;
 
-import com.markosindustries.parquito.ByteBufferInputStream;
 import com.markosindustries.parquito.ColumnChunkReader;
 import com.markosindustries.parquito.CompressionCodecs;
+import com.markosindustries.parquito.ParquetIOException;
 import com.markosindustries.parquito.encoding.Encodings;
 import com.markosindustries.parquito.encoding.IntEncodings;
 import com.markosindustries.parquito.encoding.Maths;
@@ -26,24 +26,29 @@ public class DataPageV1Reader implements DataPageReader {
       throws IOException {
     this.pageHeader = pageHeader;
 
-    final var decompressedPageStream =
-        CompressionCodecs.decompress(
-            columnChunkReader.getHeader().meta_data.codec, new ByteBufferInputStream(pageBuffer));
-
+    final var decompressedPageBuffer =
+        CompressionCodecs.decompress(columnChunkReader.getHeader().meta_data.codec, pageBuffer);
+    if (decompressedPageBuffer.remaining() < pageHeader.uncompressed_page_size) {
+      throw new ParquetIOException(
+          "There are insufficient decompressed bytes to read the data page - need "
+              + pageHeader.uncompressed_page_size
+              + " but got "
+              + decompressedPageBuffer.remaining());
+    }
     this.repetitionLevels =
         IntEncodings.getDecoder(pageHeader.data_page_header.repetition_level_encoding)
             .decode(
                 pageHeader.data_page_header.num_values,
                 Maths.bitWidth(
                     columnChunkReader.getColumnType().schemaNode().getRepetitionLevelMax()),
-                decompressedPageStream);
+                decompressedPageBuffer);
     this.definitionLevels =
         IntEncodings.getDecoder(pageHeader.data_page_header.definition_level_encoding)
             .decode(
                 pageHeader.data_page_header.num_values,
                 Maths.bitWidth(
                     columnChunkReader.getColumnType().schemaNode().getDefinitionLevelMax()),
-                decompressedPageStream);
+                decompressedPageBuffer);
     this.totalValues = pageHeader.data_page_header.num_values;
     this.nonNullValues =
         (int)
@@ -54,11 +59,7 @@ public class DataPageV1Reader implements DataPageReader {
                 .count();
     this.values =
         Encodings.getEncoding(pageHeader.data_page_header.encoding)
-            .decode(
-                nonNullValues,
-                pageHeader.uncompressed_page_size,
-                decompressedPageStream,
-                columnChunkReader);
+            .decode(nonNullValues, decompressedPageBuffer.slice(), columnChunkReader);
   }
 
   @Override
