@@ -1,8 +1,6 @@
 package com.markosindustries.parquito.rows;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-
-public class NoOpFieldIterator implements ParquetFieldIterator<Void> {
+public class NoOpFieldIterator implements ParquetFieldIterator {
   public static final NoOpFieldIterator INSTANCE = new NoOpFieldIterator();
 
   @Override
@@ -23,9 +21,6 @@ public class NoOpFieldIterator implements ParquetFieldIterator<Void> {
     return true;
   }
 
-  @SuppressFBWarnings("IT_NO_SUCH_ELEMENT")
   @Override
-  public Void next() {
-    return null;
-  }
+  public void visitNext(final FieldVisitor visitor) {}
 }

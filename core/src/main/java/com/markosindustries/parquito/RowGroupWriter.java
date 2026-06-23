@@ -6,7 +6,6 @@ import static java.util.stream.Collectors.toMap;
 import com.markosindustries.parquito.encoding.LittleEndian;
 import com.markosindustries.parquito.rows.RowAccumulator;
 import com.markosindustries.parquito.rows.ValueAccumulator;
-import com.markosindustries.parquito.types.ColumnType;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.channels.Channels;
@@ -22,7 +21,7 @@ import org.apache.parquet.format.KeyValue;
 import org.apache.parquet.format.RowGroup;
 import org.apache.parquet.format.SortingColumn;
 
-public class RowGroupWriter<Row> implements AutoCloseable, ValueAccumulator {
+public class RowGroupWriter<Row> implements AutoCloseable {
   private static final String CREATED_BY_STRING;
 
   static {
@@ -41,8 +40,8 @@ public class RowGroupWriter<Row> implements AutoCloseable, ValueAccumulator {
   private final Map<String, String> userMetadata;
   private final ParquetSchemaNode.Root schemaRoot;
   private final ArrayList<SortingColumn> sortingColumns;
-  private final ArrayList<ColumnChunkWriter<?>> columnChunkWriters;
-  private final Map<ParquetSchemaPath, ColumnChunkWriter<?>> columnChunkWritersByPath;
+  private final ArrayList<ColumnChunkWriter> columnChunkWriters;
+  private final Map<ParquetSchemaPath, ColumnChunkWriter> columnChunkWritersByPath;
   private final RowAccumulator<Row> rowAccumulator;
   private RowGroup currentRowGroup;
 
@@ -69,7 +68,8 @@ public class RowGroupWriter<Row> implements AutoCloseable, ValueAccumulator {
 
     this.currentRowGroup = newRowGroup();
     this.columnChunkWriters =
-        buildColumnChunkWritersRecursively(new ArrayList<>(schemaRoot.getLeafCount()), schemaRoot);
+        buildColumnChunkWritersRecursively(
+            new ArrayList<ColumnChunkWriter>(schemaRoot.getLeafCount()), schemaRoot);
     this.columnChunkWritersByPath =
         columnChunkWriters.stream()
             .collect(
@@ -80,22 +80,23 @@ public class RowGroupWriter<Row> implements AutoCloseable, ValueAccumulator {
     this.rowAccumulator = new RowAccumulator<>(schemaRoot, writer.getTranslator(), this);
   }
 
-  public void write(final Iterable<Row> rows) throws IOException {
+  public void write(final Iterable<? extends Row> rows) throws IOException {
     write(rows.iterator());
   }
 
-  public void write(final Iterator<Row> rows) throws IOException {
+  public void write(final Iterator<? extends Row> rows) throws IOException {
     while (rows.hasNext()) {
       write(rows.next());
     }
   }
 
   public void write(final Row row) throws IOException {
-    if (currentRowGroup.total_byte_size >= writeSpec.targetBytesPerRowGroup()
+    if (rowAccumulator.estimatedBytesRequired() >= writeSpec.targetBytesPerRowGroup()
         || currentRowGroup.num_rows >= writeSpec.maxRowsPerRowGroup()) {
       finishCurrentRowGroup(currentRowGroup.num_rows);
+      rowAccumulator.resetEstimatedBytesRequired();
     }
-    currentRowGroup.total_byte_size += rowAccumulator.accumulate(row);
+    rowAccumulator.accumulate(row);
     currentRowGroup.num_rows++;
   }
 
@@ -184,9 +185,8 @@ public class RowGroupWriter<Row> implements AutoCloseable, ValueAccumulator {
     return rowGroup;
   }
 
-  private ArrayList<ColumnChunkWriter<?>> buildColumnChunkWritersRecursively(
-      final ArrayList<ColumnChunkWriter<?>> columnChunkWriters,
-      final ParquetSchemaNode schemaNode) {
+  private ArrayList<ColumnChunkWriter> buildColumnChunkWritersRecursively(
+      final ArrayList<ColumnChunkWriter> columnChunkWriters, final ParquetSchemaNode schemaNode) {
     // It's important we visit nodes in the same order as the schema elements in fileMetaData.schema
     // - so depth first
 
@@ -206,10 +206,7 @@ public class RowGroupWriter<Row> implements AutoCloseable, ValueAccumulator {
               0,
               0);
       final var columnType =
-          ColumnType.create(
-              columnMetadata,
-              sortingColumns.get(schemaNode.getColumnIndex().getAsInt()),
-              schemaNode);
+          ColumnType.create(sortingColumns.get(schemaNode.getColumnIndex().getAsInt()), schemaNode);
       columnChunkWriters.add(ColumnChunkWriter.create(columnMetadata, columnType, writeSpec));
     } else {
       for (final var child : schemaNode.getChildren()) {
@@ -254,7 +251,7 @@ public class RowGroupWriter<Row> implements AutoCloseable, ValueAccumulator {
   }
 
   @Override
-  public ColumnChunkWriter<?> getColumnChunkWriter(final ParquetSchemaPath parquetSchemaPath) {
+  public ColumnChunkWriter getColumnChunkWriter(final ParquetSchemaPath parquetSchemaPath) {
     return columnChunkWritersByPath.get(parquetSchemaPath);
   }
 }

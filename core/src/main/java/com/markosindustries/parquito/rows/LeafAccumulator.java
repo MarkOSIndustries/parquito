@@ -2,81 +2,85 @@ package com.markosindustries.parquito.rows;
 
 import com.markosindustries.parquito.ColumnChunkWriter;
 import com.markosindustries.parquito.ParquetSchemaNode;
-import com.markosindustries.parquito.WriteTranslator;
-import java.util.Objects;
+import java.nio.ByteBuffer;
 
-public class LeafAccumulator<Leaf, WriteAs> {
-  private final WriteTranslator<Leaf, WriteAs> writeTranslator;
+import com.markosindustries.parquito.RowGroupWriter;
+import org.apache.parquet.format.Type;
+
+public class LeafAccumulator implements ParquetFieldAccumulator {
   private final ParquetSchemaNode schemaNode;
-  private final ColumnChunkWriter<WriteAs> columnChunkWriter;
+  private final AccumulatorState state;
+  private final ColumnChunkWriter columnChunkWriter;
 
-  public LeafAccumulator(
-      final WriteTranslator<Leaf, WriteAs> writeTranslator,
+  public int repetitionLevel = 0;
+
+  LeafAccumulator(
       final ParquetSchemaNode schemaNode,
-      final ValueAccumulator valueAccumulator) {
-    this.writeTranslator = writeTranslator;
+      final RowGroupWriter<?> rowGroupWriter,
+      final AccumulatorState state) {
     this.schemaNode = schemaNode;
+    this.state = state;
     //noinspection unchecked
-    this.columnChunkWriter =
-        (ColumnChunkWriter<WriteAs>) valueAccumulator.getColumnChunkWriter(schemaNode.getPath());
+    this.columnChunkWriter = rowGroupWriter.getColumnChunkWriter(schemaNode.getPath());
   }
 
-  public int accumulateNull(final int repetitionLevel, final int definitionLevel) {
-    return columnChunkWriter.accumulateNull(repetitionLevel, definitionLevel);
+  @Override
+  public void beginBranch() {}
+
+  @Override
+  public void endBranch(final int newRepetitionLevel) {
+    this.repetitionLevel = newRepetitionLevel;
   }
 
-  protected int accumulateSingle(final int repetitionLevel, final Leaf value) {
-    return columnChunkWriter.accumulateValue(
-        repetitionLevel, writeTranslator.translate(Objects.requireNonNull(value)));
+  public Type getType() {
+    return schemaNode.getElement().type;
   }
 
-  public <RepeatedValues extends Iterable<Leaf>> int accumulateRepeated(
-      final int repetitionLevel, final RepeatedValues values) {
-    var rLevel = repetitionLevel;
-    var bytes = 0;
-    for (final var value : values) {
-      if (value == null) {
-        bytes += columnChunkWriter.accumulateNull(rLevel, schemaNode.getDefinitionLevelMax());
-      } else {
-        bytes += columnChunkWriter.accumulateValue(rLevel, writeTranslator.translate(value));
-      }
-      rLevel = schemaNode.getRepetitionLevelMax();
-    }
-    if (rLevel == repetitionLevel) {
-      // We didn't write any values - we need a sentinel write
-      bytes +=
-          columnChunkWriter.accumulateNull(repetitionLevel, schemaNode.getDefinitionLevelMax() - 1);
-    }
-    return bytes;
+  @Override
+  public void accumulateNull() {
+    columnChunkWriter.accumulateNull(this.repetitionLevel, schemaNode.getDefinitionLevelMax() - 1);
+    this.repetitionLevel = schemaNode.getRepetitionLevelMax();
   }
 
-  public static class Optional<Leaf, WriteAs> extends LeafAccumulator<Leaf, WriteAs>
-      implements ParquetFieldAccumulator<Leaf> {
-    public Optional(
-        final WriteTranslator<Leaf, WriteAs> writeTranslator,
-        final ParquetSchemaNode schemaNode,
-        final ValueAccumulator valueAccumulator) {
-      super(writeTranslator, schemaNode, valueAccumulator);
-    }
-
-    @Override
-    public int accumulate(final int repetitionLevel, final Leaf value) {
-      return accumulateSingle(repetitionLevel, value);
-    }
+  @Override
+  public void accumulateNull(int repetitionLevel, int definitionLevel) {
+    columnChunkWriter.accumulateNull(repetitionLevel, definitionLevel);
+    this.repetitionLevel = schemaNode.getRepetitionLevelMax();
   }
 
-  public static class Repeated<Leaf, RepeatedValues extends Iterable<Leaf>, WriteAs>
-      extends LeafAccumulator<Leaf, WriteAs> implements ParquetFieldAccumulator<RepeatedValues> {
-    public Repeated(
-        final WriteTranslator<Leaf, WriteAs> writeTranslator,
-        final ParquetSchemaNode schemaNode,
-        final ValueAccumulator valueAccumulator) {
-      super(writeTranslator, schemaNode, valueAccumulator);
-    }
+  public void accumulateBoolean(final boolean value) {
+    state.incrementEstimatedBytesRequired(
+        columnChunkWriter.accumulateValue(this.repetitionLevel, value));
+    this.repetitionLevel = schemaNode.getRepetitionLevelMax();
+  }
 
-    @Override
-    public int accumulate(final int repetitionLevel, final RepeatedValues values) {
-      return accumulateRepeated(repetitionLevel, values);
-    }
+  public void accumulateByteBuffer(final ByteBuffer value) {
+    state.incrementEstimatedBytesRequired(
+        columnChunkWriter.accumulateValue(this.repetitionLevel, value));
+    this.repetitionLevel = schemaNode.getRepetitionLevelMax();
+  }
+
+  public void accumulateDouble(final double value) {
+    state.incrementEstimatedBytesRequired(
+        columnChunkWriter.accumulateValue(this.repetitionLevel, value));
+    this.repetitionLevel = schemaNode.getRepetitionLevelMax();
+  }
+
+  public void accumulateFloat(final float value) {
+    state.incrementEstimatedBytesRequired(
+        columnChunkWriter.accumulateValue(this.repetitionLevel, value));
+    this.repetitionLevel = schemaNode.getRepetitionLevelMax();
+  }
+
+  public void accumulateInt32(final int value) {
+    state.incrementEstimatedBytesRequired(
+        columnChunkWriter.accumulateValue(this.repetitionLevel, value));
+    this.repetitionLevel = schemaNode.getRepetitionLevelMax();
+  }
+
+  public void accumulateInt64(final long value) {
+    state.incrementEstimatedBytesRequired(
+        columnChunkWriter.accumulateValue(this.repetitionLevel, value));
+    this.repetitionLevel = schemaNode.getRepetitionLevelMax();
   }
 }

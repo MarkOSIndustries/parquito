@@ -1,23 +1,18 @@
 package com.markosindustries.parquito.rows;
 
 import com.markosindustries.parquito.ParquetSchemaNode;
-import com.markosindustries.parquito.Reader;
 
-public class OptionalBranchIterator<Branch> implements ParquetFieldIterator<Branch> {
-  private final ParquetFieldIterator<?>[] childIterators;
+public class OptionalBranchIterator implements ParquetFieldIterator {
+  private final ParquetFieldIterator[] childIterators;
   private final ParquetSchemaNode schemaNode;
-  private final Reader<?, Branch> reader;
   private boolean hasNext;
   private int definitionLevel;
   private int repetitionLevel;
 
   public OptionalBranchIterator(
-      final ParquetFieldIterator<?>[] childIterators,
-      final ParquetSchemaNode schemaNode,
-      final Reader<?, Branch> reader) {
+      final ParquetFieldIterator[] childIterators, final ParquetSchemaNode schemaNode) {
     this.childIterators = childIterators;
     this.schemaNode = schemaNode;
-    this.reader = reader;
     this.hasNext = false;
     this.definitionLevel = 0;
     this.repetitionLevel = 0;
@@ -57,17 +52,19 @@ public class OptionalBranchIterator<Branch> implements ParquetFieldIterator<Bran
   }
 
   @Override
-  public Branch next() {
+  public void visitNext(final FieldVisitor visitor) {
     boolean isNull = definitionLevel < schemaNode.getDefinitionLevelMax();
-    final var result = isNull ? null : reader.branchBuilder();
     definitionLevel = 0;
     repetitionLevel = 0;
     for (var childIndex = 0; childIndex < childIterators.length; childIndex++) {
       final var iterator = childIterators[childIndex];
-      final var next = iterator.next();
+
       if (!isNull) {
-        result.put(childIndex, next);
+        iterator.visitNext(visitor.forChildIndex(childIndex));
+      } else {
+        iterator.visitNext(NoOpFieldVisitor.INSTANCE);
       }
+
       if (iterator.hasNext()) {
         definitionLevel = Math.max(definitionLevel, iterator.peekDefinitionLevel());
         repetitionLevel = Math.max(repetitionLevel, iterator.peekRepetitionLevel());
@@ -75,6 +72,8 @@ public class OptionalBranchIterator<Branch> implements ParquetFieldIterator<Bran
         hasNext = false;
       }
     }
-    return result == null ? null : result.build();
+    if (!isNull) {
+      visitor.endBranch();
+    }
   }
 }

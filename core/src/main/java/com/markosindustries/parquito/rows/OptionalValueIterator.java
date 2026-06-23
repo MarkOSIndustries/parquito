@@ -4,20 +4,19 @@ import com.markosindustries.parquito.ParquetSchemaNode;
 import com.markosindustries.parquito.page.DataPageReader;
 import java.util.Iterator;
 
-public class OptionalValueIterator<ReadAs, Value>
-    implements ParquetFieldIterator<ReadAs>, DataPageCursor<ReadAs> {
-  private final EOFDataPage<ReadAs> eofDataPage = new EOFDataPage<>();
+public class OptionalValueIterator implements ParquetFieldIterator, DataPageCursor {
+  private final EOFDataPage eofDataPage = new EOFDataPage();
 
-  private final Iterator<DataPageReader<ReadAs>> dataPageIterator;
+  private final Iterator<DataPageReader> dataPageIterator;
   private final ParquetSchemaNode schemaNode;
   private final PushdownPredicates pushdownPredicates;
 
-  private DataPageReader<ReadAs> dataPage = null;
+  private DataPageReader dataPage = null;
   private int valueIndex = 0;
   private int definitionIndex = 0;
 
   public OptionalValueIterator(
-      Iterator<DataPageReader<ReadAs>> dataPageIterator,
+      Iterator<DataPageReader> dataPageIterator,
       ParquetSchemaNode schemaNode,
       PushdownPredicates pushdownPredicates) {
     this.dataPageIterator = dataPageIterator;
@@ -37,7 +36,7 @@ public class OptionalValueIterator<ReadAs, Value>
   }
 
   @Override
-  public DataPageReader<ReadAs> getDataPage() {
+  public DataPageReader getDataPage() {
     return dataPage;
   }
 
@@ -87,14 +86,14 @@ public class OptionalValueIterator<ReadAs, Value>
   }
 
   @Override
-  public ReadAs next() {
-    final var result =
-        dataPage.getDefinitionLevels()[definitionIndex++] == schemaNode.getDefinitionLevelMax()
-            ? dataPage.getValues().get(valueIndex++)
-            : null;
+  public void visitNext(final FieldVisitor visitor) {
+    final var pageIndex = definitionIndex++;
+    if (dataPage.getDefinitionLevels()[pageIndex] == schemaNode.getDefinitionLevelMax()) {
+      dataPage.getValues().visit(pageIndex, valueIndex++, visitor);
+    } else {
+      visitor.visitNull(pageIndex);
+    }
 
     advancePageIfNecessary();
-
-    return result;
   }
 }

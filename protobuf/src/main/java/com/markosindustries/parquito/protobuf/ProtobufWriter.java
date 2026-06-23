@@ -8,14 +8,14 @@ import com.markosindustries.parquito.Writer;
 import java.util.List;
 import org.apache.parquet.format.SchemaElement;
 
-public class ProtobufWriter<Value extends Message> implements Writer<Value> {
+public class ProtobufWriter implements Writer<Message> {
   private final ParquetSchemaNode.Root schemaRoot;
   private final List<SchemaElement> rawSchema;
-  private final ProtobufMessageWriteTranslator<Value> translator;
+  private final ProtobufMessageWriteTranslator translator;
 
-  public static <Value extends Message> ProtobufWriter<Value> fromDescriptor(
+  public static ProtobufWriter fromDescriptor(
       final Descriptors.Descriptor descriptor, final ProtobufParquetConfig protobufParquetConfig) {
-    return new ProtobufWriter<>(
+    return new ProtobufWriter(
         descriptor,
         new ProtobufSchemaConverter(protobufParquetConfig).convertDescriptorToSchema(descriptor));
   }
@@ -24,7 +24,7 @@ public class ProtobufWriter<Value extends Message> implements Writer<Value> {
       final Descriptors.Descriptor descriptor, final ParquetSchemaNode.Root schema) {
     this.rawSchema = schema.toRawSchema();
     this.schemaRoot = schema;
-    this.translator = new ProtobufMessageWriteTranslator<>(descriptor, schemaRoot);
+    this.translator = new ProtobufMessageWriteTranslator(descriptor, schemaRoot);
   }
 
   @Override
@@ -38,7 +38,7 @@ public class ProtobufWriter<Value extends Message> implements Writer<Value> {
   }
 
   @Override
-  public WriteTranslator<Value, ?> getTranslator() {
+  public WriteTranslator<Message> getTranslator() {
     return translator;
   }
 }

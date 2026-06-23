@@ -1,70 +1,192 @@
 package com.markosindustries.parquito;
 
-import com.markosindustries.parquito.rows.BranchBuilder;
-import com.markosindustries.parquito.rows.RepeatedBuilder;
+import com.markosindustries.parquito.rows.FieldVisitor;
+import com.markosindustries.parquito.types.ConversionStrategy;
+import com.markosindustries.parquito.types.JavaTypesConversionStrategy;
+import com.markosindustries.parquito.types.LogicalTypeConverter;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
-public class MapReader implements Reader<List<Map<String, Object>>, Map<String, Object>> {
-  private final ParquetSchemaNode parquetSchemaNode;
-  private final MapReader[] childReadersByFieldIndex;
+public class MapReader implements Reader<Map<String, Object>> {
+  private final MapRowBuilder rowBuilder;
 
   public MapReader(final ParquetSchemaNode parquetSchemaNode) {
-    this.parquetSchemaNode = parquetSchemaNode;
-    this.childReadersByFieldIndex = new MapReader[parquetSchemaNode.getChildren().length];
-    for (var i = 0; i < this.childReadersByFieldIndex.length; i++) {
-      childReadersByFieldIndex[i] = new MapReader(parquetSchemaNode.getChildAtIndex(i));
-    }
+    this(parquetSchemaNode, new JavaTypesConversionStrategy());
   }
 
-  @Override
-  public Reader<?, ?> forChild(final int childFieldIndex) {
-    return childReadersByFieldIndex[childFieldIndex];
+  public MapReader(
+      final ParquetSchemaNode parquetSchemaNode, final ConversionStrategy conversionStrategy) {
+    this.rowBuilder = new MapRowBuilder(parquetSchemaNode, conversionStrategy);
   }
 
-  @Override
-  public BranchBuilder<Map<String, Object>> branchBuilder() {
-    return new MapBranchBuilder(parquetSchemaNode);
+  public Reader.RowBuilder<Map<String, Object>> rowBuilder() {
+    return rowBuilder;
   }
 
-  @Override
-  public RepeatedBuilder<List<Map<String, Object>>, Map<String, Object>> repeatedBuilder() {
-    return new MapRepeatedBuilder();
-  }
-
-  private static class MapBranchBuilder implements BranchBuilder<Map<String, Object>> {
-    private final Map<String, Object> map = new HashMap<>();
-    private final ParquetSchemaNode parquetSchemaNode1;
-
-    public MapBranchBuilder(final ParquetSchemaNode parquetSchemaNode) {
-      parquetSchemaNode1 = parquetSchemaNode;
+  static class MapRowBuilder extends MapRowBranchBuilder
+      implements RowBuilder<Map<String, Object>> {
+    public MapRowBuilder(
+        final ParquetSchemaNode parquetSchemaNode, final ConversionStrategy conversionStrategy) {
+      super(parquetSchemaNode, conversionStrategy, null);
     }
 
     @Override
-    public void put(final int fieldIndex, final Object value) {
-      map.put(parquetSchemaNode1.getChildAtIndex(fieldIndex).getElement().name, value);
-    }
+    public void endBranch() {}
 
     @Override
     public Map<String, Object> build() {
-      return map;
+      final var row = map;
+      map = new HashMap<>();
+      return row;
     }
   }
 
-  private static class MapRepeatedBuilder
-      implements RepeatedBuilder<List<Map<String, Object>>, Map<String, Object>> {
-    private final ArrayList<Map<String, Object>> list = new ArrayList<>();
+  static class MapRowBranchBuilder implements FieldVisitor {
+    protected final ParquetSchemaNode parquetSchemaNode;
+    protected final LogicalTypeConverter<?> converter;
+    protected final MapRowBranchBuilder parent;
+    protected final FieldVisitor[] childVisitorsByFieldIndex;
 
-    @Override
-    public void add(final Map<String, Object> value) {
-      list.add(value);
+    protected Map<String, Object> map;
+
+    public MapRowBranchBuilder(
+        final ParquetSchemaNode parquetSchemaNode,
+        final ConversionStrategy conversionStrategy,
+        final MapRowBranchBuilder parent) {
+      this.parquetSchemaNode = parquetSchemaNode;
+      this.converter = conversionStrategy.converterFor(parquetSchemaNode);
+      this.parent = parent;
+      this.childVisitorsByFieldIndex = new FieldVisitor[parquetSchemaNode.getChildren().length];
+      for (var i = 0; i < this.childVisitorsByFieldIndex.length; i++) {
+        final var childAtIndex = parquetSchemaNode.getChildAtIndex(i);
+
+        switch (childAtIndex.getRepetitionType()) {
+          case REQUIRED, OPTIONAL -> {
+            childVisitorsByFieldIndex[i] =
+                new MapRowBranchBuilder(childAtIndex, conversionStrategy, this);
+          }
+          case REPEATED -> {
+            childVisitorsByFieldIndex[i] =
+                new MapRowRepeatedBuilder(childAtIndex, conversionStrategy, this);
+          }
+        }
+      }
+
+      map = new HashMap<>(parquetSchemaNode.getChildren().length);
     }
 
     @Override
-    public List<Map<String, Object>> build() {
-      return list;
+    public FieldVisitor forChildIndex(final int childIndex) {
+      return childVisitorsByFieldIndex[childIndex];
+    }
+
+    @Override
+    public void endBranch() {
+      parent.map.put(parquetSchemaNode.getElement().name, map);
+      map = new HashMap<>(parquetSchemaNode.getChildren().length);
+    }
+
+    @Override
+    public void endRepeated() {}
+
+    @Override
+    public void visit(final int pageIndex, final boolean value) {
+      parent.map.put(parquetSchemaNode.getElement().name, converter.fromBoolean(value));
+    }
+
+    @Override
+    public void visit(final int pageIndex, final ByteBuffer value) {
+      parent.map.put(parquetSchemaNode.getElement().name, converter.fromByteBuffer(value));
+    }
+
+    @Override
+    public void visit(final int pageIndex, final float value) {
+      parent.map.put(parquetSchemaNode.getElement().name, converter.fromFloat(value));
+    }
+
+    @Override
+    public void visit(final int pageIndex, final double value) {
+      parent.map.put(parquetSchemaNode.getElement().name, converter.fromDouble(value));
+    }
+
+    @Override
+    public void visit(final int pageIndex, final int value) {
+      parent.map.put(parquetSchemaNode.getElement().name, converter.fromInt32(value));
+    }
+
+    @Override
+    public void visit(final int pageIndex, final long value) {
+      parent.map.put(parquetSchemaNode.getElement().name, converter.fromInt64(value));
+    }
+
+    @Override
+    public void visitNull(final int pageIndex) {}
+  }
+
+  static class MapRowRepeatedBuilder extends MapRowBranchBuilder implements FieldVisitor {
+    private ArrayList<Object> list;
+
+    public MapRowRepeatedBuilder(
+        final ParquetSchemaNode parquetSchemaNode,
+        final ConversionStrategy conversionStrategy,
+        final MapRowBranchBuilder parent) {
+      super(parquetSchemaNode, conversionStrategy, parent);
+
+      list = new ArrayList<>();
+    }
+
+    @Override
+    public FieldVisitor forChildIndex(final int childIndex) {
+      return childVisitorsByFieldIndex[childIndex];
+    }
+
+    @Override
+    public void endBranch() {
+      list.add(map);
+      map = new HashMap<>(parquetSchemaNode.getChildren().length);
+    }
+
+    @Override
+    public void endRepeated() {
+      parent.map.put(parquetSchemaNode.getElement().name, list);
+      list = new ArrayList<>();
+    }
+
+    @Override
+    public void visit(final int pageIndex, final boolean value) {
+      list.add(converter.fromBoolean(value));
+    }
+
+    @Override
+    public void visit(final int pageIndex, final ByteBuffer value) {
+      list.add(converter.fromByteBuffer(value));
+    }
+
+    @Override
+    public void visit(final int pageIndex, final float value) {
+      list.add(converter.fromFloat(value));
+    }
+
+    @Override
+    public void visit(final int pageIndex, final double value) {
+      list.add(converter.fromDouble(value));
+    }
+
+    @Override
+    public void visit(final int pageIndex, final int value) {
+      list.add(converter.fromInt32(value));
+    }
+
+    @Override
+    public void visit(final int pageIndex, final long value) {
+      list.add(converter.fromInt64(value));
+    }
+
+    @Override
+    public void visitNull(final int pageIndex) {
+      list.add(null);
     }
   }
 }

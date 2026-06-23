@@ -16,7 +16,7 @@ import com.markosindustries.parquito.predicates.NoneEquals;
 import com.markosindustries.parquito.predicates.Not;
 import com.markosindustries.parquito.predicates.ParquetPredicate;
 import com.markosindustries.parquito.predicates.Union;
-import com.markosindustries.parquito.types.ColumnType;
+import com.markosindustries.parquito.types.ConversionStrategy;
 import java.util.Collection;
 import java.util.Set;
 
@@ -51,135 +51,167 @@ public class ParquetPredicates {
 
   public static <ReadAs> ParquetPredicate allEquals(
       final Object referenceValue,
-      final ColumnType<ReadAs> columnType,
+      final ConvertedColumnType<ReadAs> columnType,
       final ParquetSchemaPath schemaPath) {
     return new AllEquals<>(
-        columnType.parquetType().getReadAsClass().cast(referenceValue), columnType, schemaPath);
+        columnType.logicalTypeConverter().getConvertedClass().cast(referenceValue),
+        columnType,
+        schemaPath);
   }
 
   public static ParquetPredicate allEquals(
       final RowGroupReader rowGroupReader,
       final Object referenceValue,
-      final ParquetSchemaPath schemaPath) {
-    final var columnType = rowGroupReader.getColumnType(schemaPath).orElseThrow();
+      final ParquetSchemaPath schemaPath,
+      final ConversionStrategy conversionStrategy) {
+    final var columnType =
+        rowGroupReader.getConvertedColumnType(schemaPath, conversionStrategy).orElseThrow();
     return allEquals(referenceValue, columnType, schemaPath);
   }
 
   public static <ReadAs> ParquetPredicate anyEquals(
       final Object referenceValue,
-      final ColumnType<ReadAs> columnType,
+      final ConvertedColumnType<ReadAs> columnType,
       final ParquetSchemaPath schemaPath) {
     return new AnyEquals<>(
-        columnType.parquetType().getReadAsClass().cast(referenceValue), columnType, schemaPath);
+        columnType.logicalTypeConverter().getConvertedClass().cast(referenceValue),
+        columnType,
+        schemaPath);
   }
 
   public static ParquetPredicate anyEquals(
       final RowGroupReader rowGroupReader,
       final Object referenceValue,
-      final ParquetSchemaPath schemaPath) {
-    final var columnType = rowGroupReader.getColumnType(schemaPath).orElseThrow();
+      final ParquetSchemaPath schemaPath,
+      final ConversionStrategy conversionStrategy) {
+    final var columnType =
+        rowGroupReader.getConvertedColumnType(schemaPath, conversionStrategy).orElseThrow();
     return anyEquals(referenceValue, columnType, schemaPath);
   }
 
   public static <ReadAs> ParquetPredicate anyNotEquals(
       final Object referenceValue,
-      final ColumnType<ReadAs> columnType,
+      final ConvertedColumnType<ReadAs> columnType,
       final ParquetSchemaPath schemaPath) {
     return new AnyNotEquals<>(
-        columnType.parquetType().getReadAsClass().cast(referenceValue), columnType, schemaPath);
+        columnType.logicalTypeConverter().getConvertedClass().cast(referenceValue),
+        columnType,
+        schemaPath);
   }
 
   public static ParquetPredicate anyNotEquals(
       final RowGroupReader rowGroupReader,
       final Object referenceValue,
-      final ParquetSchemaPath schemaPath) {
-    final var columnType = rowGroupReader.getColumnType(schemaPath).orElseThrow();
+      final ParquetSchemaPath schemaPath,
+      final ConversionStrategy conversionStrategy) {
+    final var columnType =
+        rowGroupReader.getConvertedColumnType(schemaPath, conversionStrategy).orElseThrow();
     return anyNotEquals(referenceValue, columnType, schemaPath);
   }
 
   public static <ReadAs> ParquetPredicate noneEquals(
       final Object referenceValue,
-      final ColumnType<ReadAs> columnType,
+      final ConvertedColumnType<ReadAs> columnType,
       final ParquetSchemaPath schemaPath) {
     return new NoneEquals<>(
-        columnType.parquetType().getReadAsClass().cast(referenceValue), columnType, schemaPath);
+        columnType.logicalTypeConverter().getConvertedClass().cast(referenceValue),
+        columnType,
+        schemaPath);
   }
 
   public static ParquetPredicate noneEquals(
       final RowGroupReader rowGroupReader,
       final Object referenceValue,
-      final ParquetSchemaPath schemaPath) {
-    final var columnType = rowGroupReader.getColumnType(schemaPath).orElseThrow();
+      final ParquetSchemaPath schemaPath,
+      final ConversionStrategy conversionStrategy) {
+    final var columnType =
+        rowGroupReader.getConvertedColumnType(schemaPath, conversionStrategy).orElseThrow();
     return noneEquals(referenceValue, columnType, schemaPath);
   }
 
   public static <ReadAs> ParquetPredicate anyGreaterThan(
       final Object referenceValue,
-      final ColumnType<ReadAs> columnType,
+      final ConvertedColumnType<ReadAs> columnType,
       final ParquetSchemaPath schemaPath) {
     return new AnyGreaterThan<>(
-        columnType.parquetType().getReadAsClass().cast(referenceValue), columnType, schemaPath);
+        columnType.logicalTypeConverter().getConvertedClass().cast(referenceValue),
+        columnType,
+        schemaPath);
   }
 
   public static ParquetPredicate anyGreaterThan(
       final RowGroupReader rowGroupReader,
       final Object referenceValue,
-      final ParquetSchemaPath schemaPath) {
-    final var columnType = rowGroupReader.getColumnType(schemaPath).orElseThrow();
+      final ParquetSchemaPath schemaPath,
+      final ConversionStrategy conversionStrategy) {
+    final var columnType =
+        rowGroupReader.getConvertedColumnType(schemaPath, conversionStrategy).orElseThrow();
     return anyGreaterThan(referenceValue, columnType, schemaPath);
   }
 
   public static <ReadAs> ParquetPredicate anyGreaterThanOrEqual(
       final Object referenceValue,
-      final ColumnType<ReadAs> columnType,
+      final ConvertedColumnType<ReadAs> columnType,
       final ParquetSchemaPath schemaPath) {
     return new AnyGreaterThanOrEqual<>(
-        columnType.parquetType().getReadAsClass().cast(referenceValue), columnType, schemaPath);
+        columnType.logicalTypeConverter().getConvertedClass().cast(referenceValue),
+        columnType,
+        schemaPath);
   }
 
   public static ParquetPredicate anyGreaterThanOrEqual(
       final RowGroupReader rowGroupReader,
       final Object referenceValue,
-      final ParquetSchemaPath schemaPath) {
-    final var columnType = rowGroupReader.getColumnType(schemaPath).orElseThrow();
+      final ParquetSchemaPath schemaPath,
+      final ConversionStrategy conversionStrategy) {
+    final var columnType =
+        rowGroupReader.getConvertedColumnType(schemaPath, conversionStrategy).orElseThrow();
     return anyGreaterThanOrEqual(referenceValue, columnType, schemaPath);
   }
 
   public static <ReadAs> ParquetPredicate anyLessThan(
       final Object referenceValue,
-      final ColumnType<ReadAs> columnType,
+      final ConvertedColumnType<ReadAs> columnType,
       final ParquetSchemaPath schemaPath) {
     return new AnyLessThan<>(
-        columnType.parquetType().getReadAsClass().cast(referenceValue), columnType, schemaPath);
+        columnType.logicalTypeConverter().getConvertedClass().cast(referenceValue),
+        columnType,
+        schemaPath);
   }
 
   public static ParquetPredicate anyLessThan(
       final RowGroupReader rowGroupReader,
       final Object referenceValue,
-      final ParquetSchemaPath schemaPath) {
-    final var columnType = rowGroupReader.getColumnType(schemaPath).orElseThrow();
+      final ParquetSchemaPath schemaPath,
+      final ConversionStrategy conversionStrategy) {
+    final var columnType =
+        rowGroupReader.getConvertedColumnType(schemaPath, conversionStrategy).orElseThrow();
     return anyLessThan(referenceValue, columnType, schemaPath);
   }
 
   public static <ReadAs> ParquetPredicate anyLessThanOrEqual(
       final Object referenceValue,
-      final ColumnType<ReadAs> columnType,
+      final ConvertedColumnType<ReadAs> columnType,
       final ParquetSchemaPath schemaPath) {
     return new AnyLessThanOrEqual<>(
-        columnType.parquetType().getReadAsClass().cast(referenceValue), columnType, schemaPath);
+        columnType.logicalTypeConverter().getConvertedClass().cast(referenceValue),
+        columnType,
+        schemaPath);
   }
 
   public static ParquetPredicate anyLessThanOrEqual(
       final RowGroupReader rowGroupReader,
       final Object referenceValue,
-      final ParquetSchemaPath schemaPath) {
-    final var columnType = rowGroupReader.getColumnType(schemaPath).orElseThrow();
+      final ParquetSchemaPath schemaPath,
+      final ConversionStrategy conversionStrategy) {
+    final var columnType =
+        rowGroupReader.getConvertedColumnType(schemaPath, conversionStrategy).orElseThrow();
     return anyLessThanOrEqual(referenceValue, columnType, schemaPath);
   }
 
   public static <ReadAs> ParquetPredicate anyInSet(
       final Set<?> referenceValues,
-      final ColumnType<ReadAs> columnType,
+      final ConvertedColumnType<ReadAs> columnType,
       final ParquetSchemaPath schemaPath) {
     return AnyInSet.from(referenceValues, columnType, schemaPath);
   }
@@ -187,14 +219,16 @@ public class ParquetPredicates {
   public static ParquetPredicate anyInSet(
       final RowGroupReader rowGroupReader,
       final Set<?> referenceValues,
-      final ParquetSchemaPath schemaPath) {
-    final var columnType = rowGroupReader.getColumnType(schemaPath).orElseThrow();
+      final ParquetSchemaPath schemaPath,
+      final ConversionStrategy conversionStrategy) {
+    final var columnType =
+        rowGroupReader.getConvertedColumnType(schemaPath, conversionStrategy).orElseThrow();
     return anyInSet(referenceValues, columnType, schemaPath);
   }
 
   public static <ReadAs> ParquetPredicate allInSet(
       final Set<?> referenceValues,
-      final ColumnType<ReadAs> columnType,
+      final ConvertedColumnType<ReadAs> columnType,
       final ParquetSchemaPath schemaPath) {
     return AllInSet.from(referenceValues, columnType, schemaPath);
   }
@@ -202,8 +236,10 @@ public class ParquetPredicates {
   public static ParquetPredicate allInSet(
       final RowGroupReader rowGroupReader,
       final Set<?> referenceValues,
-      final ParquetSchemaPath schemaPath) {
-    final var columnType = rowGroupReader.getColumnType(schemaPath).orElseThrow();
+      final ParquetSchemaPath schemaPath,
+      final ConversionStrategy conversionStrategy) {
+    final var columnType =
+        rowGroupReader.getConvertedColumnType(schemaPath, conversionStrategy).orElseThrow();
     return allInSet(referenceValues, columnType, schemaPath);
   }
 }

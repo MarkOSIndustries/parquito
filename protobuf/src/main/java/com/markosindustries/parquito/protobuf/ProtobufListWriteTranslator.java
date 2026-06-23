@@ -3,58 +3,47 @@ package com.markosindustries.parquito.protobuf;
 import com.google.protobuf.Descriptors;
 import com.markosindustries.parquito.ParquetSchemaNode;
 import com.markosindustries.parquito.WriteTranslator;
+import com.markosindustries.parquito.rows.BranchAccumulator;
+import java.util.List;
 
-public class ProtobufListWriteTranslator implements WriteTranslator<Object, Void> {
-  private final ListGroupWriteTranslator<?, ?> listGroupWriteTranslator;
+public class ProtobufListWriteTranslator implements WriteTranslator<List<Object>> {
+  private final WriteTranslator<?> branchTranslator;
+  private final ProtobufMessageWriteTranslator.FieldLeafRepeatedVisitor leafVisitor;
+  private final ParquetSchemaNode schemaNode;
 
   public ProtobufListWriteTranslator(
       final Descriptors.FieldDescriptor field, final ParquetSchemaNode schemaNode) {
+    this.schemaNode = schemaNode;
     final var listSchemaNode = schemaNode.getChildAtIndex(0);
     final var elementSchemaNode = listSchemaNode.getChildAtIndex(0);
-    this.listGroupWriteTranslator =
-        new ListGroupWriteTranslator<>(
-            ProtobufMessageWriteTranslator.determineAppropriateTranslator(
-                field, elementSchemaNode));
+
+    this.branchTranslator =
+        ProtobufMessageWriteTranslator.determineAppropriateTranslator(field, elementSchemaNode);
+    this.leafVisitor =
+        branchTranslator == null
+            ? ProtobufMessageWriteTranslator.determineAppropriateFieldLeafRepeatedVisitor(
+                field, elementSchemaNode)
+            : null;
   }
 
   @Override
-  public Object getField(final int childIndex, final Object list) {
-    return list; // we want to just hand the list to the child to deal with
-  }
-
-  @Override
-  public WriteTranslator<?, ?> forChildIndex(final int childIndex) {
-    return listGroupWriteTranslator;
-  }
-
-  @Override
-  public Void translate(final Object o) {
-    throw new UnsupportedOperationException(
-        "A protobuf repeated field cannot be directly translated, as it is not a leaf node in the parquet schema");
-  }
-
-  public static class ListGroupWriteTranslator<Value, WriteAs>
-      implements WriteTranslator<Value, WriteAs> {
-    private final WriteTranslator<Value, WriteAs> elementTranslator;
-
-    public ListGroupWriteTranslator(final WriteTranslator<Value, WriteAs> elementTranslator) {
-      this.elementTranslator = elementTranslator;
-    }
-
-    @Override
-    public Object getField(final int childIndex, final Value value) {
-      return value; // just hand it back to go to the element write
-    }
-
-    @Override
-    public WriteTranslator<?, ?> forChildIndex(final int childIndex) {
-      return elementTranslator;
-    }
-
-    @Override
-    public WriteAs translate(final Value value) {
-      throw new UnsupportedOperationException(
-          "A protobuf repeated field's list group node cannot be directly translated, as it is not a leaf node in the parquet schema");
+  public void translate(final List<Object> list, final BranchAccumulator accumulator) {
+    if (list.isEmpty()) {
+      accumulator.accumulateNull();
+    } else {
+      accumulator.branch(
+          listGroupAccessor -> {
+            final var listGroupAccumulator = listGroupAccessor.childBranchAccumulator(0);
+            listGroupAccumulator.branch(
+                elementAccessor -> {
+                  if (branchTranslator != null) {
+                    branchTranslator.translateUnsafe(
+                        list, elementAccessor.childBranchAccumulator(0));
+                  } else {
+                    leafVisitor.visit(list, elementAccessor.childLeafAccumulator(0));
+                  }
+                });
+          });
     }
   }
 }

@@ -1,7 +1,12 @@
 package com.markosindustries.parquito.bloomfilter;
 
+import com.markosindustries.parquito.ColumnValuesSet;
+import it.unimi.dsi.fastutil.doubles.DoubleList;
+import it.unimi.dsi.fastutil.floats.FloatList;
+import it.unimi.dsi.fastutil.ints.IntList;
+import it.unimi.dsi.fastutil.longs.LongList;
 import java.nio.ByteBuffer;
-import java.util.Collection;
+import java.util.List;
 import org.apache.parquet.format.BloomFilterAlgorithm;
 import org.apache.parquet.format.BloomFilterCompression;
 import org.apache.parquet.format.BloomFilterHash;
@@ -38,27 +43,106 @@ public record BloomFilter(
     return create(header, bitset);
   }
 
-  public <Value> boolean mightContain(final Value value) {
-    final var hash = hashFunction.hash(value);
-    return bloomFilterImplementation.mightContain(hash);
-  }
-
-  public <Value> boolean mightContainAny(final Collection<Value> values) {
-    for (final var value : values) {
-      final var hash = hashFunction.hash(value);
-      if (bloomFilterImplementation.mightContain(hash)) {
-        return true;
+  public <T> boolean mightContainAny(final ColumnValuesSet<T> values) {
+    final var logicalTypeConverter = values.getLogicalTypeConverter();
+    switch (logicalTypeConverter.getType()) {
+      case BOOLEAN ->
+          throw new UnsupportedOperationException("Bloom filter doesn't support Booleans");
+      case INT32 -> {
+        for (final var value : values.getInts()) {
+          if (bloomFilterImplementation.mightContain(hashFunction.hash(value))) {
+            return true;
+          }
+        }
+      }
+      case INT64 -> {
+        for (final var value : values.getLongs()) {
+          if (bloomFilterImplementation.mightContain(hashFunction.hash(value))) {
+            return true;
+          }
+        }
+      }
+      case INT96 -> throw new UnsupportedOperationException("Can't handle int96 yet");
+      case FLOAT -> {
+        for (final var value : values.getFloats()) {
+          if (bloomFilterImplementation.mightContain(hashFunction.hash(value))) {
+            return true;
+          }
+        }
+      }
+      case DOUBLE -> {
+        for (final var value : values.getDoubles()) {
+          if (bloomFilterImplementation.mightContain(hashFunction.hash(value))) {
+            return true;
+          }
+        }
+      }
+      case BYTE_ARRAY, FIXED_LEN_BYTE_ARRAY -> {
+        for (final var value : values.getByteBuffers()) {
+          if (bloomFilterImplementation.mightContain(hashFunction.hash(value))) {
+            return true;
+          }
+        }
       }
     }
+
     return false;
   }
 
-  public <Value> void insert(final Value value) {
+  public void insert(final ByteBuffer value) {
     final var hash = hashFunction.hash(value);
     bloomFilterImplementation.insert(hash);
   }
 
-  public <Value> void insertAll(final Iterable<Value> values) {
+  public void insert(final double value) {
+    final var hash = hashFunction.hash(value);
+    bloomFilterImplementation.insert(hash);
+  }
+
+  public void insert(final float value) {
+    final var hash = hashFunction.hash(value);
+    bloomFilterImplementation.insert(hash);
+  }
+
+  public void insert(final int value) {
+    final var hash = hashFunction.hash(value);
+    bloomFilterImplementation.insert(hash);
+  }
+
+  public void insert(final long value) {
+    final var hash = hashFunction.hash(value);
+    bloomFilterImplementation.insert(hash);
+  }
+
+  public void insertAll(final List<ByteBuffer> values) {
+    for (final var value : values) {
+      final var hash = hashFunction.hash(value);
+      bloomFilterImplementation.insert(hash);
+    }
+  }
+
+  public void insertAll(final DoubleList values) {
+    for (final var value : values) {
+      final var hash = hashFunction.hash(value);
+      bloomFilterImplementation.insert(hash);
+    }
+  }
+
+  public void insertAll(final FloatList values) {
+    for (final var value : values) {
+      final var hash = hashFunction.hash(value);
+      bloomFilterImplementation.insert(hash);
+    }
+  }
+
+  public void insertAll(final IntList values) {
+    for (final var value : values) {
+      final var hash = hashFunction.hash(value);
+      bloomFilterImplementation.insert(hash);
+    }
+  }
+
+  public void insertAll(final LongList values) {
     for (final var value : values) {
       final var hash = hashFunction.hash(value);
       bloomFilterImplementation.insert(hash);

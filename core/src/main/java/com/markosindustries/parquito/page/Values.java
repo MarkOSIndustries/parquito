@@ -2,25 +2,106 @@ package com.markosindustries.parquito.page;
 
 import com.markosindustries.parquito.predicates.ColumnPredicate;
 import com.markosindustries.parquito.rows.PredicateMaterialisedMatches;
+import java.nio.ByteBuffer;
 import java.util.BitSet;
+import java.util.function.Consumer;
 
-public interface Values<ReadAs> {
-  ReadAs get(int index);
+public interface Values {
+  interface Visitor {
+    void visit(int pageIndex, boolean value);
+
+    void visit(int pageIndex, ByteBuffer value);
+
+    void visit(int pageIndex, float value);
+
+    void visit(int pageIndex, double value);
+
+    void visit(int pageIndex, int value);
+
+    void visit(int pageIndex, long value);
+
+    void visitNull(int pageIndex);
+  }
+
+  class NoOpVisitor implements Visitor {
+    public static final Visitor INSTANCE = new NoOpVisitor();
+
+    @Override
+    public void visit(int pageIndex, final boolean value) {}
+
+    @Override
+    public void visit(int pageIndex, final ByteBuffer value) {}
+
+    @Override
+    public void visit(int pageIndex, final float value) {}
+
+    @Override
+    public void visit(int pageIndex, final double value) {}
+
+    @Override
+    public void visit(int pageIndex, final int value) {}
+
+    @Override
+    public void visit(int pageIndex, final long value) {}
+
+    @Override
+    public void visitNull(int pageIndex) {}
+  }
+
+  void visit(int pageIndex, int valueIndex, Visitor visitor);
 
   int count();
 
-  default PredicateMaterialisedMatches materialise(final ColumnPredicate<ReadAs, ?> predicate) {
+  default <T> PredicateMaterialisedMatches materialise(
+      final ColumnPredicate<T, ?> predicate, final Class<T> tClass) {
     final var matchingIndices = new BitSet(count());
+    final var predicateVisitor =
+        new Visitor() {
+          @Override
+          public void visit(int pageIndex, final boolean value) {
+            if (predicate.valueMatches(value)) matchingIndices.set(pageIndex);
+          }
+
+          @Override
+          public void visit(int pageIndex, final ByteBuffer value) {
+            if (predicate.valueMatches(value)) matchingIndices.set(pageIndex);
+          }
+
+          @Override
+          public void visit(int pageIndex, final float value) {
+            if (predicate.valueMatches(value)) matchingIndices.set(pageIndex);
+          }
+
+          @Override
+          public void visit(int pageIndex, final double value) {
+            if (predicate.valueMatches(value)) matchingIndices.set(pageIndex);
+          }
+
+          @Override
+          public void visit(int pageIndex, final int value) {
+            if (predicate.valueMatches(value)) matchingIndices.set(pageIndex);
+          }
+
+          @Override
+          public void visit(int pageIndex, final long value) {
+            if (predicate.valueMatches(value)) matchingIndices.set(pageIndex);
+          }
+
+          @Override
+          public void visitNull(int pageIndex) {
+            if (predicate.nullMatches()) matchingIndices.set(pageIndex);
+          }
+        };
     for (var index = 0; index < count(); index++) {
-      matchingIndices.set(index, predicate.valueMatches(get(index)));
+      visit(index, index, predicateVisitor);
     }
 
     return matchingIndices::get;
   }
 
-  class Empty<ReadAs> implements Values<ReadAs> {
+  class Empty implements Values {
     @Override
-    public ReadAs get(final int index) {
+    public void visit(int pageIndex, int valueIndex, Visitor visitor) {
       throw new IndexOutOfBoundsException();
     }
 
@@ -30,34 +111,47 @@ public interface Values<ReadAs> {
     }
   }
 
-  static <ReadAs> Values<ReadAs> empty() {
-    return new Empty<>();
+  static Values empty() {
+    return new Empty();
   }
 
-  class Repeated<ReadAs> implements Values<ReadAs> {
-    private final ReadAs value;
-    private final int count;
+  abstract class CastingVisitor<T> implements Visitor {
+    private final Consumer<T> consumer;
+    private final Class<T> tClass;
 
-    public Repeated(final ReadAs value, final int count) {
-      this.value = value;
-      this.count = count;
+    public CastingVisitor(Consumer<T> consumer, Class<T> tClass) {
+      this.consumer = consumer;
+      this.tClass = tClass;
     }
 
     @Override
-    public ReadAs get(final int index) {
-      if (index < count) {
-        return value;
-      }
-      throw new IndexOutOfBoundsException();
+    public void visit(int pageIndex, final boolean value) {
+      consumer.accept(tClass.cast(value));
     }
 
     @Override
-    public int count() {
-      return count;
+    public void visit(int pageIndex, final ByteBuffer value) {
+      consumer.accept(tClass.cast(value));
     }
-  }
 
-  static <ReadAs> Values<ReadAs> repeated(final ReadAs repeatedValue, final int count) {
-    return new Repeated<>(repeatedValue, count);
+    @Override
+    public void visit(int pageIndex, final float value) {
+      consumer.accept(tClass.cast(value));
+    }
+
+    @Override
+    public void visit(int pageIndex, final double value) {
+      consumer.accept(tClass.cast(value));
+    }
+
+    @Override
+    public void visit(int pageIndex, final int value) {
+      consumer.accept(tClass.cast(value));
+    }
+
+    @Override
+    public void visit(int pageIndex, final long value) {
+      consumer.accept(tClass.cast(value));
+    }
   }
 }

@@ -9,6 +9,7 @@ import com.markosindustries.parquito.filesys.SimpleInputFile;
 import com.markosindustries.parquito.schemas.Example;
 import com.markosindustries.parquito.schemas.ExampleChild;
 import com.markosindustries.parquito.schemas.ExampleEnum;
+import com.markosindustries.parquito.types.ConversionStrategy;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -144,7 +145,8 @@ public class ParquetRewriterTests {
                 ParquetPredicates.anyEquals(
                     rowGroupReader,
                     "stra",
-                    rowGroupReader.schemaRoot().parseDotSeparatedPath("some_string")));
+                    rowGroupReader.schemaRoot().parseDotSeparatedPath("some_string"),
+                    ConversionStrategy.DEFAULT));
     final File rewrittenFile = File.createTempFile("rewrite-test", ".parquet");
     rewrittenFile.deleteOnExit();
     try (final var byteRangeReader = new FileByteRangeReader(file);

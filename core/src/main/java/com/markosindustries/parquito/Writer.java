@@ -8,5 +8,5 @@ public interface Writer<Value> {
 
   ParquetSchemaNode.Root getSchemaRoot();
 
-  WriteTranslator<Value, ?> getTranslator();
+  WriteTranslator<Value> getTranslator();
 }

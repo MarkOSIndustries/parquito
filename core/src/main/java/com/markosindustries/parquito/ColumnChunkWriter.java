@@ -3,7 +3,7 @@ package com.markosindustries.parquito;
 import com.markosindustries.parquito.bloomfilter.BloomFilter;
 import com.markosindustries.parquito.page.DataPageWriter;
 import com.markosindustries.parquito.page.DictionaryPageWriter;
-import com.markosindustries.parquito.types.ColumnType;
+import com.markosindustries.parquito.page.ValueAccumulator;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
@@ -16,23 +16,21 @@ import org.apache.parquet.format.PageType;
 import org.apache.parquet.format.Statistics;
 import org.apache.parquet.format.Util;
 
-public class ColumnChunkWriter<Value> {
+public class ColumnChunkWriter {
   private final ColumnMetaData columnMetaData;
-  private final ColumnType<Value> columnType;
+  private final ColumnType columnType;
   private final int leafDefinitionLevel;
   private final int leafRepetitionLevel;
   private final EncodingSelector encodingSelector;
   private final BloomFilterSelector bloomFilterSelector;
   private final WriteSpec writeSpec;
 
-  private DictionaryPageWriter<Value> dictionaryPageWriter;
-  private DataPageWriter<Value> dataPageWriter;
+  private ValueAccumulator valueAccumulator;
+  private DataPageWriter dataPageWriter;
   private ColumnChunk currentHeader;
 
   public ColumnChunkWriter(
-      final ColumnMetaData columnMetaData,
-      final ColumnType<Value> columnType,
-      final WriteSpec writeSpec) {
+      final ColumnMetaData columnMetaData, final ColumnType columnType, final WriteSpec writeSpec) {
     this.columnMetaData = columnMetaData;
     this.columnType = columnType;
     this.leafDefinitionLevel = columnType.schemaNode().getDefinitionLevelMax();
@@ -43,34 +41,57 @@ public class ColumnChunkWriter<Value> {
     startNewChunk();
   }
 
-  public static <ReadAs> ColumnChunkWriter<ReadAs> create(
-      final ColumnMetaData columnMetaData,
-      final ColumnType<ReadAs> columnType,
-      final WriteSpec writeSpec) {
-    return new ColumnChunkWriter<ReadAs>(columnMetaData, columnType, writeSpec);
+  public static ColumnChunkWriter create(
+      final ColumnMetaData columnMetaData, final ColumnType columnType, final WriteSpec writeSpec) {
+    return new ColumnChunkWriter(columnMetaData, columnType, writeSpec);
   }
 
   private void startNewChunk() {
-    this.dictionaryPageWriter = new DictionaryPageWriter<>(this);
+    this.valueAccumulator = new ValueAccumulator(columnType);
     this.dataPageWriter = DataPageWriter.create(this, writeSpec, PageType.DATA_PAGE_V2);
     this.currentHeader = makeHeader();
   }
 
-  public ColumnType<Value> getColumnType() {
+  public ColumnType getColumnType() {
     return columnType;
   }
 
-  public DictionaryPageWriter<Value> getDictionaryPageWriter() {
-    return dictionaryPageWriter;
-  }
-
-  public int accumulateNull(final int repetitionLevel, final int definitionLevel) {
+  public void accumulateNull(final int repetitionLevel, final int definitionLevel) {
     dataPageWriter.addNull(repetitionLevel, definitionLevel);
-    return 0;
   }
 
-  public int accumulateValue(final int repetitionLevel, final Value value) {
-    final var bytes = dictionaryPageWriter.addValue(Objects.requireNonNull(value));
+  public int accumulateValue(final int repetitionLevel, final boolean value) {
+    final var bytes = valueAccumulator.addValue(value);
+    dataPageWriter.addValue(repetitionLevel, leafDefinitionLevel);
+    return bytes;
+  }
+
+  public int accumulateValue(final int repetitionLevel, final ByteBuffer value) {
+    final var bytes = valueAccumulator.addValue(Objects.requireNonNull(value));
+    dataPageWriter.addValue(repetitionLevel, leafDefinitionLevel);
+    return bytes;
+  }
+
+  public int accumulateValue(final int repetitionLevel, final double value) {
+    final var bytes = valueAccumulator.addValue(value);
+    dataPageWriter.addValue(repetitionLevel, leafDefinitionLevel);
+    return bytes;
+  }
+
+  public int accumulateValue(final int repetitionLevel, final float value) {
+    final var bytes = valueAccumulator.addValue(value);
+    dataPageWriter.addValue(repetitionLevel, leafDefinitionLevel);
+    return bytes;
+  }
+
+  public int accumulateValue(final int repetitionLevel, final int value) {
+    final var bytes = valueAccumulator.addValue(value);
+    dataPageWriter.addValue(repetitionLevel, leafDefinitionLevel);
+    return bytes;
+  }
+
+  public int accumulateValue(final int repetitionLevel, final long value) {
+    final var bytes = valueAccumulator.addValue(value);
     dataPageWriter.addValue(repetitionLevel, leafDefinitionLevel);
     return bytes;
   }
@@ -78,23 +99,11 @@ public class ColumnChunkWriter<Value> {
   public ColumnChunk writeAllAndReset(
       final OutputStream rowGroupOutputStream, final OutputStream bloomOutputStream)
       throws IOException {
-    final var dictionaryPageReadyToWrite = dictionaryPageWriter.makeReadyToWrite();
+    final var valuesReadyToWrite = valueAccumulator.makeReadyToWrite();
 
-    if (dictionaryPageReadyToWrite.getNumDistinctValues() > 0) {
-      final var minValue = dictionaryPageReadyToWrite.getMinValue();
-      final var maxValue = dictionaryPageReadyToWrite.getMaxValue();
-
-      final var minBuffer =
-          ByteBuffer.allocate(columnType.parquetType().getRequiredBytesToWrite(minValue));
-      columnType.parquetType().writeToByteBuffer(minValue, minBuffer);
-      minBuffer.flip();
-      this.currentHeader.meta_data.statistics.setMin_value(minBuffer);
-
-      final var maxBuffer =
-          ByteBuffer.allocate(columnType.parquetType().getRequiredBytesToWrite(maxValue));
-      columnType.parquetType().writeToByteBuffer(maxValue, maxBuffer);
-      maxBuffer.flip();
-      this.currentHeader.meta_data.statistics.setMax_value(maxBuffer);
+    if (valuesReadyToWrite.getNumDistinctValues() > 0) {
+      this.currentHeader.meta_data.statistics.setMin_value(valuesReadyToWrite.getMinValue());
+      this.currentHeader.meta_data.statistics.setMax_value(valuesReadyToWrite.getMaxValue());
     }
 
     final var selectedEncoding =
@@ -103,7 +112,7 @@ public class ColumnChunkWriter<Value> {
             : encodingSelector.selectEncoding(
                 this.columnMetaData.type,
                 this.columnType.schemaNode().getPath(),
-                dictionaryPageReadyToWrite.getNumDistinctValues(),
+                valuesReadyToWrite.getNumDistinctValues(),
                 dataPageWriter.getNumValues(),
                 dataPageWriter.getNumNulls());
     currentHeader.meta_data.addToEncodings(selectedEncoding);
@@ -111,7 +120,9 @@ public class ColumnChunkWriter<Value> {
     if (selectedEncoding == Encoding.RLE_DICTIONARY) {
       final var dictionaryOutputStream = new ByteCountingOutputStream(rowGroupOutputStream);
       final var pageHeader =
-          dictionaryPageReadyToWrite.writePage(columnMetaData, dictionaryOutputStream);
+          new DictionaryPageWriter()
+              .writePage(
+                  valuesReadyToWrite.sliceDistinctValues(), columnMetaData, dictionaryOutputStream);
       this.currentHeader.meta_data.total_compressed_size +=
           dictionaryOutputStream.getBytesWritten();
       this.currentHeader.meta_data.total_uncompressed_size +=
@@ -126,8 +137,8 @@ public class ColumnChunkWriter<Value> {
     final var dataPageOutputStream = new ByteCountingOutputStream(rowGroupOutputStream);
     final var pageHeaders =
         dataPageWriter.writePages(
-            dictionaryPageReadyToWrite.makeFastDictionary(),
-            dictionaryPageWriter.getEstimatedBytesRequired(),
+            valuesReadyToWrite.makeSlice(),
+            valueAccumulator.getEstimatedBytesRequired(),
             selectedEncoding,
             this.currentHeader.meta_data,
             dataPageOutputStream);
@@ -144,12 +155,12 @@ public class ColumnChunkWriter<Value> {
         bloomFilterSelector.shouldWriteBloomFilter(
             this.columnMetaData.type,
             this.columnType.schemaNode().getPath(),
-            dictionaryPageWriter.getNumValues(),
+            valueAccumulator.getNumValues(),
             dataPageWriter.getNumValues(),
             dataPageWriter.getNumNulls());
     if (bloomFilterSizeInBytes.isPresent()) {
       final var bloomFilter = BloomFilter.createEmpty(bloomFilterSizeInBytes.get());
-      bloomFilter.insertAll(dictionaryPageReadyToWrite.getDistinctValues());
+      valuesReadyToWrite.fillBloomFilter(bloomFilter);
       writeBloomFilter(bloomFilter, bloomOutputStream);
       this.currentHeader.meta_data.setBloom_filter_offset(0);
     }

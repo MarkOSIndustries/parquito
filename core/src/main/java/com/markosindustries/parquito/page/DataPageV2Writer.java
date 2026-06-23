@@ -2,10 +2,9 @@ package com.markosindustries.parquito.page;
 
 import com.markosindustries.parquito.ByteBufferOutputStream;
 import com.markosindustries.parquito.ByteCountingOutputStream;
-import com.markosindustries.parquito.ColumnChunkWriter;
 import com.markosindustries.parquito.CompressionCodecs;
+import com.markosindustries.parquito.ParquetSchemaNode;
 import com.markosindustries.parquito.WriteSpec;
-import com.markosindustries.parquito.arrays.FastDictionary;
 import com.markosindustries.parquito.arrays.FastList32;
 import com.markosindustries.parquito.encoding.Encodings;
 import com.markosindustries.parquito.encoding.IntEncodings;
@@ -23,8 +22,7 @@ import org.apache.parquet.format.PageHeader;
 import org.apache.parquet.format.PageType;
 import org.apache.parquet.format.Util;
 
-public class DataPageV2Writer<Value> implements DataPageWriter<Value> {
-  private final ColumnChunkWriter<Value> columnChunkWriter;
+public class DataPageV2Writer implements DataPageWriter {
   private final WriteSpec writeSpec;
   private final FastList32 repetitionLevels;
   private final FastList32 definitionLevels;
@@ -34,13 +32,10 @@ public class DataPageV2Writer<Value> implements DataPageWriter<Value> {
   private int totalValues;
   private int totalRows;
 
-  public DataPageV2Writer(ColumnChunkWriter<Value> columnChunkWriter, WriteSpec writeSpec) {
-    this.columnChunkWriter = columnChunkWriter;
+  public DataPageV2Writer(ParquetSchemaNode schemaNode, WriteSpec writeSpec) {
     this.writeSpec = writeSpec;
-    this.repetitionLevelMax =
-        columnChunkWriter.getColumnType().schemaNode().getRepetitionLevelMax();
-    this.definitionLevelMax =
-        columnChunkWriter.getColumnType().schemaNode().getDefinitionLevelMax();
+    this.repetitionLevelMax = schemaNode.getRepetitionLevelMax();
+    this.definitionLevelMax = schemaNode.getDefinitionLevelMax();
     this.repetitionLevels = FastList32.createTightestFit(repetitionLevelMax);
     this.definitionLevels = FastList32.createTightestFit(definitionLevelMax);
   }
@@ -66,22 +61,35 @@ public class DataPageV2Writer<Value> implements DataPageWriter<Value> {
     definitionLevels.add(definitionLevel);
   }
 
+  public String describe() {
+    return "{rLevels="
+        + repetitionLevels.length()
+        + ", dLevels="
+        + definitionLevels.length()
+        + ", nulls="
+        + totalNulls
+        + ", values="
+        + totalValues
+        + ", rows="
+        + totalRows
+        + "}";
+  }
+
   @Override
   public List<PageHeader> writePages(
-      final FastDictionary<Value, ?> values,
+      final ValueAccumulator.Slice values,
       final int estimatedPlainBytesRequired,
       final Encoding encoding,
       final ColumnMetaData columnMetaData,
       final OutputStream outputStream)
       throws IOException {
-    final var encodingImpl = Encodings.<Value>getEncoding(encoding);
+    final var encodingImpl = Encodings.getEncoding(encoding);
 
     // TODO - replace with an incremental encoder so we can watch byte counts and decide when to
     // switch pages
     //  This will work ok, but we could get closer to the target page size that way
     final var refinedBytesRequiredEstimate =
-        encodingImpl.refineBytesRequiredEstimate(
-            values.length(), estimatedPlainBytesRequired, columnChunkWriter);
+        encodingImpl.refineBytesRequiredEstimate(values, estimatedPlainBytesRequired);
     final var pageCount =
         Math.max(1, Math.ceilDiv(refinedBytesRequiredEstimate, writeSpec.targetBytesPerDataPage()));
     final var valuesPerPage =
@@ -127,7 +135,7 @@ public class DataPageV2Writer<Value> implements DataPageWriter<Value> {
                 dataPageHeaderV2,
                 repetitionLevels.subList(levelsIndex, nextLevelsIndex),
                 definitionLevels.subList(levelsIndex, nextLevelsIndex),
-                values.sliceDictionary(valuesIndex, valueCount),
+                values.slice(valuesIndex, valueCount),
                 encodingImpl,
                 columnMetaData,
                 outputStream);
@@ -145,8 +153,8 @@ public class DataPageV2Writer<Value> implements DataPageWriter<Value> {
       final DataPageHeaderV2 dataPageHeaderV2,
       final FastList32 pageRepetitionLevels,
       final FastList32 pageDefinitionLevels,
-      final FastDictionary<Value, ?> pageValues,
-      final ParquetEncoding<Value> encodingImpl,
+      final ValueAccumulator.Slice pageValues,
+      final ParquetEncoding encodingImpl,
       final ColumnMetaData columnMetaData,
       final OutputStream outputStream)
       throws IOException {
@@ -166,7 +174,7 @@ public class DataPageV2Writer<Value> implements DataPageWriter<Value> {
     final var uncompressedValuesOutputStream =
         new ByteCountingOutputStream(
             CompressionCodecs.compress(columnMetaData.codec, compressedValuesOutputStream));
-    encodingImpl.encode(pageValues, uncompressedValuesOutputStream, columnChunkWriter);
+    encodingImpl.encode(pageValues, uncompressedValuesOutputStream);
     uncompressedValuesOutputStream.close();
 
     final var levelsBytesWritten =

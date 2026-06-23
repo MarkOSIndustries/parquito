@@ -28,9 +28,9 @@ public class PushdownPredicates {
     return topLevelPredicate.matchesNextRow();
   }
 
-  public void newPage(final DataPageCursor<?> dataPageCursor) {
+  public void newPage(final DataPageCursor dataPageCursor) {
     for (final var columnPredicate : columnPredicates) {
-      columnPredicate.newPageUnsafe(dataPageCursor);
+      columnPredicate.newPage(dataPageCursor);
     }
   }
 

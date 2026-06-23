@@ -1,11 +1,13 @@
 package com.markosindustries.parquito.rows;
 
-import java.util.Iterator;
-
-public interface ParquetFieldIterator<T> extends Iterator<T> {
+public interface ParquetFieldIterator {
   int peekDefinitionLevel();
 
   int peekRepetitionLevel();
 
   void skipNextRow();
+
+  boolean hasNext();
+
+  void visitNext(final FieldVisitor visitor);
 }

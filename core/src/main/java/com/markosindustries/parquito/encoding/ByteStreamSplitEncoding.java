@@ -1,25 +1,25 @@
 package com.markosindustries.parquito.encoding;
 
 import com.markosindustries.parquito.ColumnChunkReader;
-import com.markosindustries.parquito.ColumnChunkWriter;
-import com.markosindustries.parquito.arrays.FastDictionary;
 import com.markosindustries.parquito.page.Values;
-import com.markosindustries.parquito.types.ParquetType;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.function.BiConsumer;
+import java.util.function.IntConsumer;
 
-public class ByteStreamSplitEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
+public class ByteStreamSplitEncoding implements ParquetEncoding {
   @Override
-  public Values<ReadAs> decode(
+  public Values decode(
       final int expectedValues,
       final int decompressedPageBytes,
       final InputStream decompressedPageStream,
-      final ColumnChunkReader<ReadAs> columnChunkReader)
+      final ColumnChunkReader columnChunkReader)
       throws IOException {
-    final var parquetType = columnChunkReader.getColumnType().parquetType();
-    final var byteWidth = getByteWidth(parquetType);
+    final var type = columnChunkReader.getColumnType().getType();
+    final var byteWidth = FixedTypeLengths.BYTES_BY_TYPE.get(type);
 
     if (decompressedPageBytes % byteWidth != 0) {
       throw new IllegalArgumentException(
@@ -44,15 +44,27 @@ public class ByteStreamSplitEncoding<ReadAs> implements ParquetEncoding<ReadAs> 
           "There should be " + decompressedPageBytes + " bytes, but we only have " + bytes.length);
     }
 
-    var buffer = ByteBuffer.allocate(byteWidth);
-    return new Values<ReadAs>() {
+    final var buffer = ByteBuffer.allocate(byteWidth).order(ByteOrder.LITTLE_ENDIAN);
+    final BiConsumer<Integer, Values.Visitor> visitBuffer =
+        switch (type) {
+          case INT32 -> (pageIndex, visitor) -> visitor.visit(pageIndex, buffer.getInt(0));
+          case INT64 -> (pageIndex, visitor) -> visitor.visit(pageIndex, buffer.getLong(0));
+          case FLOAT -> (pageIndex, visitor) -> visitor.visit(pageIndex, buffer.getFloat(0));
+          case DOUBLE -> (pageIndex, visitor) -> visitor.visit(pageIndex, buffer.getDouble(0));
+          default ->
+              throw new UnsupportedOperationException(
+                  this.getClass().getSimpleName() + " does not support type " + type);
+        };
+    return new Values() {
       @Override
-      public ReadAs get(final int index) {
+      public void visit(final int pageIndex, final int valueIndex, final Visitor visitor) {
         var byteIndex = 0;
-        for (var streamIndex = index; streamIndex < bytes.length; streamIndex += expectedValues) {
+        for (var streamIndex = valueIndex;
+            streamIndex < bytes.length;
+            streamIndex += expectedValues) {
           buffer.put(byteIndex++, bytes[streamIndex]);
         }
-        return parquetType.readFromByteBuffer(buffer);
+        visitBuffer.accept(pageIndex, visitor);
       }
 
       @Override
@@ -63,21 +75,27 @@ public class ByteStreamSplitEncoding<ReadAs> implements ParquetEncoding<ReadAs> 
   }
 
   @Override
-  public void encode(
-      final FastDictionary<ReadAs, ?> values,
-      final OutputStream uncompressedPageStream,
-      final ColumnChunkWriter<ReadAs> columnChunkWriter)
+  public void encode(final EncodingWritableValues values, final OutputStream uncompressedPageStream)
       throws IOException {
-    final var parquetType = columnChunkWriter.getColumnType().parquetType();
-    final var byteWidth = getByteWidth(parquetType);
+    final var byteWidth = FixedTypeLengths.BYTES_BY_TYPE.get(values.getType());
     final var splitStreams = new byte[byteWidth][];
     for (var i = 0; i < splitStreams.length; i++) {
       splitStreams[i] = new byte[values.length()];
     }
 
-    final var buffer = ByteBuffer.allocate(byteWidth);
+    final var buffer = ByteBuffer.allocate(byteWidth).order(ByteOrder.LITTLE_ENDIAN);
+    final IntConsumer writeValueAtIndexToBuffer =
+        switch (values.getType()) {
+          case INT32 -> index -> buffer.putInt(values.getAsInt32(index));
+          case INT64 -> index -> buffer.putLong(values.getAsInt64(index));
+          case FLOAT -> index -> buffer.putFloat(values.getAsFloat(index));
+          case DOUBLE -> index -> buffer.putDouble(values.getAsDouble(index));
+          default ->
+              throw new UnsupportedOperationException(
+                  this.getClass().getSimpleName() + " does not support type " + values.getType());
+        };
     for (var valueIndex = 0; valueIndex < values.length(); valueIndex++) {
-      parquetType.writeToByteBuffer(values.getAsObject(valueIndex), buffer);
+      writeValueAtIndexToBuffer.accept(valueIndex);
       for (var byteIndex = 0; byteIndex < byteWidth; byteIndex++) {
         splitStreams[byteIndex][valueIndex] = buffer.array()[byteIndex];
       }
@@ -91,15 +109,7 @@ public class ByteStreamSplitEncoding<ReadAs> implements ParquetEncoding<ReadAs> 
 
   @Override
   public int refineBytesRequiredEstimate(
-      final int valueCount,
-      final int estimatedPlainBytesRequired,
-      final ColumnChunkWriter<ReadAs> columnChunkWriter) {
+      final EncodingWritableValues values, final int estimatedPlainBytesRequired) {
     return estimatedPlainBytesRequired;
-  }
-
-  private static int getByteWidth(final ParquetType<?> parquetType) {
-    // we can pass null here because ByteStreamSplit only applies to fixed-size data
-    // none of the possible implementations will look at the value
-    return parquetType.getRequiredBytesToWrite(null);
   }
 }

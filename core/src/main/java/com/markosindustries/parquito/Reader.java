@@ -1,12 +1,11 @@
 package com.markosindustries.parquito;
 
-import com.markosindustries.parquito.rows.BranchBuilder;
-import com.markosindustries.parquito.rows.RepeatedBuilder;
+import com.markosindustries.parquito.rows.FieldVisitor;
 
-public interface Reader<Collection, Value> {
-  Reader<?, ?> forChild(int childFieldIndex);
+public interface Reader<Row> {
+  RowBuilder<Row> rowBuilder();
 
-  BranchBuilder<Value> branchBuilder();
-
-  RepeatedBuilder<Collection, Value> repeatedBuilder();
+  interface RowBuilder<Row> extends FieldVisitor {
+    Row build();
+  }
 }

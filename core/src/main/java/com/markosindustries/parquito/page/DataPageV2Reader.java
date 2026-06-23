@@ -11,17 +11,17 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import org.apache.parquet.format.PageHeader;
 
-public class DataPageV2Reader<ReadAs> implements DataPageReader<ReadAs> {
+public class DataPageV2Reader implements DataPageReader {
   private final int[] repetitionLevels;
   private final int[] definitionLevels;
   private final PageHeader pageHeader;
   private final int totalValues;
   private final int nonNullValues;
-  private final Values<ReadAs> values;
+  private final Values values;
 
   protected DataPageV2Reader(
       final PageHeader pageHeader,
-      final ColumnChunkReader<ReadAs> columnChunkReader,
+      final ColumnChunkReader columnChunkReader,
       final ByteBuffer pageBuffer)
       throws IOException {
     this.pageHeader = pageHeader;
@@ -55,7 +55,7 @@ public class DataPageV2Reader<ReadAs> implements DataPageReader<ReadAs> {
               : CompressionCodecs.decompress(
                   columnChunkReader.getHeader().meta_data.codec, pageStream);
       this.values =
-          Encodings.<ReadAs>getEncoding(pageHeader.data_page_header_v2.encoding)
+          Encodings.getEncoding(pageHeader.data_page_header_v2.encoding)
               .decode(
                   nonNullValues,
                   pageHeader.uncompressed_page_size - bytesInLevels,
@@ -90,7 +90,7 @@ public class DataPageV2Reader<ReadAs> implements DataPageReader<ReadAs> {
   }
 
   @Override
-  public Values<ReadAs> getValues() {
+  public Values getValues() {
     return values;
   }
 }

@@ -1,9 +1,12 @@
 package com.markosindustries.parquito;
 
-public interface WriteTranslator<Value, WriteAs> {
-  Object getField(final int childIndex, final Value value);
+import com.markosindustries.parquito.rows.BranchAccumulator;
 
-  WriteTranslator<?, ?> forChildIndex(final int childIndex);
+public interface WriteTranslator<Branch> {
+  void translate(Branch branch, BranchAccumulator accumulator);
 
-  WriteAs translate(Value value);
+  default void translateUnsafe(Object branch, BranchAccumulator accumulator) {
+    //noinspection unchecked
+    translate((Branch) branch, accumulator);
+  }
 }

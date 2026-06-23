@@ -1,8 +1,10 @@
 package com.markosindustries.parquito.predicates;
 
+import com.markosindustries.parquito.ColumnValuesSet;
+import com.markosindustries.parquito.ConvertedColumnType;
 import com.markosindustries.parquito.ParquetSchemaPath;
 import com.markosindustries.parquito.rows.PredicateRowMatcher;
-import com.markosindustries.parquito.types.ColumnType;
+import java.nio.ByteBuffer;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -10,39 +12,68 @@ import java.util.Set;
  * Matches a row if all values for the given column equal one of the values in the referenceValues
  * set
  *
- * @param <ReadAs> The type of value
+ * @param <Converted> The type of value
  */
-public class AllInSet<ReadAs>
-    extends ColumnPredicate<ReadAs, PredicateRowMatcher.AllMatch<ReadAs>> {
-  private final Set<ReadAs> referenceValues;
+public class AllInSet<Converted> extends ColumnPredicate<Converted, PredicateRowMatcher.AllMatch> {
+  private final ColumnValuesSet<Converted> referenceValues;
 
   private AllInSet(
-      Set<ReadAs> referenceValues,
-      final ColumnType<ReadAs> columnType,
+      Set<Converted> referenceValues,
+      final ConvertedColumnType<Converted> columnType,
       ParquetSchemaPath schemaPath) {
     super(columnType, schemaPath, PredicateRowMatcher.AllMatch::new);
-    this.referenceValues = referenceValues;
-    this.referenceValues.addAll(referenceValues);
+    this.referenceValues =
+        new ColumnValuesSet<>(columnType.logicalTypeConverter(), referenceValues);
   }
 
   @Override
-  public boolean valueMatches(final ReadAs value) {
+  public boolean valueMatches(final boolean value) {
     return referenceValues.contains(value);
   }
 
-  private static <ReadAs> Set<ReadAs> asTypedSet(
-      final Set<?> referenceValues, final ColumnType<ReadAs> columnType) {
-    final var set = new HashSet<ReadAs>();
-    final var caster = columnType.parquetType().getReadAsClass();
+  @Override
+  public boolean valueMatches(final ByteBuffer value) {
+    return referenceValues.contains(value);
+  }
+
+  @Override
+  public boolean valueMatches(final double value) {
+    return referenceValues.contains(value);
+  }
+
+  @Override
+  public boolean valueMatches(final float value) {
+    return referenceValues.contains(value);
+  }
+
+  @Override
+  public boolean valueMatches(final int value) {
+    return referenceValues.contains(value);
+  }
+
+  @Override
+  public boolean valueMatches(final long value) {
+    return referenceValues.contains(value);
+  }
+
+  @Override
+  public boolean nullMatches() {
+    return referenceValues.containsNull();
+  }
+
+  private static <Converted> Set<Converted> asTypedSet(
+      final Set<?> referenceValues, final ConvertedColumnType<Converted> columnType) {
+    final var set = new HashSet<Converted>();
+    final var caster = columnType.logicalTypeConverter().getConvertedClass();
     for (final var referenceValue : referenceValues) {
       set.add(caster.cast(referenceValue));
     }
     return set;
   }
 
-  public static <ReadAs> AllInSet<ReadAs> from(
+  public static <Converted> AllInSet<Converted> from(
       final Set<?> referenceValues,
-      final ColumnType<ReadAs> columnType,
+      final ConvertedColumnType<Converted> columnType,
       final ParquetSchemaPath schemaPath) {
     return new AllInSet<>(asTypedSet(referenceValues, columnType), columnType, schemaPath);
   }

@@ -1,12 +1,8 @@
 package com.markosindustries.parquito.encoding;
 
-import static org.apache.parquet.format.Encoding.DELTA_BINARY_PACKED;
-
 import com.clearspring.analytics.util.Varint;
 import com.markosindustries.parquito.ColumnChunkReader;
-import com.markosindustries.parquito.ColumnChunkWriter;
 import com.markosindustries.parquito.arrays.FastArray;
-import com.markosindustries.parquito.arrays.FastDictionary;
 import com.markosindustries.parquito.page.Values;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -14,50 +10,54 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-public class DeltaBinaryPackedEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
+public class DeltaBinaryPackedEncoding implements ParquetEncoding {
   @Override
-  public Values<ReadAs> decode(
+  public Values decode(
       final int expectedValues,
       final int decompressedPageBytes,
       final InputStream decompressedPageStream,
-      final ColumnChunkReader<ReadAs> columnChunkReader)
+      final ColumnChunkReader columnChunkReader)
       throws IOException {
     if (expectedValues == 0) {
       return Values.empty();
     }
 
-    final var readAsClass = columnChunkReader.getColumnType().parquetType().getReadAsClass();
-    if (readAsClass.isAssignableFrom(Integer.class)) {
-      final var values = DeltaBinaryPackedEncoding.decode32(expectedValues, decompressedPageStream);
-      return new Values<ReadAs>() {
-        @Override
-        public ReadAs get(final int index) {
-          return readAsClass.cast(values[index]);
-        }
+    final var type = columnChunkReader.getColumnType().getType();
+    return switch (type) {
+      case INT32 -> {
+        final var values =
+            DeltaBinaryPackedEncoding.decode32(expectedValues, decompressedPageStream);
+        yield new Values() {
+          @Override
+          public void visit(final int pageIndex, final int valueIndex, final Visitor visitor) {
+            visitor.visit(pageIndex, values[valueIndex]);
+          }
 
-        @Override
-        public int count() {
-          return values.length;
-        }
-      };
-    }
-    if (readAsClass.isAssignableFrom(Long.class)) {
-      final var values = DeltaBinaryPackedEncoding.decode64(expectedValues, decompressedPageStream);
-      return new Values<ReadAs>() {
-        @Override
-        public ReadAs get(final int index) {
-          return readAsClass.cast(values[index]);
-        }
+          @Override
+          public int count() {
+            return values.length;
+          }
+        };
+      }
+      case INT64 -> {
+        final var values =
+            DeltaBinaryPackedEncoding.decode64(expectedValues, decompressedPageStream);
+        yield new Values() {
+          @Override
+          public void visit(final int pageIndex, final int valueIndex, final Visitor visitor) {
+            visitor.visit(pageIndex, values[valueIndex]);
+          }
 
-        @Override
-        public int count() {
-          return expectedValues;
-        }
-      };
-    }
-
-    throw new UnsupportedOperationException(
-        "Can't use " + DELTA_BINARY_PACKED + " with: " + readAsClass);
+          @Override
+          public int count() {
+            return expectedValues;
+          }
+        };
+      }
+      default ->
+          throw new UnsupportedOperationException(
+              this.getClass().getSimpleName() + " does not support type " + type);
+    };
   }
 
   public static int[] decode32(final int expectedValues, final InputStream decompressedPageStream)
@@ -137,18 +137,17 @@ public class DeltaBinaryPackedEncoding<ReadAs> implements ParquetEncoding<ReadAs
   }
 
   @Override
-  public void encode(
-      final FastDictionary<ReadAs, ?> values,
-      final OutputStream uncompressedPageStream,
-      final ColumnChunkWriter<ReadAs> columnChunkWriter)
+  public void encode(final EncodingWritableValues values, final OutputStream uncompressedPageStream)
       throws IOException {
-    final var readAsClass = columnChunkWriter.getColumnType().parquetType().getReadAsClass();
-    try {
-      DeltaBinaryPackedEncoding.encodeFrom(values.asFastArray(), uncompressedPageStream);
-    } catch (UnsupportedOperationException e) {
-      throw new UnsupportedOperationException(
-          "Can't use " + DELTA_BINARY_PACKED + " with: " + readAsClass, e);
-    }
+    final var fastArray =
+        switch (values.getType()) {
+          case INT32 -> FastArray.wrap(values.getInt32sAsIntList());
+          case INT64 -> FastArray.wrap(values.getInt64sAsLongList());
+          default ->
+              throw new UnsupportedOperationException(
+                  this.getClass().getSimpleName() + " does not support type " + values.getType());
+        };
+    DeltaBinaryPackedEncoding.encodeFrom(fastArray, uncompressedPageStream);
   }
 
   public static void encode32(final int[] values, final OutputStream uncompressedPageStream)
@@ -232,9 +231,7 @@ public class DeltaBinaryPackedEncoding<ReadAs> implements ParquetEncoding<ReadAs
 
   @Override
   public int refineBytesRequiredEstimate(
-      final int valueCount,
-      final int estimatedPlainBytesRequired,
-      final ColumnChunkWriter<ReadAs> columnChunkWriter) {
-    return Math.ceilDiv(Maths.bitWidth(valueCount) * valueCount, 8);
+      final EncodingWritableValues values, final int estimatedPlainBytesRequired) {
+    return Math.ceilDiv(Maths.bitWidth(values.length()) * values.length(), 8);
   }
 }

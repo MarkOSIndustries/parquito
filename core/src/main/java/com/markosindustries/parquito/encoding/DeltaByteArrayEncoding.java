@@ -2,8 +2,6 @@ package com.markosindustries.parquito.encoding;
 
 import com.markosindustries.parquito.ByteBufferOutputStream;
 import com.markosindustries.parquito.ColumnChunkReader;
-import com.markosindustries.parquito.ColumnChunkWriter;
-import com.markosindustries.parquito.arrays.FastDictionary;
 import com.markosindustries.parquito.page.Values;
 import java.io.IOException;
 import java.io.InputStream;
@@ -11,15 +9,15 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 
-public class DeltaByteArrayEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
+public class DeltaByteArrayEncoding implements ParquetEncoding {
   private static final ByteBuffer EMPTY_BUFFER = ByteBuffer.allocate(0).limit(0);
 
   @Override
-  public Values<ReadAs> decode(
+  public Values decode(
       final int expectedValues,
       final int decompressedPageBytes,
       final InputStream decompressedPageStream,
-      final ColumnChunkReader<ReadAs> columnChunkReader)
+      final ColumnChunkReader columnChunkReader)
       throws IOException {
     final var prefixLengths =
         DeltaBinaryPackedEncoding.decode32(expectedValues, decompressedPageStream);
@@ -35,15 +33,19 @@ public class DeltaByteArrayEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
     }
     final var bytes = ByteBuffer.wrap(decompressedPageStream.readAllBytes());
 
-    return new Values<ReadAs>() {
+    return new Values() {
       @Override
-      public ReadAs get(final int index) {
-        if (prefixLengths[index] == 0) {
-          return columnChunkReader.readValue(bytes.slice(offsets[index], suffixLengths[index]));
+      public void visit(final int pageIndex, final int valueIndex, final Visitor visitor) {
+        if (prefixLengths[valueIndex] == 0) {
+          visitor.visit(pageIndex, bytes.slice(offsets[valueIndex], suffixLengths[valueIndex]));
+          return;
         }
-        final var concat = ByteBuffer.allocate(prefixLengths[index] + suffixLengths[index]);
-        concat.put(prefixLengths[index], bytes, offsets[index], suffixLengths[index]);
-        int prevIndex = index, bytesNeeded = prefixLengths[index];
+
+        final var concat =
+            ByteBuffer.allocate(prefixLengths[valueIndex] + suffixLengths[valueIndex]);
+        concat.put(
+            prefixLengths[valueIndex], bytes, offsets[valueIndex], suffixLengths[valueIndex]);
+        int prevIndex = valueIndex, bytesNeeded = prefixLengths[valueIndex];
         do {
           prevIndex--;
           if (bytesNeeded > prefixLengths[prevIndex]) {
@@ -52,7 +54,7 @@ public class DeltaByteArrayEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
             bytesNeeded -= bytesAvailable;
           }
         } while (prefixLengths[prevIndex] != 0);
-        return columnChunkReader.readValue(concat);
+        visitor.visit(pageIndex, concat);
       }
 
       @Override
@@ -63,10 +65,7 @@ public class DeltaByteArrayEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
   }
 
   @Override
-  public void encode(
-      final FastDictionary<ReadAs, ?> values,
-      final OutputStream uncompressedPageStream,
-      final ColumnChunkWriter<ReadAs> columnChunkWriter)
+  public void encode(final EncodingWritableValues values, final OutputStream uncompressedPageStream)
       throws IOException {
     var previousBuffer = EMPTY_BUFFER;
     var currentBuffer = EMPTY_BUFFER;
@@ -76,9 +75,8 @@ public class DeltaByteArrayEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
     final var valuesOutputBufferStream = new ByteBufferOutputStream(valuesLength);
     final var valuesOutputBufferChannel = Channels.newChannel(valuesOutputBufferStream);
     for (var valueIndex = 0; valueIndex < valuesLength; valueIndex++) {
-      final var value = values.getAsObject(valueIndex);
-      final var requiredCapacity =
-          columnChunkWriter.getColumnType().parquetType().getRequiredBytesToWrite(value);
+      final var value = values.getAsByteBuffer(valueIndex);
+      final var requiredCapacity = value.remaining();
       if (requiredCapacity > currentBuffer.capacity()) {
         previousBuffer = resizeBuffer(previousBuffer, requiredCapacity);
         currentBuffer = resizeBuffer(currentBuffer, requiredCapacity);
@@ -86,7 +84,7 @@ public class DeltaByteArrayEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
 
       currentBuffer.limit(requiredCapacity);
       currentBuffer.position(0);
-      columnChunkWriter.getColumnType().parquetType().writeToByteBuffer(value, currentBuffer);
+      currentBuffer.put(value);
       var prefixCount = 0;
       for (var i = 0; i < previousBuffer.limit() && i < currentBuffer.limit(); i++) {
         if (previousBuffer.get(i) != currentBuffer.get(i)) {
@@ -119,10 +117,10 @@ public class DeltaByteArrayEncoding<ReadAs> implements ParquetEncoding<ReadAs> {
 
   @Override
   public int refineBytesRequiredEstimate(
-      final int valueCount,
-      final int estimatedPlainBytesRequired,
-      final ColumnChunkWriter<ReadAs> columnChunkWriter) {
-    return estimatedPlainBytesRequired
-        + columnChunkWriter.getColumnType().parquetType().getPlainBytesOverhead() * valueCount;
+      final EncodingWritableValues values, final int estimatedPlainBytesRequired) {
+    return switch (values.getType()) {
+      case BYTE_ARRAY -> estimatedPlainBytesRequired + 4 * values.length();
+      default -> estimatedPlainBytesRequired;
+    };
   }
 }

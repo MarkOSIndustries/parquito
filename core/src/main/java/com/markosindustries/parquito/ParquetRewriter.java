@@ -1,10 +1,13 @@
 package com.markosindustries.parquito;
 
+import com.markosindustries.parquito.page.Values;
 import com.markosindustries.parquito.predicates.ParquetPredicate;
+import com.markosindustries.parquito.rows.NoOpFieldVisitor;
 import com.markosindustries.parquito.rows.OptionalBranchIterator;
 import com.markosindustries.parquito.rows.PushdownPredicates;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
 import java.util.BitSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
@@ -104,37 +107,27 @@ public class ParquetRewriter {
 
     boolean anyKeep = false, anyDiscard = false;
 
-    final var reader = NoOpReader.INSTANCE;
     final var pushdownPredicates = new PushdownPredicates(keepRowsPredicate);
     final var predicateIterator =
-        new OptionalBranchIterator<>(
+        new OptionalBranchIterator(
             rowGroupReader.makeFieldIterators(
                 keepRowsPredicate.asSchemaTraversalSpec(),
-                reader,
                 pushdownPredicates,
                 schema,
                 sourceRangeReader),
-            schema,
-            reader);
+            schema);
 
-    RowGroupAction currentAction = null;
     var rowIndex = 0;
     var countOfRowsToKeep = 0L;
     while (predicateIterator.hasNext()) {
       final var isMatch = pushdownPredicates.matchesNextRow();
-      switch (currentAction) {
-        case RowGroupAction.Copy copy -> {}
-        case RowGroupAction.Drop drop -> {}
-        case RowGroupAction.Rewrite rewrite -> {}
-        case null -> {}
-      }
       anyKeep = anyKeep || isMatch;
       anyDiscard = anyDiscard || !isMatch;
       keepRowsBitset.set(rowIndex++, isMatch);
       if (isMatch) {
         countOfRowsToKeep++;
       }
-      predicateIterator.next();
+      predicateIterator.visitNext(NoOpFieldVisitor.INSTANCE);
     }
 
     if (anyKeep) {
@@ -167,7 +160,7 @@ public class ParquetRewriter {
               .getColumnChunkReaderForSchemaPath(rowGroupRangeReader, columnSchemaNode)
               .orElseThrow();
       valuePumps[columnIndex] =
-          ValuePump.createCasting(
+          ValuePump.create(
               columnChunkReader,
               rowGroupRangeReader,
               writer.getColumnChunkWriter(columnSchemaNode.getPath()),
@@ -181,57 +174,89 @@ public class ParquetRewriter {
     writer.finishCurrentRowGroup(countOfRowsToKeep);
   }
 
-  private record ValuePump<Value>(
-      CompletableFuture<FlatColumnIterator<Value>> columnValueIteratorFuture,
-      ColumnChunkWriter<Value> columnChunkWriter) {
-    public static <Value> ValuePump<Value> create(
-        final ColumnChunkReader<Value> columnChunkReader,
+  private record ValuePump(
+      CompletableFuture<FlatColumnIterator> columnValueIteratorFuture,
+      ColumnChunkWriter columnChunkWriter) {
+    public static ValuePump create(
+        final ColumnChunkReader columnChunkReader,
         final ByteRangeReader byteRangeReader,
-        final ColumnChunkWriter<Value> columnChunkWriter,
+        final ColumnChunkWriter columnChunkWriter,
         final ParquetSchemaNode columnSchemaNode) {
-      return new ValuePump<>(
+      return new ValuePump(
           columnChunkReader
               .readPages(byteRangeReader)
               .thenApplyAsync(
                   dataPageReaderIterator ->
-                      new FlatColumnIterator<>(dataPageReaderIterator, columnSchemaNode)),
+                      new FlatColumnIterator(dataPageReaderIterator, columnSchemaNode)),
           columnChunkWriter);
     }
 
-    public static <Value> ValuePump<Value> createCasting(
-        final ColumnChunkReader<Value> columnChunkReader,
-        final ByteRangeReader byteRangeReader,
-        final ColumnChunkWriter<?> columnChunkWriter,
-        final ParquetSchemaNode columnSchemaNode) {
-      //noinspection unchecked
-      return new ValuePump<>(
-          columnChunkReader
-              .readPages(byteRangeReader)
-              .thenApplyAsync(
-                  dataPageReaderIterator ->
-                      new FlatColumnIterator<>(dataPageReaderIterator, columnSchemaNode)),
-          (ColumnChunkWriter<Value>) columnChunkWriter);
+    static class ColumnWritingVisitor implements Values.Visitor {
+      private final ColumnChunkWriter columnChunkWriter;
+      private int repetitionLevel, definitionLevel;
+
+      public ColumnWritingVisitor(ColumnChunkWriter columnChunkWriter) {
+        this.columnChunkWriter = columnChunkWriter;
+      }
+
+      @Override
+      public void visit(final int pageIndex, final boolean value) {
+        columnChunkWriter.accumulateValue(repetitionLevel, value);
+      }
+
+      @Override
+      public void visit(final int pageIndex, final ByteBuffer value) {
+        columnChunkWriter.accumulateValue(repetitionLevel, value);
+      }
+
+      @Override
+      public void visit(final int pageIndex, final float value) {
+        columnChunkWriter.accumulateValue(repetitionLevel, value);
+      }
+
+      @Override
+      public void visit(final int pageIndex, final double value) {
+        columnChunkWriter.accumulateValue(repetitionLevel, value);
+      }
+
+      @Override
+      public void visit(final int pageIndex, final int value) {
+        columnChunkWriter.accumulateValue(repetitionLevel, value);
+      }
+
+      @Override
+      public void visit(final int pageIndex, final long value) {
+        columnChunkWriter.accumulateValue(repetitionLevel, value);
+      }
+
+      public void visitNull(int pageIndex) {
+        columnChunkWriter.accumulateNull(repetitionLevel, definitionLevel);
+      }
+
+      public void setRepetitionLevel(final int repetitionLevel) {
+        this.repetitionLevel = repetitionLevel;
+      }
+
+      public void setDefinitionLevel(final int definitionLevel) {
+        this.definitionLevel = definitionLevel;
+      }
     }
 
     public void transferRows(final BitSet rowsToKeep) {
       final var columnValueIterator = columnValueIteratorFuture.join();
       var rowIndex = 0;
+      final var visitor = new ColumnWritingVisitor(columnChunkWriter);
       while (columnValueIterator.hasNext()) {
         if (rowsToKeep.get(rowIndex++)) {
           do {
-            final var repetitionLevel = columnValueIterator.peekRepetitionLevel();
-            final var definitionLevel = columnValueIterator.peekDefinitionLevel();
-            final var value = columnValueIterator.next();
-            if (value == null) {
-              columnChunkWriter.accumulateNull(repetitionLevel, definitionLevel);
-            } else {
-              columnChunkWriter.accumulateValue(repetitionLevel, value);
-            }
+            visitor.setRepetitionLevel(columnValueIterator.peekRepetitionLevel());
+            visitor.setDefinitionLevel(columnValueIterator.peekDefinitionLevel());
+            columnValueIterator.visitNext(visitor);
           } while (columnValueIterator.hasNext()
               && columnValueIterator.peekRepetitionLevel() > 0); // zero means a new row
         } else {
           do {
-            columnValueIterator.next();
+            columnValueIterator.visitNext(Values.NoOpVisitor.INSTANCE);
           } while (columnValueIterator.hasNext()
               && columnValueIterator.peekRepetitionLevel() > 0); // zero means a new row
         }

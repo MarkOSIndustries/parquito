@@ -2,12 +2,12 @@ package com.markosindustries.parquito.page;
 
 import org.apache.parquet.format.PageHeader;
 
-public interface ParquetPageReader<ReadAs> {
+public interface ParquetPageReader {
   PageHeader getPageHeader();
 
   int getTotalValues();
 
   int getNonNullValues();
 
-  Values<ReadAs> getValues();
+  Values getValues();
 }

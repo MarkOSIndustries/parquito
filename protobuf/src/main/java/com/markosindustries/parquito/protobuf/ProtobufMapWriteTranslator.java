@@ -1,95 +1,34 @@
 package com.markosindustries.parquito.protobuf;
 
 import com.google.protobuf.Descriptors;
-import com.google.protobuf.Message;
+import com.google.protobuf.MapEntry;
 import com.markosindustries.parquito.ParquetSchemaNode;
 import com.markosindustries.parquito.WriteTranslator;
+import com.markosindustries.parquito.rows.BranchAccumulator;
+import java.util.List;
 
-public class ProtobufMapWriteTranslator implements WriteTranslator<Object, Void> {
-  private final MapGroupWriteTranslator<?, ?, ?, ?> mapGroupWriteTranslator;
+public class ProtobufMapWriteTranslator implements WriteTranslator<List<MapEntry<?, ?>>> {
+  private final WriteTranslator<?> mapEntryTranslator;
 
   public ProtobufMapWriteTranslator(
       final Descriptors.FieldDescriptor fieldDescriptor, final ParquetSchemaNode schemaNode) {
     final var keyValueSchemaNode = schemaNode.getChildAtIndex(0);
-    final var keySchemaNode = keyValueSchemaNode.getChildAtIndex(0);
-    final var valueSchemaNode = keyValueSchemaNode.getChildAtIndex(1);
-
-    final var keyField = fieldDescriptor.getMessageType().getFields().get(0);
-    final var valueField = fieldDescriptor.getMessageType().getFields().get(1);
-
-    this.mapGroupWriteTranslator =
-        new MapGroupWriteTranslator<>(
-            keyField,
-            valueField,
-            ProtobufMessageWriteTranslator.determineAppropriateTranslator(keyField, keySchemaNode),
-            ProtobufMessageWriteTranslator.determineAppropriateTranslator(
-                valueField, valueSchemaNode));
+    this.mapEntryTranslator =
+        ProtobufMessageWriteTranslator.determineAppropriateTranslator(
+            fieldDescriptor, keyValueSchemaNode);
   }
 
   @Override
-  public Object getField(final int childIndex, final Object mapEntries) {
-    return mapEntries; // we want to just hand the list of entries to the child to deal with
-  }
-
-  @Override
-  public WriteTranslator<?, ?> forChildIndex(final int childIndex) {
-    return mapGroupWriteTranslator;
-  }
-
-  @Override
-  public Void translate(final Object o) {
-    throw new UnsupportedOperationException(
-        "A protobuf map field cannot be directly translated, as it is not a leaf node in the parquet schema");
-  }
-
-  public static class MapGroupWriteTranslator<Key, KeyWriteAs, Value, ValueWriteAs>
-      implements WriteTranslator<Message, Void> {
-    private final Descriptors.FieldDescriptor keyFieldDescriptor;
-    private final Descriptors.FieldDescriptor valueFieldDescriptor;
-    private final WriteTranslator<Key, KeyWriteAs> keyTranslator;
-    private final WriteTranslator<Value, ValueWriteAs> valueTranslator;
-
-    public MapGroupWriteTranslator(
-        final Descriptors.FieldDescriptor keyFieldDescriptor,
-        final Descriptors.FieldDescriptor valueFieldDescriptor,
-        final WriteTranslator<Key, KeyWriteAs> keyTranslator,
-        final WriteTranslator<Value, ValueWriteAs> valueTranslator) {
-      this.keyFieldDescriptor = keyFieldDescriptor;
-      this.valueFieldDescriptor = valueFieldDescriptor;
-      this.keyTranslator = keyTranslator;
-      this.valueTranslator = valueTranslator;
-    }
-
-    @Override
-    public Object getField(final int childIndex, final Message keyValueMapEntry) {
-      return switch (childIndex) {
-        case 0 -> keyValueMapEntry.getField(keyFieldDescriptor);
-        case 1 -> keyValueMapEntry.getField(valueFieldDescriptor);
-        default ->
-            throw new IndexOutOfBoundsException(
-                "We shouldn't be looking for a field at child index "
-                    + childIndex
-                    + " on a MAP.group structure");
-      };
-    }
-
-    @Override
-    public WriteTranslator<?, ?> forChildIndex(final int childIndex) {
-      return switch (childIndex) {
-        case 0 -> keyTranslator;
-        case 1 -> valueTranslator;
-        default ->
-            throw new IndexOutOfBoundsException(
-                "We shouldn't be looking for a write translator at child index "
-                    + childIndex
-                    + " on a MAP.group structure");
-      };
-    }
-
-    @Override
-    public Void translate(final Message keyValueMapEntry) {
-      throw new UnsupportedOperationException(
-          "A protobuf map field's key_value group node cannot be directly translated, as it is not a leaf node in the parquet schema");
+  public void translate(
+      final List<MapEntry<?, ?>> mapEntries, final BranchAccumulator accumulator) {
+    if (mapEntries.isEmpty()) {
+      accumulator.accumulateNull();
+    } else {
+      accumulator.branch(
+          mapEntriesAccessor -> {
+            mapEntryTranslator.translateUnsafe(
+                mapEntries, mapEntriesAccessor.childBranchAccumulator(0));
+          });
     }
   }
 }

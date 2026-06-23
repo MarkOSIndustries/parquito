@@ -3,13 +3,13 @@ package com.markosindustries.parquito.rows;
 public interface PredicateRowMatcher {
   boolean rowMatches();
 
-  final class AnyMatch<T> implements PredicateRowMatcher {
-    private final DataPageCursor<T> dataPageCursor;
+  final class AnyMatch implements PredicateRowMatcher {
+    private final DataPageCursor dataPageCursor;
     private final PredicateMaterialisedMatches materialisedMatches;
     private final boolean matchesNull;
 
     public AnyMatch(
-        final DataPageCursor<T> dataPageCursor,
+        final DataPageCursor dataPageCursor,
         final PredicateMaterialisedMatches materialisedMatches,
         final boolean matchesNull) {
       this.dataPageCursor = dataPageCursor;
@@ -37,13 +37,13 @@ public interface PredicateRowMatcher {
     }
   }
 
-  final class AllMatch<T> implements PredicateRowMatcher {
-    private final DataPageCursor<T> dataPageCursor;
+  final class AllMatch implements PredicateRowMatcher {
+    private final DataPageCursor dataPageCursor;
     private final PredicateMaterialisedMatches materialisedMatches;
     private final boolean matchesNull;
 
     public AllMatch(
-        final DataPageCursor<T> dataPageCursor,
+        final DataPageCursor dataPageCursor,
         final PredicateMaterialisedMatches materialisedMatches,
         final boolean matchesNull) {
       this.dataPageCursor = dataPageCursor;
@@ -71,13 +71,13 @@ public interface PredicateRowMatcher {
     }
   }
 
-  final class NoneMatch<T> implements PredicateRowMatcher {
-    private final DataPageCursor<T> dataPageCursor;
+  final class NoneMatch implements PredicateRowMatcher {
+    private final DataPageCursor dataPageCursor;
     private final PredicateMaterialisedMatches materialisedMatches;
     private final boolean matchesNull;
 
     public NoneMatch(
-        final DataPageCursor<T> dataPageCursor,
+        final DataPageCursor dataPageCursor,
         final PredicateMaterialisedMatches materialisedMatches,
         final boolean matchesNull) {
       this.dataPageCursor = dataPageCursor;

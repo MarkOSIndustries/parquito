@@ -12,6 +12,7 @@ import com.markosindustries.parquito.protobuf.ProtobufReader;
 import com.markosindustries.parquito.schemas.Example;
 import com.markosindustries.parquito.schemas.ExampleChild;
 import com.markosindustries.parquito.schemas.ExampleEnum;
+import com.markosindustries.parquito.types.ConversionStrategy;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
@@ -92,7 +93,15 @@ public class ParquitoAsReaderCompatibilityTests {
       throws IOException {
     final var file =
         generateFileUsingApacheHadoop(
-            List.of(Example.newBuilder().build(), Example.newBuilder().build()),
+            List.of(
+                Example.newBuilder()
+                    .addSomeRepeated(Example.ExampleRepeated.newBuilder().build())
+                    .putSomeMap(0, ExampleChild.newBuilder().build())
+                    .build(),
+                Example.newBuilder()
+                    .addSomeRepeated(Example.ExampleRepeated.newBuilder().build())
+                    .putSomeMap(0, ExampleChild.newBuilder().build())
+                    .build()),
             codecName,
             writerVersion,
             parquetSpecsCompliant,
@@ -398,11 +407,13 @@ public class ParquitoAsReaderCompatibilityTests {
                                   ParquetPredicates.anyEquals(
                                       rowGroupReader,
                                       Integer.MAX_VALUE - 974456,
-                                      schema.parsePathElements("some_child", "some_int32")),
+                                      schema.parsePathElements("some_child", "some_int32"),
+                                      ConversionStrategy.DEFAULT),
                                   ParquetPredicates.anyGreaterThan(
                                       rowGroupReader,
                                       "str",
-                                      schema.parsePathElements("some_child", "some_string")))),
+                                      schema.parsePathElements("some_child", "some_string"),
+                                      ConversionStrategy.DEFAULT))),
                           byteRangeReader);
                   var rows = 0;
                   while (rowIterator.hasNext()) {
@@ -442,8 +453,10 @@ public class ParquitoAsReaderCompatibilityTests {
                           .getColumnChunkReaderForSchemaPath(
                               byteRangeReader, schema.parseDotSeparatedPath("some_string"))
                           .orElseThrow();
-                  assertTrue(columnChunkReader.mightContainObject("str"));
-                  Assertions.assertFalse(columnChunkReader.mightContainObject("slab"));
+                  assertTrue(
+                      columnChunkReader.mightContainObject("str", ConversionStrategy.DEFAULT));
+                  Assertions.assertFalse(
+                      columnChunkReader.mightContainObject("slab", ConversionStrategy.DEFAULT));
                 }
               })
           .join();
@@ -477,11 +490,16 @@ public class ParquitoAsReaderCompatibilityTests {
                           .getColumnChunkReaderForSchemaPath(
                               byteRangeReader, schema.parseDotSeparatedPath("some_string"))
                           .orElseThrow();
-                  Assertions.assertFalse(columnChunkReader.mightContainObject("str"));
-                  assertTrue(columnChunkReader.mightContainObject("stonks"));
-                  assertTrue(columnChunkReader.mightContainAnyObjects(List.of("str", "stonks")));
                   Assertions.assertFalse(
-                      columnChunkReader.mightContainAnyObjects(List.of("str", "strut")));
+                      columnChunkReader.mightContainObject("str", ConversionStrategy.DEFAULT));
+                  assertTrue(
+                      columnChunkReader.mightContainObject("stonks", ConversionStrategy.DEFAULT));
+                  assertTrue(
+                      columnChunkReader.mightContainAnyObjects(
+                          List.of("str", "stonks"), ConversionStrategy.DEFAULT));
+                  Assertions.assertFalse(
+                      columnChunkReader.mightContainAnyObjects(
+                          List.of("str", "strut"), ConversionStrategy.DEFAULT));
                 }
               })
           .join();
@@ -515,11 +533,16 @@ public class ParquitoAsReaderCompatibilityTests {
                           .getColumnChunkReaderForSchemaPath(
                               byteRangeReader, schema.parseDotSeparatedPath("some_string"))
                           .orElseThrow();
-                  Assertions.assertFalse(columnChunkReader.mightContainObject("str"));
-                  assertTrue(columnChunkReader.mightContainObject("stonks"));
-                  assertTrue(columnChunkReader.mightContainAnyObjects(List.of("str", "stonks")));
                   Assertions.assertFalse(
-                      columnChunkReader.mightContainAnyObjects(List.of("str", "strut")));
+                      columnChunkReader.mightContainObject("str", ConversionStrategy.DEFAULT));
+                  assertTrue(
+                      columnChunkReader.mightContainObject("stonks", ConversionStrategy.DEFAULT));
+                  assertTrue(
+                      columnChunkReader.mightContainAnyObjects(
+                          List.of("str", "stonks"), ConversionStrategy.DEFAULT));
+                  Assertions.assertFalse(
+                      columnChunkReader.mightContainAnyObjects(
+                          List.of("str", "strut"), ConversionStrategy.DEFAULT));
                 }
               })
           .join();

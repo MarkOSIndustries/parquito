@@ -1,19 +1,14 @@
 package com.markosindustries.parquito.rows;
 
 import com.markosindustries.parquito.ParquetSchemaNode;
-import com.markosindustries.parquito.Reader;
 
-public class RepeatedBranchIterator<Repeated, Value> implements ParquetFieldIterator<Repeated> {
-  private final OptionalBranchIterator<Value> optionalBranchIterator;
+public class RepeatedBranchIterator implements ParquetFieldIterator {
+  private final OptionalBranchIterator optionalBranchIterator;
   private final ParquetSchemaNode schemaNode;
-  private final Reader<Repeated, Value> reader;
 
   public RepeatedBranchIterator(
-      ParquetFieldIterator<?>[] childIterators,
-      ParquetSchemaNode schemaNode,
-      final Reader<Repeated, Value> reader) {
-    this.reader = reader;
-    this.optionalBranchIterator = new OptionalBranchIterator<>(childIterators, schemaNode, reader);
+      ParquetFieldIterator[] childIterators, ParquetSchemaNode schemaNode) {
+    this.optionalBranchIterator = new OptionalBranchIterator(childIterators, schemaNode);
     this.schemaNode = schemaNode;
   }
 
@@ -38,15 +33,14 @@ public class RepeatedBranchIterator<Repeated, Value> implements ParquetFieldIter
   }
 
   @Override
-  public Repeated next() {
-    final var values = reader.repeatedBuilder();
+  public void visitNext(final FieldVisitor visitor) {
     if (optionalBranchIterator.peekDefinitionLevel() >= schemaNode.getDefinitionLevelMax()) {
       do {
-        values.add(optionalBranchIterator.next());
+        optionalBranchIterator.visitNext(visitor);
       } while (optionalBranchIterator.peekRepetitionLevel() >= schemaNode.getRepetitionLevelMax());
     } else {
-      optionalBranchIterator.next();
+      optionalBranchIterator.visitNext(NoOpFieldVisitor.INSTANCE);
     }
-    return values.build();
+    visitor.endRepeated();
   }
 }

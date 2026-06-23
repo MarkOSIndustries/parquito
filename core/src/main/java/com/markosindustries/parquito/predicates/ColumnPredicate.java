@@ -1,38 +1,39 @@
 package com.markosindustries.parquito.predicates;
 
+import com.markosindustries.parquito.ConvertedColumnType;
 import com.markosindustries.parquito.ParquetSchemaPath;
 import com.markosindustries.parquito.rows.DataPageCursor;
 import com.markosindustries.parquito.rows.PredicateMaterialisedMatches;
 import com.markosindustries.parquito.rows.PredicateRowMatcher;
 import com.markosindustries.parquito.schematraversal.SchemaTraversalSpec;
-import com.markosindustries.parquito.types.ColumnType;
+import java.nio.ByteBuffer;
 import java.util.stream.Stream;
 
 /**
  * A predicate
  *
- * @param <ReadAs>
+ * @param <Converted>
  */
-public abstract class ColumnPredicate<ReadAs, RowMatcher extends PredicateRowMatcher>
+public abstract class ColumnPredicate<Converted, RowMatcher extends PredicateRowMatcher>
     implements ParquetPredicate {
-  private final ColumnType<ReadAs> columnType;
+  private final ConvertedColumnType<Converted> convertedColumnType;
   private final ParquetSchemaPath schemaPath;
-  private final RowMatcherConstructor<ReadAs, RowMatcher> rowMatcherConstructor;
+  private final RowMatcherConstructor<RowMatcher> rowMatcherConstructor;
   private PredicateRowMatcher rowMatcher;
 
   @FunctionalInterface
-  public interface RowMatcherConstructor<ReadAs, RowMatcher extends PredicateRowMatcher> {
+  public interface RowMatcherConstructor<RowMatcher extends PredicateRowMatcher> {
     RowMatcher create(
-        final DataPageCursor<ReadAs> dataPageCursor,
+        final DataPageCursor dataPageCursor,
         final PredicateMaterialisedMatches materialisedMatches,
         final boolean matchesNull);
   }
 
   public ColumnPredicate(
-      final ColumnType<ReadAs> columnType,
+      final ConvertedColumnType<Converted> convertedColumnType,
       final ParquetSchemaPath schemaPath,
-      final RowMatcherConstructor<ReadAs, RowMatcher> rowMatcherConstructor) {
-    this.columnType = columnType;
+      final RowMatcherConstructor<RowMatcher> rowMatcherConstructor) {
+    this.convertedColumnType = convertedColumnType;
     this.schemaPath = schemaPath;
     this.rowMatcherConstructor = rowMatcherConstructor;
   }
@@ -60,11 +61,47 @@ public abstract class ColumnPredicate<ReadAs, RowMatcher extends PredicateRowMat
     return schemaPath;
   }
 
-  protected int compare(ReadAs value, ReadAs comparator) {
-    return columnType.compare(value, comparator);
+  protected int compare(final boolean o1, final Converted o2) {
+    return convertedColumnType.compare(o1, o2);
   }
 
-  public abstract boolean valueMatches(final ReadAs value);
+  protected int compare(final ByteBuffer o1, final Converted o2) {
+    return convertedColumnType.compare(o1, o2);
+  }
+
+  protected int compare(final double o1, final Converted o2) {
+    return convertedColumnType.compare(o1, o2);
+  }
+
+  protected int compare(final float o1, final Converted o2) {
+    return convertedColumnType.compare(o1, o2);
+  }
+
+  protected int compare(final int o1, final Converted o2) {
+    return convertedColumnType.compare(o1, o2);
+  }
+
+  protected int compare(final long o1, final Converted o2) {
+    return convertedColumnType.compare(o1, o2);
+  }
+
+  protected int compareNull(final Converted o2) {
+    return convertedColumnType.compareNull(o2);
+  }
+
+  public abstract boolean valueMatches(final boolean value);
+
+  public abstract boolean valueMatches(final ByteBuffer value);
+
+  public abstract boolean valueMatches(final double value);
+
+  public abstract boolean valueMatches(final float value);
+
+  public abstract boolean valueMatches(final int value);
+
+  public abstract boolean valueMatches(final long value);
+
+  public abstract boolean nullMatches();
 
   @Override
   public final boolean matchesNextRow() {
@@ -80,15 +117,13 @@ public abstract class ColumnPredicate<ReadAs, RowMatcher extends PredicateRowMat
     return Stream.of(this);
   }
 
-  public final void newPageUnsafe(final DataPageCursor<?> dataPageCursor) {
-    //noinspection unchecked
-    newPage((DataPageCursor<ReadAs>) dataPageCursor);
-  }
-
-  public final void newPage(final DataPageCursor<ReadAs> dataPageCursor) {
-    final var materialisedMatches = dataPageCursor.getDataPage().getValues().materialise(this);
-    final var matchesNull = valueMatches(null);
+  public final void newPage(final DataPageCursor dataPageCursor) {
+    final var materialisedMatches =
+        dataPageCursor
+            .getDataPage()
+            .getValues()
+            .materialise(this, this.convertedColumnType.logicalTypeConverter().getConvertedClass());
     this.rowMatcher =
-        rowMatcherConstructor.create(dataPageCursor, materialisedMatches, matchesNull);
+        rowMatcherConstructor.create(dataPageCursor, materialisedMatches, nullMatches());
   }
 }

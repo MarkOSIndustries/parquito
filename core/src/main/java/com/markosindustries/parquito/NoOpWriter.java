@@ -1,5 +1,6 @@
 package com.markosindustries.parquito;
 
+import com.markosindustries.parquito.rows.BranchAccumulator;
 import java.util.List;
 import org.apache.parquet.format.SchemaElement;
 
@@ -23,26 +24,14 @@ class NoOpWriter implements Writer<Object> {
   }
 
   @Override
-  public WriteTranslator<Object, ?> getTranslator() {
+  public WriteTranslator<Object> getTranslator() {
     return NoOpWriteTranslator.INSTANCE;
   }
 
-  private static class NoOpWriteTranslator implements WriteTranslator<Object, Object> {
+  private static class NoOpWriteTranslator implements WriteTranslator<Object> {
     public static final NoOpWriteTranslator INSTANCE = new NoOpWriteTranslator();
 
     @Override
-    public Object getField(final int childIndex, final Object o) {
-      return null;
-    }
-
-    @Override
-    public WriteTranslator<?, ?> forChildIndex(final int childIndex) {
-      return this;
-    }
-
-    @Override
-    public Object translate(final Object o) {
-      return o;
-    }
+    public void translate(final Object o, final BranchAccumulator accumulator) {}
   }
 }

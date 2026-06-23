@@ -14,6 +14,7 @@ import com.markosindustries.parquito.schemas.Example;
 import com.markosindustries.parquito.schemas.ExampleChild;
 import com.markosindustries.parquito.schemas.ExampleEnum;
 import com.markosindustries.parquito.schematraversal.SchemaTraversalSpec;
+import com.markosindustries.parquito.types.ConversionStrategy;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -180,7 +181,7 @@ public class ParquitoRoundTripTests {
                   final var rowGroupReader = new RowGroupReader(rowGroup, schema);
                   final var rowGroupByteRangeReader =
                       rowGroupReader.preloadRowGroup(byteRangeReader).join();
-                  final ColumnChunkReader<?> someStringColumnChunkReader =
+                  final ColumnChunkReader someStringColumnChunkReader =
                       rowGroupReader
                           .getColumnChunkReaderForSchemaPath(
                               rowGroupByteRangeReader,
@@ -188,9 +189,16 @@ public class ParquitoRoundTripTests {
                                   schema, "some_child.some_string"))
                           .orElseThrow();
                   assertTrue(someStringColumnChunkReader.hasBloomFilter());
-                  assertFalse(someStringColumnChunkReader.getBloomFilter().mightContain("strx"));
-                  assertEquals("stra", someStringColumnChunkReader.getStatsMin());
-                  assertEquals("strc", someStringColumnChunkReader.getStatsMax());
+                  assertFalse(
+                      someStringColumnChunkReader
+                          .getBloomFilter()
+                          .mightContainAny(
+                              someStringColumnChunkReader.makeColumnValuesSet(
+                                  List.of("strx"), ConversionStrategy.DEFAULT)));
+                  assertEquals(
+                      "stra", someStringColumnChunkReader.getStatsMin(ConversionStrategy.DEFAULT));
+                  assertEquals(
+                      "strc", someStringColumnChunkReader.getStatsMax(ConversionStrategy.DEFAULT));
                   final var rowIterator =
                       rowGroupReader.getRowIterator(
                           new RowReadSpec<>(new ProtobufReader<>(Example::newBuilder, schema)),
@@ -202,7 +210,10 @@ public class ParquitoRoundTripTests {
                       assertTrue(
                           someStringColumnChunkReader
                               .getBloomFilter()
-                              .mightContain(expectedProtobuf.getSomeChild().getSomeString()),
+                              .mightContainAny(
+                                  someStringColumnChunkReader.makeColumnValuesSet(
+                                      List.of(expectedProtobuf.getSomeChild().getSomeString()),
+                                      ConversionStrategy.DEFAULT)),
                           "Bloom filter did not contain "
                               + expectedProtobuf.getSomeChild().getSomeString());
                     }
@@ -326,7 +337,7 @@ public class ParquitoRoundTripTests {
     final var fullSchema =
         protobufSchemaConverter.convertDescriptorToSchema(Example.getDescriptor());
     final var writeSchema = fullSchema.trim(makeSchemaTraversalSpec.apply(fullSchema));
-    final var protobufWriter = new ProtobufWriter<Example>(Example.getDescriptor(), writeSchema);
+    final var protobufWriter = new ProtobufWriter(Example.getDescriptor(), writeSchema);
 
     final var bloomFilterFPPs = new HashMap<ParquetSchemaPath, Double>();
     protobufWriter
@@ -492,7 +503,7 @@ public class ParquitoRoundTripTests {
         new ProtobufSchemaConverter(ProtobufParquetConfig.newBuilder().build());
     final var writeSchema =
         protobufSchemaConverter.convertDescriptorToSchema(Example.getDescriptor());
-    final var protobufWriter = new ProtobufWriter<Example>(Example.getDescriptor(), writeSchema);
+    final var protobufWriter = new ProtobufWriter(Example.getDescriptor(), writeSchema);
     try (final var writer =
         new RowGroupWriter<>(
             outputStream,

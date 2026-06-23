@@ -9,13 +9,13 @@ import java.nio.ByteBuffer;
 import org.apache.parquet.format.Encoding;
 import org.apache.parquet.format.PageHeader;
 
-public class DictionaryPageReader<ReadAs> implements ParquetPageReader<ReadAs> {
+public class DictionaryPageReader implements ParquetPageReader {
   private final PageHeader pageHeader;
-  private final Values<ReadAs> values;
+  private final Values values;
 
   public DictionaryPageReader(
       final PageHeader pageHeader,
-      final ColumnChunkReader<ReadAs> columnChunkReader,
+      final ColumnChunkReader columnChunkReader,
       final ByteBuffer pageBuffer)
       throws IOException {
     this.pageHeader = pageHeader;
@@ -25,7 +25,7 @@ public class DictionaryPageReader<ReadAs> implements ParquetPageReader<ReadAs> {
             columnChunkReader.getHeader().meta_data.codec, new ByteBufferInputStream(pageBuffer));
 
     this.values =
-        Encodings.<ReadAs>getEncoding(Encoding.PLAIN)
+        Encodings.getEncoding(Encoding.PLAIN)
             .decode(
                 pageHeader.dictionary_page_header.num_values,
                 pageHeader.uncompressed_page_size,
@@ -49,7 +49,7 @@ public class DictionaryPageReader<ReadAs> implements ParquetPageReader<ReadAs> {
   }
 
   @Override
-  public Values<ReadAs> getValues() {
+  public Values getValues() {
     return values;
   }
 }

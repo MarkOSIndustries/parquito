@@ -83,7 +83,7 @@ public class EncodingsCompatibilityTests {
 
   private static Stream<Arguments> longEncodingsSource() {
     final var valueCounts = List.of(1, 10_000);
-    final var maxValues = List.of(0, 1, Long.MAX_VALUE);
+    final var maxValues = List.of(0, 2, Long.MAX_VALUE);
 
     return Stream.concat(
             Lists.cartesianProduct(

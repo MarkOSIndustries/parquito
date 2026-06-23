@@ -4,42 +4,46 @@ import com.markosindustries.parquito.bloomfilter.BloomFilter;
 import com.markosindustries.parquito.bloomfilter.BloomFilterRead;
 import com.markosindustries.parquito.page.DataPageReader;
 import com.markosindustries.parquito.page.DictionaryPageReader;
-import com.markosindustries.parquito.types.ColumnType;
+import com.markosindustries.parquito.page.Values;
+import com.markosindustries.parquito.types.ConversionStrategy;
+import com.markosindustries.parquito.types.LogicalTypeConverter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.parquet.format.BloomFilterHeader;
+import org.apache.parquet.format.ColumnChunk;
 import org.apache.parquet.format.ColumnMetaData;
 import org.apache.parquet.format.PageHeader;
 import org.apache.parquet.format.RowGroup;
 import org.apache.parquet.format.SortingColumn;
 import org.apache.parquet.format.Util;
 
-public class ColumnChunkReader<ReadAs> {
+public class ColumnChunkReader {
   /**
    * Usually between 14/18, but a bit of over-read won't hurt because the bloom filter bitset is
    * next and it's minimum 32 bytes
    */
   private static final int BLOOM_FILTER_HEADER_SIZE = 32;
 
-  private final org.apache.parquet.format.ColumnChunk header;
-  private final ColumnType<ReadAs> columnType;
-  private final CompletableFuture<DictionaryPageReader<ReadAs>> dictionaryPage;
+  private final ColumnChunk header;
+  private final ColumnType columnType;
+  private final CompletableFuture<DictionaryPageReader> dictionaryPage;
   private final CompletableFuture<BloomFilter> bloomFilter;
   private final long dataPageCompressedBytes;
 
   private ColumnChunkReader(
-      final org.apache.parquet.format.ColumnChunk header,
-      final ColumnType<ReadAs> columnType,
-      final CompletableFuture<DictionaryPageReader<ReadAs>> dictionaryPage,
+      final ColumnChunk header,
+      final ColumnType columnType,
+      final CompletableFuture<DictionaryPageReader> dictionaryPage,
       final CompletableFuture<BloomFilter> bloomFilter,
       final long dataPageCompressedBytes) {
     this.header = header;
@@ -49,9 +53,9 @@ public class ColumnChunkReader<ReadAs> {
     this.dataPageCompressedBytes = dataPageCompressedBytes;
   }
 
-  public static <ReadAs> ColumnChunkReader<ReadAs> create(
-      final org.apache.parquet.format.ColumnChunk columnChunkHeader,
-      final ColumnType<ReadAs> type,
+  public static ColumnChunkReader create(
+      final ColumnChunk columnChunkHeader,
+      final ColumnType type,
       final ByteRangeReader byteRangeReader) {
     // Writers attribute the first DataPage as the file_offset, not the first Page - and we want the
     // first page, which is the dictionary if it has one
@@ -60,10 +64,10 @@ public class ColumnChunkReader<ReadAs> {
             ? (columnChunkHeader.file_offset - columnChunkHeader.meta_data.dictionary_page_offset)
             : 0;
 
-    final var dictionaryPageFuture = new CompletableFuture<DictionaryPageReader<ReadAs>>();
+    final var dictionaryPageFuture = new CompletableFuture<DictionaryPageReader>();
     final var bloomFilterFuture = readBloomFilter(byteRangeReader, columnChunkHeader.meta_data);
     final var columnChunk =
-        new ColumnChunkReader<ReadAs>(
+        new ColumnChunkReader(
             columnChunkHeader,
             type,
             dictionaryPageFuture,
@@ -77,7 +81,7 @@ public class ColumnChunkReader<ReadAs> {
                 try {
                   final var dictionaryStream = new ByteBufferInputStream(dictionaryBuffer);
                   final var dictionaryPageHeader = Util.readPageHeader(dictionaryStream);
-                  return new DictionaryPageReader<ReadAs>(
+                  return new DictionaryPageReader(
                       dictionaryPageHeader,
                       columnChunk,
                       dictionaryStream.readAsBufferView(dictionaryPageHeader.compressed_page_size));
@@ -104,7 +108,7 @@ public class ColumnChunkReader<ReadAs> {
     return columnChunk;
   }
 
-  public static ColumnChunkReader<?> create(
+  public static ColumnChunkReader create(
       final RowGroup rowGroupHeader,
       final int columnChunkIndex,
       final ParquetSchemaNode columnSchema,
@@ -117,8 +121,7 @@ public class ColumnChunkReader<ReadAs> {
                 .findAny()
                 .orElseGet(() -> new SortingColumn(columnChunkIndex, false, true))
             : new SortingColumn(columnChunkIndex, false, true);
-    final var columnType =
-        ColumnType.create(columnChunkHeader.meta_data, columnChunkSorting, columnSchema);
+    final var columnType = ColumnType.create(columnChunkSorting, columnSchema);
     return ColumnChunkReader.create(columnChunkHeader, columnType, byteRangeReader);
   }
 
@@ -153,15 +156,15 @@ public class ColumnChunkReader<ReadAs> {
             Concurrency.DEFAULT_EXECUTOR);
   }
 
-  public org.apache.parquet.format.ColumnChunk getHeader() {
+  public ColumnChunk getHeader() {
     return header;
   }
 
-  public ColumnType<ReadAs> getColumnType() {
+  public ColumnType getColumnType() {
     return columnType;
   }
 
-  public DictionaryPageReader<ReadAs> getDictionaryPage() {
+  public DictionaryPageReader getDictionaryPage() {
     return dictionaryPage.join();
   }
 
@@ -169,34 +172,50 @@ public class ColumnChunkReader<ReadAs> {
     return bloomFilter.join();
   }
 
-  public boolean mightContainAnyObjects(Collection<Object> values) {
-    final var readAsClass = columnType.parquetType().getReadAsClass();
+  public boolean mightContainAnyObjects(
+      Collection<Object> values, ConversionStrategy conversionStrategy) {
+    final var convertedClass =
+        conversionStrategy.converterFor(this.columnType.schemaNode()).getConvertedClass();
     return mightContainAny(
-        values.stream().filter(readAsClass::isInstance).map(readAsClass::cast).toList());
+        values.stream().filter(convertedClass::isInstance).map(convertedClass::cast).toList(),
+        conversionStrategy);
   }
 
-  public boolean mightContainObject(final Object value) {
-    final var readAsClass = columnType.parquetType().getReadAsClass();
-    if (readAsClass.isInstance(value)) {
-      return mightContainAny(List.of(readAsClass.cast(value)));
+  public boolean mightContainObject(final Object value, ConversionStrategy conversionStrategy) {
+    final var convertedClass =
+        conversionStrategy.converterFor(this.columnType.schemaNode()).getConvertedClass();
+    if (convertedClass.isInstance(value)) {
+      return mightContainAny(List.of(convertedClass.cast(value)), conversionStrategy);
     }
     return false;
   }
 
-  public boolean mightContainAny(final Collection<ReadAs> values) {
-    if (hasRangeStats()
-        && (values.stream()
-            .allMatch(
-                value ->
-                    columnType.compare(getStatsMin(), value) > 0
-                        || columnType.compare(getStatsMax(), value) < 0))) {
+  public ColumnValuesSet<?> makeColumnValuesSet(
+      final Collection<?> values, final ConversionStrategy conversionStrategy) {
+    final var logicalTypeConverter = conversionStrategy.converterFor(this.columnType.schemaNode());
+    return makeColumnValuesSet(logicalTypeConverter, values);
+  }
+
+  private <T> ColumnValuesSet<T> makeColumnValuesSet(
+      final LogicalTypeConverter<T> logicalTypeConverter, final Collection<?> values) {
+    final var convertedClass = logicalTypeConverter.getConvertedClass();
+    return new ColumnValuesSet<>(
+        logicalTypeConverter,
+        values.stream().filter(convertedClass::isInstance).map(convertedClass::cast).toList());
+  }
+
+  public boolean mightContainAny(
+      final Collection<?> values, final ConversionStrategy conversionStrategy) {
+    final var logicalTypeConverter = conversionStrategy.converterFor(this.columnType.schemaNode());
+    final var valuesSet = makeColumnValuesSet(logicalTypeConverter, values);
+    if (hasRangeStats() && !valuesSet.anyInRange(columnType, header.meta_data.statistics)) {
       return false;
     }
-    if (hasBloomFilter() && !bloomFilterMightContainAny(values)) {
+    if (hasBloomFilter() && !bloomFilterMightContainAny(valuesSet)) {
       return false;
     }
     if (hasDictionary()) {
-      return dictionaryContainsAny(values);
+      return dictionaryContainsAny(valuesSet);
     }
     return containsNonNulls();
   }
@@ -204,18 +223,6 @@ public class ColumnChunkReader<ReadAs> {
   public boolean hasRangeStats() {
     return header.meta_data.statistics.min_value != null
         && header.meta_data.statistics.max_value != null;
-  }
-
-  public ReadAs readValue(ByteBuffer byteBuffer) {
-    return columnType.parquetType().readFromByteBuffer(byteBuffer);
-  }
-
-  public ReadAs getStatsMin() {
-    return readValue(header.meta_data.statistics.min_value);
-  }
-
-  public ReadAs getStatsMax() {
-    return readValue(header.meta_data.statistics.max_value);
   }
 
   public boolean containsNonNulls() {
@@ -230,16 +237,69 @@ public class ColumnChunkReader<ReadAs> {
     return header.meta_data.isSetDictionary_page_offset();
   }
 
-  private boolean bloomFilterMightContainAny(final Collection<ReadAs> values) {
+  private <T> boolean bloomFilterMightContainAny(final ColumnValuesSet<T> columnValuesSet) {
     final var bloomFilter = getBloomFilter();
-    return bloomFilter.mightContainAny(values);
+    return bloomFilter.mightContainAny(columnValuesSet);
   }
 
-  private boolean dictionaryContainsAny(final Collection<ReadAs> values) {
+  private <T> boolean dictionaryContainsAny(final ColumnValuesSet<T> columnValuesSet) {
     final var dictionaryPage = getDictionaryPage();
     final var dictionaryPageValues = dictionaryPage.getValues();
+    final var foundAny = new AtomicBoolean(false);
     for (int i = 0; i < dictionaryPage.getNonNullValues(); i++) {
-      if (values.stream().anyMatch(dictionaryPageValues.get(i)::equals)) {
+      dictionaryPageValues.visit(
+          i,
+          i,
+          new Values.Visitor() {
+            @Override
+            public void visit(final int pageIndex, final boolean value) {
+              if (columnValuesSet.contains(value)) {
+                foundAny.set(true);
+              }
+            }
+
+            @Override
+            public void visit(final int pageIndex, final ByteBuffer value) {
+              if (columnValuesSet.contains(value)) {
+                foundAny.set(true);
+              }
+            }
+
+            @Override
+            public void visit(final int pageIndex, final float value) {
+              if (columnValuesSet.contains(value)) {
+                foundAny.set(true);
+              }
+            }
+
+            @Override
+            public void visit(final int pageIndex, final double value) {
+              if (columnValuesSet.contains(value)) {
+                foundAny.set(true);
+              }
+            }
+
+            @Override
+            public void visit(final int pageIndex, final int value) {
+              if (columnValuesSet.contains(value)) {
+                foundAny.set(true);
+              }
+            }
+
+            @Override
+            public void visit(final int pageIndex, final long value) {
+              if (columnValuesSet.contains(value)) {
+                foundAny.set(true);
+              }
+            }
+
+            @Override
+            public void visitNull(int pageIndex) {
+              throw new UnsupportedOperationException(
+                  "We shouldn't encounter nulls in a dictionary page");
+            }
+          });
+      if (foundAny.get()) {
         return true;
       }
     }
@@ -247,29 +307,73 @@ public class ColumnChunkReader<ReadAs> {
     return false;
   }
 
-  public Set<ReadAs> getValuesInDictionary() {
+  public Set<?> getValuesInDictionary(final ConversionStrategy conversionStrategy) {
+    return getValuesInDictionary(conversionStrategy.converterFor(this.columnType.schemaNode()));
+  }
+
+  private <T> Set<T> getValuesInDictionary(final LogicalTypeConverter<T> logicalTypeConverter) {
     if (!hasDictionary()) {
       return Collections.emptySet();
     }
     return dictionaryPage
         .thenApplyAsync(
             page -> {
+              final var hashSet = new HashSet<T>();
               final var values = page.getValues();
-              return IntStream.range(0, page.getNonNullValues())
-                  .mapToObj(values::get)
-                  .collect(Collectors.toUnmodifiableSet());
+              for (var i = 0; i < page.getNonNullValues(); i++) {
+                values.visit(
+                    i,
+                    i,
+                    new Values.Visitor() {
+                      @Override
+                      public void visit(final int pageIndex, final boolean value) {
+                        hashSet.add(logicalTypeConverter.fromBoolean(value));
+                      }
+
+                      @Override
+                      public void visit(final int pageIndex, final ByteBuffer value) {
+                        hashSet.add(logicalTypeConverter.fromByteBuffer(value));
+                      }
+
+                      @Override
+                      public void visit(final int pageIndex, final float value) {
+                        hashSet.add(logicalTypeConverter.fromFloat(value));
+                      }
+
+                      @Override
+                      public void visit(final int pageIndex, final double value) {
+                        hashSet.add(logicalTypeConverter.fromDouble(value));
+                      }
+
+                      @Override
+                      public void visit(final int pageIndex, final int value) {
+                        hashSet.add(logicalTypeConverter.fromInt32(value));
+                      }
+
+                      @Override
+                      public void visit(final int pageIndex, final long value) {
+                        hashSet.add(logicalTypeConverter.fromInt64(value));
+                      }
+
+                      @Override
+                      public void visitNull(int pageIndex) {
+                        throw new UnsupportedOperationException(
+                            "We shouldn't encounter nulls in a dictionary page");
+                      }
+                    });
+              }
+              return hashSet;
             },
             Concurrency.DEFAULT_EXECUTOR)
         .join();
   }
 
-  public CompletableFuture<Iterator<DataPageReader<ReadAs>>> readPages(
-      ByteRangeReader byteRangeReader) {
+  public CompletableFuture<Iterator<DataPageReader>> readPages(ByteRangeReader byteRangeReader) {
     return byteRangeReader
         .readAsBuffer(header.file_offset, (int) dataPageCompressedBytes)
         .thenApplyAsync(
             chunkDataBuffer -> {
-              return new Iterator<DataPageReader<ReadAs>>() {
+              return new Iterator<DataPageReader>() {
                 private final ByteBufferInputStream chunkDataBufferStream =
                     new ByteBufferInputStream(chunkDataBuffer);
                 private int valuesFound = 0;
@@ -280,7 +384,7 @@ public class ColumnChunkReader<ReadAs> {
                 }
 
                 @Override
-                public DataPageReader<ReadAs> next() {
+                public DataPageReader next() {
                   final var pageHeader = ColumnChunkReader.readPageHeader(chunkDataBufferStream);
                   // TODO - CRC with
                   //     import java.util.zip.CRC32;
@@ -303,6 +407,32 @@ public class ColumnChunkReader<ReadAs> {
     } catch (IOException e) {
       throw new ParquetIOException(e);
     }
+  }
+
+  public Object getStatsMin(final ConversionStrategy conversionStrategy) {
+    return readStatsValue(header.meta_data.statistics.min_value, conversionStrategy);
+  }
+
+  public Object getStatsMax(final ConversionStrategy conversionStrategy) {
+    return readStatsValue(header.meta_data.statistics.max_value, conversionStrategy);
+  }
+
+  public Object readStatsValue(
+      final ByteBuffer encoded, final ConversionStrategy conversionStrategy) {
+    final var converter = conversionStrategy.converterFor(this.columnType.schemaNode());
+    return switch (converter.getType()) {
+      case BOOLEAN ->
+          converter.fromBoolean(encoded.order(ByteOrder.LITTLE_ENDIAN).asIntBuffer().get() != 0);
+      case INT32 -> converter.fromInt32(encoded.order(ByteOrder.LITTLE_ENDIAN).asIntBuffer().get());
+      case INT64 ->
+          converter.fromInt64(encoded.order(ByteOrder.LITTLE_ENDIAN).asLongBuffer().get());
+      case INT96 -> throw new UnsupportedOperationException("We don't currently support Int96");
+      case FLOAT ->
+          converter.fromFloat(encoded.order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer().get());
+      case DOUBLE ->
+          converter.fromDouble(encoded.order(ByteOrder.LITTLE_ENDIAN).asDoubleBuffer().get());
+      case BYTE_ARRAY, FIXED_LEN_BYTE_ARRAY -> converter.fromByteBuffer(encoded.slice());
+    };
   }
 
   @Override

@@ -1,31 +1,26 @@
 package com.markosindustries.parquito.rows;
 
 import com.markosindustries.parquito.ParquetSchemaNode;
-import com.markosindustries.parquito.Reader;
 import com.markosindustries.parquito.page.DataPageReader;
 import java.util.Iterator;
 
-public class RepeatedValueIterator<ReadAs, Repeated, Value>
-    implements ParquetFieldIterator<Repeated>, DataPageCursor<ReadAs> {
-  private final EOFDataPage<ReadAs> eofDataPage = new EOFDataPage<>();
+public class RepeatedValueIterator implements ParquetFieldIterator, DataPageCursor {
+  private final EOFDataPage eofDataPage = new EOFDataPage();
 
-  private final Iterator<DataPageReader<ReadAs>> dataPageIterator;
+  private final Iterator<DataPageReader> dataPageIterator;
   private final ParquetSchemaNode schemaNode;
-  private final Reader<Repeated, Value> reader;
   private final PushdownPredicates pushdownPredicates;
-  private DataPageReader<ReadAs> dataPage = null;
+  private DataPageReader dataPage = null;
   private int valueIndex = 0;
   private int definitionIndex = 0;
 
   public RepeatedValueIterator(
-      Iterator<DataPageReader<ReadAs>> dataPageIterator,
+      Iterator<DataPageReader> dataPageIterator,
       ParquetSchemaNode schemaNode,
-      PushdownPredicates pushdownPredicates,
-      Reader<Repeated, Value> reader) {
+      PushdownPredicates pushdownPredicates) {
     this.dataPageIterator = dataPageIterator;
     this.schemaNode = schemaNode;
     this.pushdownPredicates = pushdownPredicates;
-    this.reader = reader;
     advancePageIfNecessary();
   }
 
@@ -40,7 +35,7 @@ public class RepeatedValueIterator<ReadAs, Repeated, Value>
   }
 
   @Override
-  public DataPageReader<ReadAs> getDataPage() {
+  public DataPageReader getDataPage() {
     return dataPage;
   }
 
@@ -90,18 +85,16 @@ public class RepeatedValueIterator<ReadAs, Repeated, Value>
   }
 
   @Override
-  public Repeated next() {
-    final var values = reader.repeatedBuilder();
+  public void visitNext(final FieldVisitor visitor) {
     do {
       if (dataPage.getDefinitionLevels()[definitionIndex] == schemaNode.getDefinitionLevelMax()) {
-        //noinspection unchecked
-        values.add((Value) dataPage.getValues().get(valueIndex++));
+        dataPage.getValues().visit(definitionIndex, valueIndex++, visitor);
       }
       definitionIndex++;
     } while (definitionIndex < dataPage.getDefinitionLevels().length
         && dataPage.getRepetitionLevels()[definitionIndex] == schemaNode.getRepetitionLevelMax());
     advancePageIfNecessary();
 
-    return values.build();
+    visitor.endRepeated();
   }
 }

@@ -9,7 +9,7 @@ import com.markosindustries.parquito.rows.RepeatedBranchIterator;
 import com.markosindustries.parquito.rows.RepeatedValueIterator;
 import com.markosindustries.parquito.rows.RowIterator;
 import com.markosindustries.parquito.schematraversal.SchemaTraversalSpec;
-import com.markosindustries.parquito.types.ColumnType;
+import com.markosindustries.parquito.types.ConversionStrategy;
 import java.util.Iterator;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -33,8 +33,8 @@ public record RowGroupReader(RowGroup rowGroupHeader, ParquetSchemaNode.Root sch
             Concurrency.DEFAULT_EXECUTOR);
   }
 
-  public <Repeated, Value> Iterator<Value> getRowIterator(
-      final RowReadSpec<Repeated, Value> rowReadSpec, final ByteRangeReader byteRangeReader) {
+  public <Row> Iterator<Row> getRowIterator(
+      final RowReadSpec<Row> rowReadSpec, final ByteRangeReader byteRangeReader) {
     final var schemaTraversalSpec =
         rowReadSpec
             .schemaTraversalSpec()
@@ -43,21 +43,16 @@ public record RowGroupReader(RowGroup rowGroupHeader, ParquetSchemaNode.Root sch
     final var pushdownPredicates = new PushdownPredicates(rowReadSpec.predicate());
 
     final var parquetFieldIterators =
-        makeFieldIterators(
-            schemaTraversalSpec,
-            rowReadSpec.reader(),
-            pushdownPredicates,
-            schemaRoot,
-            byteRangeReader);
+        makeFieldIterators(schemaTraversalSpec, pushdownPredicates, schemaRoot, byteRangeReader);
 
     return new RowIterator<>(
         pushdownPredicates,
-        new OptionalBranchIterator<>(parquetFieldIterators, schemaRoot, rowReadSpec.reader()));
+        new OptionalBranchIterator(parquetFieldIterators, schemaRoot),
+        rowReadSpec.reader());
   }
 
-  private <ReadAs, Repeated, Value> ParquetFieldIterator<?> iterateField(
+  private ParquetFieldIterator iterateField(
       final SchemaTraversalSpec schemaTraversalSpec,
-      final Reader<Repeated, Value> reader,
       final PushdownPredicates pushdownPredicates,
       final ParquetSchemaNode parquetSchema,
       final ByteRangeReader byteRangeReader) {
@@ -65,40 +60,32 @@ public record RowGroupReader(RowGroup rowGroupHeader, ParquetSchemaNode.Root sch
         getColumnChunkReaderForSchemaPath(byteRangeReader, parquetSchema);
     if (maybeColumnChunkReader.isPresent()) {
       return iterateLeaf(
-          reader,
-          pushdownPredicates,
-          parquetSchema,
-          (ColumnChunkReader<ReadAs>) maybeColumnChunkReader.get(),
-          byteRangeReader);
+          pushdownPredicates, parquetSchema, maybeColumnChunkReader.get(), byteRangeReader);
     } else {
-      return iterateBranch(
-          schemaTraversalSpec, reader, pushdownPredicates, parquetSchema, byteRangeReader);
+      return iterateBranch(schemaTraversalSpec, pushdownPredicates, parquetSchema, byteRangeReader);
     }
   }
 
-  private <ReadAs, Repeated, Value> ParquetFieldIterator<?> iterateLeaf(
-      final Reader<Repeated, Value> reader,
+  private ParquetFieldIterator iterateLeaf(
       final PushdownPredicates pushdownPredicates,
       final ParquetSchemaNode parquetSchema,
-      final ColumnChunkReader<ReadAs> columnChunkReader,
+      final ColumnChunkReader columnChunkReader,
       final ByteRangeReader byteRangeReader) {
     final var dataPageIterator = columnChunkReader.readPages(byteRangeReader).join();
     return switch (parquetSchema.getRepetitionType()) {
       case REQUIRED, OPTIONAL -> {
         // Required can be nested within Optional/Repeated, so we always have to respect definition
         // levels
-        yield new OptionalValueIterator<>(dataPageIterator, parquetSchema, pushdownPredicates);
+        yield new OptionalValueIterator(dataPageIterator, parquetSchema, pushdownPredicates);
       }
       case REPEATED -> {
-        yield new RepeatedValueIterator<>(
-            dataPageIterator, parquetSchema, pushdownPredicates, reader);
+        yield new RepeatedValueIterator(dataPageIterator, parquetSchema, pushdownPredicates);
       }
     };
   }
 
-  private <Repeated, Value> ParquetFieldIterator<?> iterateBranch(
+  private ParquetFieldIterator iterateBranch(
       final SchemaTraversalSpec schemaTraversalSpec,
-      final Reader<Repeated, Value> reader,
       final PushdownPredicates pushdownPredicates,
       final ParquetSchemaNode parquetSchema,
       final ByteRangeReader byteRangeReader) {
@@ -107,28 +94,24 @@ public record RowGroupReader(RowGroup rowGroupHeader, ParquetSchemaNode.Root sch
             ? parquetSchema.getRepetitionType()
             : FieldRepetitionType.REQUIRED;
     final var parquetFieldIterators =
-        makeFieldIterators(
-            schemaTraversalSpec, reader, pushdownPredicates, parquetSchema, byteRangeReader);
+        makeFieldIterators(schemaTraversalSpec, pushdownPredicates, parquetSchema, byteRangeReader);
     return switch (repetitionType) {
-      case REQUIRED, OPTIONAL ->
-          new OptionalBranchIterator<>(parquetFieldIterators, parquetSchema, reader);
-      case REPEATED -> new RepeatedBranchIterator<>(parquetFieldIterators, parquetSchema, reader);
+      case REQUIRED, OPTIONAL -> new OptionalBranchIterator(parquetFieldIterators, parquetSchema);
+      case REPEATED -> new RepeatedBranchIterator(parquetFieldIterators, parquetSchema);
     };
   }
 
-  <Repeated, Value> ParquetFieldIterator<?>[] makeFieldIterators(
+  ParquetFieldIterator[] makeFieldIterators(
       final SchemaTraversalSpec schemaTraversalSpec,
-      final Reader<Repeated, Value> reader,
       final PushdownPredicates pushdownPredicates,
       final ParquetSchemaNode parquetSchema,
       final ByteRangeReader byteRangeReader) {
-    final var iterators = new ParquetFieldIterator<?>[parquetSchema.getChildren().length];
+    final var iterators = new ParquetFieldIterator[parquetSchema.getChildren().length];
     for (var index = 0; index < parquetSchema.getChildren().length; index++) {
       iterators[index] =
           schemaTraversalSpec.includesChild(index)
               ? iterateField(
                   schemaTraversalSpec.forChild(index),
-                  reader.forChild(index),
                   pushdownPredicates.forChild(index),
                   parquetSchema.getChildAtIndex(index),
                   byteRangeReader)
@@ -137,21 +120,20 @@ public record RowGroupReader(RowGroup rowGroupHeader, ParquetSchemaNode.Root sch
     return iterators;
   }
 
-  public Optional<? extends ColumnChunkReader<?>> getColumnChunkReaderForSchemaPath(
+  public Optional<ColumnChunkReader> getColumnChunkReaderForSchemaPath(
       final ByteRangeReader byteRangeReader, final ParquetSchemaPath parquetSchemaPath) {
     return getColumnChunkReaderForSchemaPath(
         byteRangeReader, schemaRoot.getChild(parquetSchemaPath));
   }
 
-  <Value> Optional<ColumnChunkReader<Value>> getColumnChunkReaderForSchemaPath(
+  Optional<ColumnChunkReader> getColumnChunkReaderForSchemaPath(
       final ByteRangeReader byteRangeReader, final ParquetSchemaNode columnSchema) {
     //noinspection unchecked
     return columnSchema.getColumnIndex().stream()
         .mapToObj(
             columnChunkIndex ->
-                (ColumnChunkReader<Value>)
-                    ColumnChunkReader.create(
-                        rowGroupHeader, columnChunkIndex, columnSchema, byteRangeReader))
+                ColumnChunkReader.create(
+                    rowGroupHeader, columnChunkIndex, columnSchema, byteRangeReader))
         .findAny();
   }
 
@@ -159,8 +141,16 @@ public record RowGroupReader(RowGroup rowGroupHeader, ParquetSchemaNode.Root sch
     return schemaRoot.getChild(parquetSchemaPath).getColumnIndex();
   }
 
-  public Optional<? extends ColumnType<?>> getColumnType(
-      final ParquetSchemaPath parquetSchemaPath) {
+  public Optional<? extends ConvertedColumnType<?>> getConvertedColumnType(
+      final ParquetSchemaPath parquetSchemaPath, final ConversionStrategy conversionStrategy) {
+    return getColumnType(parquetSchemaPath)
+        .map(
+            columnType ->
+                new ConvertedColumnType<>(
+                    columnType, conversionStrategy.converterFor(columnType.schemaNode())));
+  }
+
+  public Optional<ColumnType> getColumnType(final ParquetSchemaPath parquetSchemaPath) {
     return getColumnChunkIndexForSchemaPath(parquetSchemaPath).stream()
         .mapToObj(
             columnChunkIndex -> {
@@ -169,10 +159,7 @@ public record RowGroupReader(RowGroup rowGroupHeader, ParquetSchemaNode.Root sch
                   rowGroupHeader.isSetSorting_columns()
                       ? rowGroupHeader.sorting_columns.get(columnChunkIndex)
                       : new SortingColumn(columnChunkIndex, false, true);
-              return ColumnType.create(
-                  columnChunkHeader.meta_data,
-                  columnChunkSorting,
-                  schemaRoot.getChild(parquetSchemaPath));
+              return ColumnType.create(columnChunkSorting, schemaRoot.getChild(parquetSchemaPath));
             })
         .findAny();
   }

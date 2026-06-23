@@ -1,6 +1,7 @@
 package com.markosindustries.parquito;
 
 import com.markosindustries.parquito.page.DataPageReader;
+import com.markosindustries.parquito.page.Values;
 import java.util.Iterator;
 
 /**
@@ -9,15 +10,15 @@ import java.util.Iterator;
  *
  * @param <ReadAs> The type of data to be read from the column data pages
  */
-class FlatColumnIterator<ReadAs> implements Iterator<ReadAs> {
-  private final Iterator<? extends DataPageReader<ReadAs>> dataPageIterator;
+class FlatColumnIterator {
+  private final Iterator<? extends DataPageReader> dataPageIterator;
   private final ParquetSchemaNode schemaNode;
-  private DataPageReader<ReadAs> dataPage = null;
+  private DataPageReader dataPage = null;
   private int valueIndex = 0;
   private int definitionIndex = 0;
 
   public FlatColumnIterator(
-      final Iterator<? extends DataPageReader<ReadAs>> dataPageIterator,
+      final Iterator<? extends DataPageReader> dataPageIterator,
       final ParquetSchemaNode schemaNode) {
     this.dataPageIterator = dataPageIterator;
     this.schemaNode = schemaNode;
@@ -32,7 +33,6 @@ class FlatColumnIterator<ReadAs> implements Iterator<ReadAs> {
     return dataPage.getRepetitionLevels()[definitionIndex];
   }
 
-  @Override
   public boolean hasNext() {
     return dataPage != null;
   }
@@ -49,15 +49,14 @@ class FlatColumnIterator<ReadAs> implements Iterator<ReadAs> {
     }
   }
 
-  @Override
-  public ReadAs next() {
-    final var result =
-        dataPage.getDefinitionLevels()[definitionIndex++] == schemaNode.getDefinitionLevelMax()
-            ? dataPage.getValues().get(valueIndex++)
-            : null;
+  public void visitNext(final Values.Visitor visitor) {
+    final var pageIndex = definitionIndex++;
+    if (dataPage.getDefinitionLevels()[pageIndex] == schemaNode.getDefinitionLevelMax()) {
+      dataPage.getValues().visit(pageIndex, valueIndex++, visitor);
+    } else {
+      visitor.visitNull(pageIndex);
+    }
 
     advancePageIfNecessary();
-
-    return result;
   }
 }

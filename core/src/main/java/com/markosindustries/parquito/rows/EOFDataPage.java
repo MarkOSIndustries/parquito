@@ -4,7 +4,7 @@ import com.markosindustries.parquito.page.DataPageReader;
 import com.markosindustries.parquito.page.Values;
 import org.apache.parquet.format.PageHeader;
 
-public class EOFDataPage<ReadAs> implements DataPageReader<ReadAs> {
+public class EOFDataPage implements DataPageReader {
   private static final int[] LEVELS = new int[] {0};
 
   @Override
@@ -33,7 +33,7 @@ public class EOFDataPage<ReadAs> implements DataPageReader<ReadAs> {
   }
 
   @Override
-  public Values<ReadAs> getValues() {
+  public Values getValues() {
     return Values.empty();
   }
 }
