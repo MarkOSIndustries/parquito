@@ -33,4 +33,6 @@ public sealed interface FastList32 extends FastArray32
     }
     return new IntListBoxless(new IntArrayList());
   }
+
+  void clear();
 }

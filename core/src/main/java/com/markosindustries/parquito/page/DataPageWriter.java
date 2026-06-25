@@ -48,4 +48,6 @@ public interface DataPageWriter {
   long getNumRows(final PageHeader pageHeader);
 
   long getNumRows();
+
+  void clear();
 }

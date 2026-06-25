@@ -32,4 +32,8 @@ public class ByteBufferOutputStream extends ByteArrayOutputStream implements Wri
   public boolean isOpen() {
     return true;
   }
+
+  public void clear() {
+    count = 0;
+  }
 }

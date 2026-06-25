@@ -38,6 +38,8 @@ public class ColumnChunkWriter {
     this.encodingSelector = writeSpec.encodingSelector();
     this.bloomFilterSelector = writeSpec.bloomFilterSelector();
     this.writeSpec = writeSpec;
+    this.valueAccumulator = ValueAccumulator.create(columnType);
+    this.dataPageWriter = DataPageWriter.create(this, writeSpec, PageType.DATA_PAGE_V2);
     startNewChunk();
   }
 
@@ -47,8 +49,8 @@ public class ColumnChunkWriter {
   }
 
   private void startNewChunk() {
-    this.valueAccumulator = new ValueAccumulator(columnType);
-    this.dataPageWriter = DataPageWriter.create(this, writeSpec, PageType.DATA_PAGE_V2);
+    this.valueAccumulator.clear();
+    this.dataPageWriter.clear();
     this.currentHeader = makeHeader();
   }
 

@@ -45,4 +45,9 @@ public final class ZerosCounter implements FastList32 {
   public FastList32 subList(int startOffsetInclusive, int endOffsetExclusive) {
     return new ZerosCounter(endOffsetExclusive - startOffsetInclusive);
   }
+
+  @Override
+  public void clear() {
+    count = 0;
+  }
 }

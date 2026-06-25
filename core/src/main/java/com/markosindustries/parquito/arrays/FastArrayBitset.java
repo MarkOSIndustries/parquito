@@ -69,4 +69,13 @@ public final class FastArrayBitset implements FastList32 {
   public int length() {
     return count;
   }
+
+  @Override
+  public void clear() {
+    if (fixedSize) {
+      throw new IndexOutOfBoundsException("Can't clear this BitSet");
+    }
+    bitset.clear();
+    count = 0;
+  }
 }

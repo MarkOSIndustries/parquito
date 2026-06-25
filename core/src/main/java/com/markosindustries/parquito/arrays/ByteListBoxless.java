@@ -4,7 +4,7 @@ import it.unimi.dsi.fastutil.bytes.ByteList;
 
 public final class ByteListBoxless implements FastList32 {
   private final ByteList values;
-  private boolean fixedSize;
+  private final boolean fixedSize;
 
   public ByteListBoxless(final ByteList values) {
     this(values, false);
@@ -46,5 +46,13 @@ public final class ByteListBoxless implements FastList32 {
   @Override
   public FastList32 subList(final int startOffsetInclusive, final int endOffsetExclusive) {
     return new ByteListBoxless(values.subList(startOffsetInclusive, endOffsetExclusive), true);
+  }
+
+  @Override
+  public void clear() {
+    if (fixedSize) {
+      throw new IndexOutOfBoundsException("Can't clear this ByteListBoxed");
+    }
+    values.clear();
   }
 }

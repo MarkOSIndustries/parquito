@@ -23,248 +23,397 @@ import java.util.HashMap;
 import org.apache.parquet.format.PageHeader;
 import org.apache.parquet.format.Type;
 
-public class ValueAccumulator {
-  private final ColumnType columnType;
-  private final Int2ObjectOpenHashMap<BooleanWithOriginalIndices> booleansWithOriginalIndices;
-  private final HashMap<ByteBuffer, ByteBufferWithOriginalIndices> byteBuffersWithOriginalIndices;
-  private final Double2ObjectOpenHashMap<DoubleWithOriginalIndices> doublesWithOriginalIndices;
-  private final Float2ObjectOpenHashMap<FloatWithOriginalIndices> floatsWithOriginalIndices;
-  private final Int2ObjectOpenHashMap<IntWithOriginalIndices> intsWithOriginalIndices;
-  private final Long2ObjectOpenHashMap<LongWithOriginalIndices> longsWithOriginalIndices;
-  private int estimatedBytesRequired;
-  private int totalValues;
+public abstract class ValueAccumulator {
+  protected final ColumnType columnType;
+  protected int estimatedBytesRequired;
+  protected int totalValues;
 
   private interface ThingWithOriginalIndices {
     IntArrayList originalIndices();
   }
 
-  private record BooleanWithOriginalIndices(boolean value, IntArrayList originalIndices)
-      implements ThingWithOriginalIndices {
-    public static BooleanWithOriginalIndices create(boolean value) {
-      return new BooleanWithOriginalIndices(value, new IntArrayList(1));
-    }
-  }
-
-  private record ByteBufferWithOriginalIndices(ByteBuffer value, IntArrayList originalIndices)
-      implements ThingWithOriginalIndices {
-    public static ByteBufferWithOriginalIndices create(ByteBuffer value) {
-      return new ByteBufferWithOriginalIndices(value, new IntArrayList(1));
-    }
-  }
-
-  private record DoubleWithOriginalIndices(double value, IntArrayList originalIndices)
-      implements ThingWithOriginalIndices {
-    public static DoubleWithOriginalIndices create(double value) {
-      return new DoubleWithOriginalIndices(value, new IntArrayList(1));
-    }
-  }
-
-  private record FloatWithOriginalIndices(float value, IntArrayList originalIndices)
-      implements ThingWithOriginalIndices {
-    public static FloatWithOriginalIndices create(float value) {
-      return new FloatWithOriginalIndices(value, new IntArrayList(1));
-    }
-  }
-
-  private record IntWithOriginalIndices(int value, IntArrayList originalIndices)
-      implements ThingWithOriginalIndices {
-    public static IntWithOriginalIndices create(int value) {
-      return new IntWithOriginalIndices(value, new IntArrayList(1));
-    }
-  }
-
-  private record LongWithOriginalIndices(long value, IntArrayList originalIndices)
-      implements ThingWithOriginalIndices {
-    public static LongWithOriginalIndices create(long value) {
-      return new LongWithOriginalIndices(value, new IntArrayList(1));
-    }
-  }
-
   public ValueAccumulator(final ColumnType columnType) {
     this.columnType = columnType;
-    this.booleansWithOriginalIndices = new Int2ObjectOpenHashMap<>();
-    this.byteBuffersWithOriginalIndices = new HashMap<>();
-    this.doublesWithOriginalIndices = new Double2ObjectOpenHashMap<>();
-    this.floatsWithOriginalIndices = new Float2ObjectOpenHashMap<>();
-    this.intsWithOriginalIndices = new Int2ObjectOpenHashMap<>();
-    this.longsWithOriginalIndices = new Long2ObjectOpenHashMap<>();
     this.totalValues = 0;
     this.estimatedBytesRequired = 0;
   }
 
   public int addValue(final boolean value) {
-    final var bytesBefore = estimatedBytesRequired;
-    final var valueWithOriginalIndices =
-        booleansWithOriginalIndices.computeIfAbsent(
-            value ? 1 : 0,
-            v -> {
-              estimatedBytesRequired += 4;
-              return BooleanWithOriginalIndices.create(value);
-            });
-
-    valueWithOriginalIndices.originalIndices.add(totalValues++);
-
-    return estimatedBytesRequired - bytesBefore;
+    throw new UnsupportedOperationException();
   }
 
   public int addValue(final ByteBuffer value) {
-    final var bytesBefore = estimatedBytesRequired;
-    final var valueWithOriginalIndices =
-        byteBuffersWithOriginalIndices.computeIfAbsent(
-            value,
-            v -> {
-              estimatedBytesRequired += 4 + value.remaining();
-              return ByteBufferWithOriginalIndices.create(value.mark());
-            });
-
-    valueWithOriginalIndices.originalIndices.add(totalValues++);
-
-    return estimatedBytesRequired - bytesBefore;
+    throw new UnsupportedOperationException();
   }
 
   public int addValue(final double value) {
-    final var bytesBefore = estimatedBytesRequired;
-    final var valueWithOriginalIndices =
-        doublesWithOriginalIndices.computeIfAbsent(
-            value,
-            v -> {
-              estimatedBytesRequired += 8;
-              return DoubleWithOriginalIndices.create(value);
-            });
-
-    valueWithOriginalIndices.originalIndices.add(totalValues++);
-
-    return estimatedBytesRequired - bytesBefore;
+    throw new UnsupportedOperationException();
   }
 
   public int addValue(final float value) {
-    final var bytesBefore = estimatedBytesRequired;
-    final var valueWithOriginalIndices =
-        floatsWithOriginalIndices.computeIfAbsent(
-            value,
-            v -> {
-              estimatedBytesRequired += 4;
-              return FloatWithOriginalIndices.create(value);
-            });
-
-    valueWithOriginalIndices.originalIndices.add(totalValues++);
-
-    return estimatedBytesRequired - bytesBefore;
+    throw new UnsupportedOperationException();
   }
 
   public int addValue(final int value) {
-    final var bytesBefore = estimatedBytesRequired;
-    final var valueWithOriginalIndices =
-        intsWithOriginalIndices.computeIfAbsent(
-            value,
-            v -> {
-              estimatedBytesRequired += 4;
-              return IntWithOriginalIndices.create(value);
-            });
-
-    valueWithOriginalIndices.originalIndices.add(totalValues++);
-
-    return estimatedBytesRequired - bytesBefore;
+    throw new UnsupportedOperationException();
   }
 
   public int addValue(final long value) {
-    final var bytesBefore = estimatedBytesRequired;
-    final var valueWithOriginalIndices =
-        longsWithOriginalIndices.computeIfAbsent(
-            value,
-            v -> {
-              estimatedBytesRequired += 8;
-              return LongWithOriginalIndices.create(value);
-            });
-
-    valueWithOriginalIndices.originalIndices.add(totalValues++);
-
-    return estimatedBytesRequired - bytesBefore;
+    throw new UnsupportedOperationException();
   }
 
   public int getEstimatedBytesRequired() {
     return estimatedBytesRequired;
   }
 
-  public long getNumValues() {
-    return switch (columnType.getType()) {
-      case BOOLEAN -> booleansWithOriginalIndices.size();
-      case INT32 -> intsWithOriginalIndices.size();
-      case INT64 -> longsWithOriginalIndices.size();
-      case INT96 -> throw new UnsupportedOperationException("We can't currently handle Int96");
-      case FLOAT -> floatsWithOriginalIndices.size();
-      case DOUBLE -> doublesWithOriginalIndices.size();
-      case BYTE_ARRAY, FIXED_LEN_BYTE_ARRAY -> byteBuffersWithOriginalIndices.size();
-    };
-  }
+  public abstract long getNumValues();
 
   public long getNumValues(final PageHeader pageHeader) {
     return pageHeader.dictionary_page_header.num_values;
   }
 
-  public ReadyToWrite makeReadyToWrite() {
-    return new ReadyToWrite(
-        switch (columnType.getType()) {
-          case BOOLEAN -> {
-            final var sortedBooleans =
-                new BooleanWithOriginalIndices[booleansWithOriginalIndices.size()];
-            int index = 0;
-            for (final var value : booleansWithOriginalIndices.values()) {
-              sortedBooleans[index++] = value;
-            }
-            Arrays.parallelSort(sortedBooleans, (v1, v2) -> columnType.compare(v1.value, v2.value));
-            yield sortedBooleans;
-          }
-          case INT32 -> {
-            final var sortedInts = new IntWithOriginalIndices[intsWithOriginalIndices.size()];
-            int index = 0;
-            for (final var value : intsWithOriginalIndices.values()) {
-              sortedInts[index++] = value;
-            }
-            Arrays.parallelSort(sortedInts, (v1, v2) -> columnType.compare(v1.value, v2.value));
-            yield sortedInts;
-          }
-          case INT64 -> {
-            final var sortedLongs = new LongWithOriginalIndices[longsWithOriginalIndices.size()];
-            int index = 0;
-            for (final var value : longsWithOriginalIndices.values()) {
-              sortedLongs[index++] = value;
-            }
-            Arrays.parallelSort(sortedLongs, (v1, v2) -> columnType.compare(v1.value, v2.value));
-            yield sortedLongs;
-          }
-          case INT96 -> throw new UnsupportedOperationException("We can't currently handle Int96");
-          case FLOAT -> {
-            final var sortedFloats = new FloatWithOriginalIndices[floatsWithOriginalIndices.size()];
-            int index = 0;
-            for (final var value : floatsWithOriginalIndices.values()) {
-              sortedFloats[index++] = value;
-            }
-            Arrays.parallelSort(sortedFloats, (v1, v2) -> columnType.compare(v1.value, v2.value));
-            yield sortedFloats;
-          }
-          case DOUBLE -> {
-            final var sortedDoubles =
-                new DoubleWithOriginalIndices[doublesWithOriginalIndices.size()];
-            int index = 0;
-            for (final var value : doublesWithOriginalIndices.values()) {
-              sortedDoubles[index++] = value;
-            }
-            Arrays.parallelSort(sortedDoubles, (v1, v2) -> columnType.compare(v1.value, v2.value));
-            yield sortedDoubles;
-          }
-          case BYTE_ARRAY, FIXED_LEN_BYTE_ARRAY -> {
-            final var sortedByteBuffers =
-                new ByteBufferWithOriginalIndices[byteBuffersWithOriginalIndices.size()];
-            int index = 0;
-            for (final var value : byteBuffersWithOriginalIndices.values()) {
-              sortedByteBuffers[index++] = value;
-            }
-            Arrays.parallelSort(
-                sortedByteBuffers, (v1, v2) -> columnType.compare(v1.value, v2.value));
-            yield sortedByteBuffers;
-          }
-        });
+  public abstract ReadyToWrite makeReadyToWrite();
+
+  public void clear() {
+    estimatedBytesRequired = 0;
+    totalValues = 0;
+  }
+
+  public static ValueAccumulator create(final ColumnType columnType) {
+    return switch (columnType.getType()) {
+      case BOOLEAN -> new BooleanAccumulator(columnType);
+      case INT32 -> new Int32Accumulator(columnType);
+      case INT64 -> new Int64Accumulator(columnType);
+      case INT96 -> throw new UnsupportedOperationException("We can't currently handle Int96");
+      case FLOAT -> new FloatAccumulator(columnType);
+      case DOUBLE -> new DoubleAccumulator(columnType);
+      case BYTE_ARRAY, FIXED_LEN_BYTE_ARRAY -> new ByteBufferAccumulator(columnType);
+    };
+  }
+
+  public static class BooleanAccumulator extends ValueAccumulator {
+    private final Int2ObjectOpenHashMap<ValueWithOriginalIndices> valuesWithOriginalIndices;
+
+    public BooleanAccumulator(final ColumnType columnType) {
+      super(columnType);
+      this.valuesWithOriginalIndices = new Int2ObjectOpenHashMap<>();
+    }
+
+    private record ValueWithOriginalIndices(boolean value, IntArrayList originalIndices)
+        implements ThingWithOriginalIndices {
+      public static ValueWithOriginalIndices create(boolean value) {
+        return new ValueWithOriginalIndices(value, new IntArrayList(1));
+      }
+    }
+
+    @Override
+    public int addValue(final boolean value) {
+      final var bytesBefore = estimatedBytesRequired;
+      final var valueWithOriginalIndices =
+          valuesWithOriginalIndices.computeIfAbsent(
+              value ? 1 : 0,
+              v -> {
+                estimatedBytesRequired += 4;
+                return ValueWithOriginalIndices.create(v == 1);
+              });
+
+      valueWithOriginalIndices.originalIndices.add(totalValues++);
+
+      return estimatedBytesRequired - bytesBefore;
+    }
+
+    @Override
+    public long getNumValues() {
+      return valuesWithOriginalIndices.size();
+    }
+
+    @Override
+    public ReadyToWrite makeReadyToWrite() {
+      final var sortedBooleans = new ValueWithOriginalIndices[valuesWithOriginalIndices.size()];
+      int index = 0;
+      for (final var value : valuesWithOriginalIndices.values()) {
+        sortedBooleans[index++] = value;
+      }
+      Arrays.parallelSort(sortedBooleans, (v1, v2) -> columnType.compare(v1.value, v2.value));
+      return new ReadyToWrite(sortedBooleans);
+    }
+
+    @Override
+    public void clear() {
+      super.clear();
+      valuesWithOriginalIndices.clear();
+    }
+  }
+
+  public static class ByteBufferAccumulator extends ValueAccumulator {
+    private final HashMap<ByteBuffer, ValueWithOriginalIndices> valuesWithOriginalIndices;
+
+    public ByteBufferAccumulator(final ColumnType columnType) {
+      super(columnType);
+      this.valuesWithOriginalIndices = new HashMap<>();
+    }
+
+    private ValueWithOriginalIndices newDistinctValue(ByteBuffer v) {
+      estimatedBytesRequired += 4 + v.remaining();
+      return ValueWithOriginalIndices.create(v.mark());
+    }
+
+    private int compare(ValueWithOriginalIndices v1, ValueWithOriginalIndices v2) {
+      return columnType.compare(v1.value, v2.value);
+    }
+
+    private record ValueWithOriginalIndices(ByteBuffer value, IntArrayList originalIndices)
+        implements ThingWithOriginalIndices {
+      // TODO ditch these and move into "newDistinctValue"
+      public static ValueWithOriginalIndices create(ByteBuffer value) {
+        return new ValueWithOriginalIndices(value, new IntArrayList(1));
+      }
+    }
+
+    @Override
+    public int addValue(final ByteBuffer value) {
+      final var bytesBefore = estimatedBytesRequired;
+      final var valueWithOriginalIndices =
+          valuesWithOriginalIndices.computeIfAbsent(value, this::newDistinctValue);
+
+      valueWithOriginalIndices.originalIndices.add(totalValues++);
+
+      return estimatedBytesRequired - bytesBefore;
+    }
+
+    @Override
+    public long getNumValues() {
+      return valuesWithOriginalIndices.size();
+    }
+
+    @Override
+    public ReadyToWrite makeReadyToWrite() {
+      final var sortedByteBuffers = new ValueWithOriginalIndices[valuesWithOriginalIndices.size()];
+      int index = 0;
+      for (final var value : valuesWithOriginalIndices.values()) {
+        sortedByteBuffers[index++] = value;
+      }
+      Arrays.parallelSort(sortedByteBuffers, this::compare);
+      return new ReadyToWrite(sortedByteBuffers);
+    }
+
+    @Override
+    public void clear() {
+      super.clear();
+      valuesWithOriginalIndices.clear();
+    }
+  }
+
+  public static class DoubleAccumulator extends ValueAccumulator {
+    private final Double2ObjectOpenHashMap<ValueWithOriginalIndices> valuesWithOriginalIndices;
+
+    public DoubleAccumulator(final ColumnType columnType) {
+      super(columnType);
+      this.valuesWithOriginalIndices = new Double2ObjectOpenHashMap<>();
+    }
+
+    private record ValueWithOriginalIndices(double value, IntArrayList originalIndices)
+        implements ThingWithOriginalIndices {
+      public static ValueWithOriginalIndices create(double value) {
+        return new ValueWithOriginalIndices(value, new IntArrayList(1));
+      }
+    }
+
+    public int addValue(final double value) {
+      final var bytesBefore = estimatedBytesRequired;
+      final var valueWithOriginalIndices =
+          valuesWithOriginalIndices.computeIfAbsent(
+              value,
+              v -> {
+                estimatedBytesRequired += 8;
+                return ValueWithOriginalIndices.create(v);
+              });
+
+      valueWithOriginalIndices.originalIndices.add(totalValues++);
+
+      return estimatedBytesRequired - bytesBefore;
+    }
+
+    @Override
+    public long getNumValues() {
+      return valuesWithOriginalIndices.size();
+    }
+
+    @Override
+    public ReadyToWrite makeReadyToWrite() {
+      final var sortedDoubles = new ValueWithOriginalIndices[valuesWithOriginalIndices.size()];
+      int index = 0;
+      for (final var value : valuesWithOriginalIndices.values()) {
+        sortedDoubles[index++] = value;
+      }
+      Arrays.parallelSort(sortedDoubles, (v1, v2) -> columnType.compare(v1.value, v2.value));
+      return new ReadyToWrite(sortedDoubles);
+    }
+
+    @Override
+    public void clear() {
+      super.clear();
+      valuesWithOriginalIndices.clear();
+    }
+  }
+
+  public static class FloatAccumulator extends ValueAccumulator {
+    private final Float2ObjectOpenHashMap<ValueWithOriginalIndices> valuesWithOriginalIndices;
+
+    public FloatAccumulator(final ColumnType columnType) {
+      super(columnType);
+      this.valuesWithOriginalIndices = new Float2ObjectOpenHashMap<>();
+    }
+
+    private record ValueWithOriginalIndices(float value, IntArrayList originalIndices)
+        implements ThingWithOriginalIndices {
+      public static ValueWithOriginalIndices create(float value) {
+        return new ValueWithOriginalIndices(value, new IntArrayList(1));
+      }
+    }
+
+    public int addValue(final float value) {
+      final var bytesBefore = estimatedBytesRequired;
+      final var valueWithOriginalIndices =
+          valuesWithOriginalIndices.computeIfAbsent(
+              value,
+              v -> {
+                estimatedBytesRequired += 4;
+                return ValueWithOriginalIndices.create(v);
+              });
+
+      valueWithOriginalIndices.originalIndices.add(totalValues++);
+
+      return estimatedBytesRequired - bytesBefore;
+    }
+
+    @Override
+    public long getNumValues() {
+      return valuesWithOriginalIndices.size();
+    }
+
+    @Override
+    public ReadyToWrite makeReadyToWrite() {
+      final var sortedFloats = new ValueWithOriginalIndices[valuesWithOriginalIndices.size()];
+      int index = 0;
+      for (final var value : valuesWithOriginalIndices.values()) {
+        sortedFloats[index++] = value;
+      }
+      Arrays.parallelSort(sortedFloats, (v1, v2) -> columnType.compare(v1.value, v2.value));
+      return new ReadyToWrite(sortedFloats);
+    }
+
+    @Override
+    public void clear() {
+      super.clear();
+      valuesWithOriginalIndices.clear();
+    }
+  }
+
+  public static class Int32Accumulator extends ValueAccumulator {
+    private final Int2ObjectOpenHashMap<ValueWithOriginalIndices> valuesWithOriginalIndices;
+
+    public Int32Accumulator(final ColumnType columnType) {
+      super(columnType);
+      this.valuesWithOriginalIndices = new Int2ObjectOpenHashMap<>();
+    }
+
+    private record ValueWithOriginalIndices(int value, IntArrayList originalIndices)
+        implements ThingWithOriginalIndices {
+      public static ValueWithOriginalIndices create(int value) {
+        return new ValueWithOriginalIndices(value, new IntArrayList(1));
+      }
+    }
+
+    public int addValue(final int value) {
+      final var bytesBefore = estimatedBytesRequired;
+      final var valueWithOriginalIndices =
+          valuesWithOriginalIndices.computeIfAbsent(
+              value,
+              v -> {
+                estimatedBytesRequired += 4;
+                return ValueWithOriginalIndices.create(v);
+              });
+
+      valueWithOriginalIndices.originalIndices.add(totalValues++);
+
+      return estimatedBytesRequired - bytesBefore;
+    }
+
+    @Override
+    public long getNumValues() {
+      return valuesWithOriginalIndices.size();
+    }
+
+    @Override
+    public ReadyToWrite makeReadyToWrite() {
+      final var sortedInts = new ValueWithOriginalIndices[valuesWithOriginalIndices.size()];
+      int index = 0;
+      for (final var value : valuesWithOriginalIndices.values()) {
+        sortedInts[index++] = value;
+      }
+      Arrays.parallelSort(sortedInts, (v1, v2) -> columnType.compare(v1.value, v2.value));
+      return new ReadyToWrite(sortedInts);
+    }
+
+    @Override
+    public void clear() {
+      super.clear();
+      valuesWithOriginalIndices.clear();
+    }
+  }
+
+  public static class Int64Accumulator extends ValueAccumulator {
+    private final Long2ObjectOpenHashMap<ValueWithOriginalIndices> valuesWithOriginalIndices;
+
+    public Int64Accumulator(final ColumnType columnType) {
+      super(columnType);
+      this.valuesWithOriginalIndices = new Long2ObjectOpenHashMap<>();
+    }
+
+    private record ValueWithOriginalIndices(long value, IntArrayList originalIndices)
+        implements ThingWithOriginalIndices {
+      public static ValueWithOriginalIndices create(long value) {
+        return new ValueWithOriginalIndices(value, new IntArrayList(1));
+      }
+    }
+
+    public int addValue(final long value) {
+      final var bytesBefore = estimatedBytesRequired;
+      final var valueWithOriginalIndices =
+          valuesWithOriginalIndices.computeIfAbsent(
+              value,
+              v -> {
+                estimatedBytesRequired += 8;
+                return ValueWithOriginalIndices.create(v);
+              });
+
+      valueWithOriginalIndices.originalIndices.add(totalValues++);
+
+      return estimatedBytesRequired - bytesBefore;
+    }
+
+    @Override
+    public long getNumValues() {
+      return valuesWithOriginalIndices.size();
+    }
+
+    @Override
+    public ReadyToWrite makeReadyToWrite() {
+      final var sortedLongs = new ValueWithOriginalIndices[valuesWithOriginalIndices.size()];
+      int index = 0;
+      for (final var value : valuesWithOriginalIndices.values()) {
+        sortedLongs[index++] = value;
+      }
+      Arrays.parallelSort(sortedLongs, (v1, v2) -> columnType.compare(v1.value, v2.value));
+      return new ReadyToWrite(sortedLongs);
+    }
+
+    @Override
+    public void clear() {
+      super.clear();
+      valuesWithOriginalIndices.clear();
+    }
   }
 
   public static class Slice implements EncodingWritableValues {
@@ -314,29 +463,39 @@ public class ValueAccumulator {
     }
 
     public boolean getAsBoolean(final int index) {
-      return ((BooleanWithOriginalIndices) thingsWithOriginalIndices[indices[offset + index]])
+      return ((BooleanAccumulator.ValueWithOriginalIndices)
+              thingsWithOriginalIndices[indices[offset + index]])
           .value;
     }
 
     public ByteBuffer getAsByteBuffer(final int index) {
-      return ((ByteBufferWithOriginalIndices) thingsWithOriginalIndices[indices[offset + index]])
+      return ((ByteBufferAccumulator.ValueWithOriginalIndices)
+              thingsWithOriginalIndices[indices[offset + index]])
           .value.reset();
     }
 
     public double getAsDouble(final int index) {
-      return ((DoubleWithOriginalIndices) thingsWithOriginalIndices[indices[offset + index]]).value;
+      return ((DoubleAccumulator.ValueWithOriginalIndices)
+              thingsWithOriginalIndices[indices[offset + index]])
+          .value;
     }
 
     public float getAsFloat(final int index) {
-      return ((FloatWithOriginalIndices) thingsWithOriginalIndices[indices[offset + index]]).value;
+      return ((FloatAccumulator.ValueWithOriginalIndices)
+              thingsWithOriginalIndices[indices[offset + index]])
+          .value;
     }
 
     public int getAsInt32(final int index) {
-      return ((IntWithOriginalIndices) thingsWithOriginalIndices[indices[offset + index]]).value;
+      return ((Int32Accumulator.ValueWithOriginalIndices)
+              thingsWithOriginalIndices[indices[offset + index]])
+          .value;
     }
 
     public long getAsInt64(final int index) {
-      return ((LongWithOriginalIndices) thingsWithOriginalIndices[indices[offset + index]]).value;
+      return ((Int64Accumulator.ValueWithOriginalIndices)
+              thingsWithOriginalIndices[indices[offset + index]])
+          .value;
     }
 
     public IntList getBooleansAsIntList() {
@@ -393,42 +552,50 @@ public class ValueAccumulator {
       return sortedValuesWithOriginalIndices.length;
     }
 
-    public int getNumValues() {
-      return totalValues;
-    }
-
     private ByteBuffer getStatsValue(final ThingWithOriginalIndices thingWithOriginalIndices) {
       return switch (columnType.getType()) {
         case BOOLEAN -> {
           final var buffer = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
           buffer
               .asIntBuffer()
-              .put(((BooleanWithOriginalIndices) thingWithOriginalIndices).value ? 1 : 0);
+              .put(
+                  ((BooleanAccumulator.ValueWithOriginalIndices) thingWithOriginalIndices).value
+                      ? 1
+                      : 0);
           yield buffer;
         }
         case INT32 -> {
           final var buffer = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
-          buffer.asIntBuffer().put(((IntWithOriginalIndices) thingWithOriginalIndices).value);
+          buffer
+              .asIntBuffer()
+              .put(((Int32Accumulator.ValueWithOriginalIndices) thingWithOriginalIndices).value);
           yield buffer;
         }
         case INT64 -> {
           final var buffer = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
-          buffer.asLongBuffer().put(((LongWithOriginalIndices) thingWithOriginalIndices).value);
+          buffer
+              .asLongBuffer()
+              .put(((Int64Accumulator.ValueWithOriginalIndices) thingWithOriginalIndices).value);
           yield buffer;
         }
         case INT96 -> throw new UnsupportedOperationException("We can't currently handle Int96");
         case FLOAT -> {
           final var buffer = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
-          buffer.asFloatBuffer().put(((FloatWithOriginalIndices) thingWithOriginalIndices).value);
+          buffer
+              .asFloatBuffer()
+              .put(((FloatAccumulator.ValueWithOriginalIndices) thingWithOriginalIndices).value);
           yield buffer;
         }
         case DOUBLE -> {
           final var buffer = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
-          buffer.asDoubleBuffer().put(((DoubleWithOriginalIndices) thingWithOriginalIndices).value);
+          buffer
+              .asDoubleBuffer()
+              .put(((DoubleAccumulator.ValueWithOriginalIndices) thingWithOriginalIndices).value);
           yield buffer;
         }
         case BYTE_ARRAY, FIXED_LEN_BYTE_ARRAY ->
-            ((ByteBufferWithOriginalIndices) thingWithOriginalIndices).value.reset();
+            ((ByteBufferAccumulator.ValueWithOriginalIndices) thingWithOriginalIndices)
+                .value.reset();
       };
     }
 
@@ -448,22 +615,27 @@ public class ValueAccumulator {
                 "Bloom filters are not supported for Boolean types");
         case INT32 ->
             bloomFilter.insertAll(
-                new IntsArrayList((IntWithOriginalIndices[]) sortedValuesWithOriginalIndices));
+                new IntsArrayList(
+                    (Int32Accumulator.ValueWithOriginalIndices[]) sortedValuesWithOriginalIndices));
         case INT64 ->
             bloomFilter.insertAll(
-                new LongsArrayList((LongWithOriginalIndices[]) sortedValuesWithOriginalIndices));
+                new LongsArrayList(
+                    (Int64Accumulator.ValueWithOriginalIndices[]) sortedValuesWithOriginalIndices));
         case INT96 -> throw new UnsupportedOperationException("We can't currently handle Int96");
         case FLOAT ->
             bloomFilter.insertAll(
-                new FloatsArrayList((FloatWithOriginalIndices[]) sortedValuesWithOriginalIndices));
+                new FloatsArrayList(
+                    (FloatAccumulator.ValueWithOriginalIndices[]) sortedValuesWithOriginalIndices));
         case DOUBLE ->
             bloomFilter.insertAll(
                 new DoublesArrayList(
-                    (DoubleWithOriginalIndices[]) sortedValuesWithOriginalIndices));
+                    (DoubleAccumulator.ValueWithOriginalIndices[])
+                        sortedValuesWithOriginalIndices));
         case BYTE_ARRAY, FIXED_LEN_BYTE_ARRAY ->
             bloomFilter.insertAll(
                 new ByteBuffersArrayList(
-                    (ByteBufferWithOriginalIndices[]) sortedValuesWithOriginalIndices));
+                    (ByteBufferAccumulator.ValueWithOriginalIndices[])
+                        sortedValuesWithOriginalIndices));
       }
     }
 
@@ -495,9 +667,10 @@ public class ValueAccumulator {
   }
 
   private static class BooleansArrayList extends AbstractBooleanList {
-    private final BooleanWithOriginalIndices[] valuesWithOriginalIndices;
+    private final BooleanAccumulator.ValueWithOriginalIndices[] valuesWithOriginalIndices;
 
-    public BooleansArrayList(final BooleanWithOriginalIndices[] valuesWithOriginalIndices) {
+    public BooleansArrayList(
+        final BooleanAccumulator.ValueWithOriginalIndices[] valuesWithOriginalIndices) {
       this.valuesWithOriginalIndices = valuesWithOriginalIndices;
     }
 
@@ -513,9 +686,10 @@ public class ValueAccumulator {
   }
 
   private static class ByteBuffersArrayList extends AbstractList<ByteBuffer> {
-    private final ByteBufferWithOriginalIndices[] valuesWithOriginalIndices;
+    private final ByteBufferAccumulator.ValueWithOriginalIndices[] valuesWithOriginalIndices;
 
-    public ByteBuffersArrayList(final ByteBufferWithOriginalIndices[] valuesWithOriginalIndices) {
+    public ByteBuffersArrayList(
+        final ByteBufferAccumulator.ValueWithOriginalIndices[] valuesWithOriginalIndices) {
       this.valuesWithOriginalIndices = valuesWithOriginalIndices;
     }
 
@@ -531,9 +705,10 @@ public class ValueAccumulator {
   }
 
   private static class DoublesArrayList extends AbstractDoubleList {
-    private final DoubleWithOriginalIndices[] valuesWithOriginalIndices;
+    private final DoubleAccumulator.ValueWithOriginalIndices[] valuesWithOriginalIndices;
 
-    public DoublesArrayList(final DoubleWithOriginalIndices[] valuesWithOriginalIndices) {
+    public DoublesArrayList(
+        final DoubleAccumulator.ValueWithOriginalIndices[] valuesWithOriginalIndices) {
       this.valuesWithOriginalIndices = valuesWithOriginalIndices;
     }
 
@@ -549,9 +724,10 @@ public class ValueAccumulator {
   }
 
   private static class FloatsArrayList extends AbstractFloatList {
-    private final FloatWithOriginalIndices[] valuesWithOriginalIndices;
+    private final FloatAccumulator.ValueWithOriginalIndices[] valuesWithOriginalIndices;
 
-    public FloatsArrayList(final FloatWithOriginalIndices[] valuesWithOriginalIndices) {
+    public FloatsArrayList(
+        final FloatAccumulator.ValueWithOriginalIndices[] valuesWithOriginalIndices) {
       this.valuesWithOriginalIndices = valuesWithOriginalIndices;
     }
 
@@ -567,9 +743,10 @@ public class ValueAccumulator {
   }
 
   private static class IntsArrayList extends AbstractIntList {
-    private final IntWithOriginalIndices[] valuesWithOriginalIndices;
+    private final Int32Accumulator.ValueWithOriginalIndices[] valuesWithOriginalIndices;
 
-    public IntsArrayList(final IntWithOriginalIndices[] valuesWithOriginalIndices) {
+    public IntsArrayList(
+        final Int32Accumulator.ValueWithOriginalIndices[] valuesWithOriginalIndices) {
       this.valuesWithOriginalIndices = valuesWithOriginalIndices;
     }
 
@@ -585,9 +762,10 @@ public class ValueAccumulator {
   }
 
   private static class LongsArrayList extends AbstractLongList {
-    private final LongWithOriginalIndices[] valuesWithOriginalIndices;
+    private final Int64Accumulator.ValueWithOriginalIndices[] valuesWithOriginalIndices;
 
-    public LongsArrayList(final LongWithOriginalIndices[] valuesWithOriginalIndices) {
+    public LongsArrayList(
+        final Int64Accumulator.ValueWithOriginalIndices[] valuesWithOriginalIndices) {
       this.valuesWithOriginalIndices = valuesWithOriginalIndices;
     }
 

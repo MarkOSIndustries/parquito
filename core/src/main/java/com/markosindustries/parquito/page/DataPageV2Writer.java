@@ -12,6 +12,7 @@ import com.markosindustries.parquito.encoding.Maths;
 import com.markosindustries.parquito.encoding.ParquetEncoding;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.channels.Channels;
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.parquet.format.ColumnMetaData;
@@ -28,6 +29,7 @@ public class DataPageV2Writer implements DataPageWriter {
   private final FastList32 definitionLevels;
   private final int repetitionLevelMax;
   private final int definitionLevelMax;
+  private final ByteBufferOutputStream pageOutputBufferStream;
   private int totalNulls;
   private int totalValues;
   private int totalRows;
@@ -38,6 +40,17 @@ public class DataPageV2Writer implements DataPageWriter {
     this.definitionLevelMax = schemaNode.getDefinitionLevelMax();
     this.repetitionLevels = FastList32.createTightestFit(repetitionLevelMax);
     this.definitionLevels = FastList32.createTightestFit(definitionLevelMax);
+    this.pageOutputBufferStream =
+        new ByteBufferOutputStream(writeSpec.targetBytesPerDataPage() * 2);
+  }
+
+  @Override
+  public void clear() {
+    repetitionLevels.clear();
+    definitionLevels.clear();
+    totalValues = 0;
+    totalNulls = 0;
+    totalRows = 0;
   }
 
   @Override
@@ -159,8 +172,7 @@ public class DataPageV2Writer implements DataPageWriter {
       final OutputStream outputStream)
       throws IOException {
     // TODO - resize this better when we get to incremental encoding
-    final var pageOutputBufferStream =
-        new ByteBufferOutputStream(writeSpec.targetBytesPerDataPage());
+    pageOutputBufferStream.clear();
     final var repetitionLevelsOutputStream = new ByteCountingOutputStream(pageOutputBufferStream);
     IntEncodings.INT_ENCODING_DATA_PAGE_V2_LEVELS.encode(
         pageRepetitionLevels, Maths.bitWidth(repetitionLevelMax), repetitionLevelsOutputStream);
@@ -193,7 +205,7 @@ public class DataPageV2Writer implements DataPageWriter {
             .setDefinition_levels_byte_length(definitionLevelsOutputStream.getBytesWrittenAsInt());
 
     Util.writePageHeader(pageHeader, outputStream);
-    pageOutputBufferStream.writeTo(outputStream);
+    Channels.newChannel(outputStream).write(pageOutputBufferStream.asByteBuffer());
 
     return pageHeader;
   }

@@ -33,7 +33,7 @@ public final class IntListBoxed implements FastList32 {
   @Override
   public void add(final int value) {
     if (fixedSize) {
-      throw new IndexOutOfBoundsException("Can't grow this IntListBoxled");
+      throw new IndexOutOfBoundsException("Can't grow this IntListBoxed");
     }
     values.add(value);
   }
@@ -46,5 +46,13 @@ public final class IntListBoxed implements FastList32 {
   @Override
   public FastList32 subList(final int startOffsetInclusive, final int endOffsetExclusive) {
     return new IntListBoxed(values.subList(startOffsetInclusive, endOffsetExclusive), true);
+  }
+
+  @Override
+  public void clear() {
+    if (fixedSize) {
+      throw new IndexOutOfBoundsException("Can't clear this IntListBoxed");
+    }
+    values.clear();
   }
 }

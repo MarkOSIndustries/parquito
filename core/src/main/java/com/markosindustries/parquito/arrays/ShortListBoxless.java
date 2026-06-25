@@ -47,4 +47,12 @@ public final class ShortListBoxless implements FastList32 {
   public FastList32 subList(final int startOffsetInclusive, final int endOffsetExclusive) {
     return new ShortListBoxless(values.subList(startOffsetInclusive, endOffsetExclusive), true);
   }
+
+  @Override
+  public void clear() {
+    if (fixedSize) {
+      throw new IndexOutOfBoundsException("Can't clear this ShortListBoxed");
+    }
+    values.clear();
+  }
 }
