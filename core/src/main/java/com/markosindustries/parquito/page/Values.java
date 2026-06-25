@@ -4,104 +4,65 @@ import com.markosindustries.parquito.predicates.ColumnPredicate;
 import com.markosindustries.parquito.rows.PredicateMaterialisedMatches;
 import java.nio.ByteBuffer;
 import java.util.BitSet;
-import java.util.function.Consumer;
 
 public interface Values {
-  interface Visitor {
-    void visit(int pageIndex, boolean value);
+  boolean getBoolean(int index);
 
-    void visit(int pageIndex, ByteBuffer value);
+  ByteBuffer getByteBuffer(int index);
 
-    void visit(int pageIndex, float value);
+  double getDouble(int index);
 
-    void visit(int pageIndex, double value);
+  float getFloat(int index);
 
-    void visit(int pageIndex, int value);
+  int getInt32(int index);
 
-    void visit(int pageIndex, long value);
-
-    void visitNull(int pageIndex);
-  }
-
-  class NoOpVisitor implements Visitor {
-    public static final Visitor INSTANCE = new NoOpVisitor();
-
-    @Override
-    public void visit(int pageIndex, final boolean value) {}
-
-    @Override
-    public void visit(int pageIndex, final ByteBuffer value) {}
-
-    @Override
-    public void visit(int pageIndex, final float value) {}
-
-    @Override
-    public void visit(int pageIndex, final double value) {}
-
-    @Override
-    public void visit(int pageIndex, final int value) {}
-
-    @Override
-    public void visit(int pageIndex, final long value) {}
-
-    @Override
-    public void visitNull(int pageIndex) {}
-  }
-
-  void visit(int pageIndex, int valueIndex, Visitor visitor);
+  long getInt64(int index);
 
   int count();
 
-  default <T> PredicateMaterialisedMatches materialise(
-      final ColumnPredicate<T, ?> predicate, final Class<T> tClass) {
+  default <T> PredicateMaterialisedMatches materialise(final ColumnPredicate<T, ?> predicate) {
     final var matchingIndices = new BitSet(count());
-    final var predicateVisitor =
-        new Visitor() {
-          @Override
-          public void visit(int pageIndex, final boolean value) {
-            if (predicate.valueMatches(value)) matchingIndices.set(pageIndex);
-          }
-
-          @Override
-          public void visit(int pageIndex, final ByteBuffer value) {
-            if (predicate.valueMatches(value)) matchingIndices.set(pageIndex);
-          }
-
-          @Override
-          public void visit(int pageIndex, final float value) {
-            if (predicate.valueMatches(value)) matchingIndices.set(pageIndex);
-          }
-
-          @Override
-          public void visit(int pageIndex, final double value) {
-            if (predicate.valueMatches(value)) matchingIndices.set(pageIndex);
-          }
-
-          @Override
-          public void visit(int pageIndex, final int value) {
-            if (predicate.valueMatches(value)) matchingIndices.set(pageIndex);
-          }
-
-          @Override
-          public void visit(int pageIndex, final long value) {
-            if (predicate.valueMatches(value)) matchingIndices.set(pageIndex);
-          }
-
-          @Override
-          public void visitNull(int pageIndex) {
-            if (predicate.nullMatches()) matchingIndices.set(pageIndex);
-          }
-        };
     for (var index = 0; index < count(); index++) {
-      visit(index, index, predicateVisitor);
+      matchingIndices.set(index, predicate.valueMatches(this, index));
     }
 
     return matchingIndices::get;
   }
 
+  interface Visitor {
+    void visit(int pageIndex, Values values, int valueIndex);
+
+    void visitNull(int pageIndex);
+  }
+
   class Empty implements Values {
     @Override
-    public void visit(int pageIndex, int valueIndex, Visitor visitor) {
+    public boolean getBoolean(final int index) {
+      throw new IndexOutOfBoundsException();
+    }
+
+    @Override
+    public ByteBuffer getByteBuffer(final int index) {
+      throw new IndexOutOfBoundsException();
+    }
+
+    @Override
+    public double getDouble(final int index) {
+      throw new IndexOutOfBoundsException();
+    }
+
+    @Override
+    public float getFloat(final int index) {
+      throw new IndexOutOfBoundsException();
+    }
+
+    @Override
+    public int getInt32(final int index) {
+      throw new IndexOutOfBoundsException();
+    }
+
+    @Override
+    public long getInt64(final int index) {
       throw new IndexOutOfBoundsException();
     }
 
@@ -111,47 +72,49 @@ public interface Values {
     }
   }
 
+  abstract class Impl implements Values {
+    @Override
+    public boolean getBoolean(final int index) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public ByteBuffer getByteBuffer(final int index) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public double getDouble(final int index) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public float getFloat(final int index) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public int getInt32(final int index) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public long getInt64(final int index) {
+      throw new UnsupportedOperationException();
+    }
+  }
+
   static Values empty() {
     return new Empty();
   }
 
-  abstract class CastingVisitor<T> implements Visitor {
-    private final Consumer<T> consumer;
-    private final Class<T> tClass;
-
-    public CastingVisitor(Consumer<T> consumer, Class<T> tClass) {
-      this.consumer = consumer;
-      this.tClass = tClass;
-    }
+  class NoOpVisitor implements Visitor {
+    public static final NoOpVisitor INSTANCE = new NoOpVisitor();
 
     @Override
-    public void visit(int pageIndex, final boolean value) {
-      consumer.accept(tClass.cast(value));
-    }
+    public void visit(final int pageIndex, final Values values, final int valueIndex) {}
 
     @Override
-    public void visit(int pageIndex, final ByteBuffer value) {
-      consumer.accept(tClass.cast(value));
-    }
-
-    @Override
-    public void visit(int pageIndex, final float value) {
-      consumer.accept(tClass.cast(value));
-    }
-
-    @Override
-    public void visit(int pageIndex, final double value) {
-      consumer.accept(tClass.cast(value));
-    }
-
-    @Override
-    public void visit(int pageIndex, final int value) {
-      consumer.accept(tClass.cast(value));
-    }
-
-    @Override
-    public void visit(int pageIndex, final long value) {
-      consumer.accept(tClass.cast(value));
-    }
+    public void visitNull(final int pageIndex) {}
   }
 }

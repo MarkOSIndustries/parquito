@@ -1,5 +1,6 @@
 package com.markosindustries.parquito;
 
+import com.markosindustries.parquito.page.Values;
 import com.markosindustries.parquito.types.LogicalTypeConverter;
 import it.unimi.dsi.fastutil.booleans.BooleanOpenHashSet;
 import it.unimi.dsi.fastutil.booleans.BooleanSet;
@@ -103,8 +104,16 @@ public class ColumnValuesSet<T> {
     return longs;
   }
 
-  public boolean isContainedNull() {
-    return containedNull;
+  public boolean contains(final Values values, final int index) {
+    return switch (logicalTypeConverter.getType()) {
+      case BOOLEAN -> booleans.contains(values.getBoolean(index));
+      case INT32 -> ints.contains(values.getInt32(index));
+      case INT64 -> longs.contains(values.getInt64(index));
+      case INT96 -> throw new UnsupportedOperationException("We don't currently support Int96");
+      case FLOAT -> floats.contains(values.getFloat(index));
+      case DOUBLE -> doubles.contains(values.getDouble(index));
+      case BYTE_ARRAY, FIXED_LEN_BYTE_ARRAY -> byteBuffers.contains(values.getByteBuffer(index));
+    };
   }
 
   public boolean contains(final boolean value) {

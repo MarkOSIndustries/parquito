@@ -52,7 +52,7 @@ class FlatColumnIterator {
   public void visitNext(final Values.Visitor visitor) {
     final var pageIndex = definitionIndex++;
     if (dataPage.getDefinitionLevels()[pageIndex] == schemaNode.getDefinitionLevelMax()) {
-      dataPage.getValues().visit(pageIndex, valueIndex++, visitor);
+      visitor.visit(pageIndex, dataPage.getValues(), valueIndex++);
     } else {
       visitor.visitNull(pageIndex);
     }

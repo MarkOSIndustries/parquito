@@ -22,10 +22,10 @@ public class DeltaLengthByteArrayEncoding implements ParquetEncoding {
       offset += lengths[i];
     }
 
-    return new Values() {
+    return new Values.Impl() {
       @Override
-      public void visit(final int pageIndex, final int valueIndex, final Visitor visitor) {
-        visitor.visit(pageIndex, buffers[valueIndex]);
+      public ByteBuffer getByteBuffer(final int index) {
+        return buffers[index];
       }
 
       @Override

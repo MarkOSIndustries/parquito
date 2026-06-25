@@ -1,6 +1,7 @@
 package com.markosindustries.parquito.encoding;
 
 import com.markosindustries.parquito.ColumnChunkReader;
+import com.markosindustries.parquito.ParquetIOException;
 import com.markosindustries.parquito.page.Values;
 import com.markosindustries.parquito.predicates.ColumnPredicate;
 import com.markosindustries.parquito.rows.PredicateMaterialisedMatches;
@@ -22,13 +23,52 @@ public class DictionaryEncoding implements ParquetEncoding {
         IntEncodings.INT_ENCODING_DICTIONARY_INDICES.decode(
             expectedValues, bitWidth, decompressedPageBuffer);
 
+    if (dictionaryIndices.length != expectedValues) {
+      throw new ParquetIOException(
+          "Unexpected dictionary value count - expected "
+              + expectedValues
+              + " but found "
+              + dictionaryIndices.length);
+    }
+
     return new Values() {
       @Override
-      public void visit(final int pageIndex, final int valueIndex, final Visitor visitor) {
-        columnChunkReader
+      public boolean getBoolean(final int index) {
+        return columnChunkReader
             .getDictionaryPage()
             .getValues()
-            .visit(pageIndex, dictionaryIndices[valueIndex], visitor);
+            .getBoolean(dictionaryIndices[index]);
+      }
+
+      @Override
+      public ByteBuffer getByteBuffer(final int index) {
+        return columnChunkReader
+            .getDictionaryPage()
+            .getValues()
+            .getByteBuffer(dictionaryIndices[index]);
+      }
+
+      @Override
+      public double getDouble(final int index) {
+        return columnChunkReader
+            .getDictionaryPage()
+            .getValues()
+            .getDouble(dictionaryIndices[index]);
+      }
+
+      @Override
+      public float getFloat(final int index) {
+        return columnChunkReader.getDictionaryPage().getValues().getFloat(dictionaryIndices[index]);
+      }
+
+      @Override
+      public int getInt32(final int index) {
+        return columnChunkReader.getDictionaryPage().getValues().getInt32(dictionaryIndices[index]);
+      }
+
+      @Override
+      public long getInt64(final int index) {
+        return columnChunkReader.getDictionaryPage().getValues().getInt64(dictionaryIndices[index]);
       }
 
       @Override
@@ -37,55 +77,16 @@ public class DictionaryEncoding implements ParquetEncoding {
       }
 
       @Override
-      public <T> PredicateMaterialisedMatches materialise(
-          final ColumnPredicate<T, ?> predicate, final Class<T> tClass) {
+      public <T> PredicateMaterialisedMatches materialise(final ColumnPredicate<T, ?> predicate) {
         final var dictionaryPage = columnChunkReader.getDictionaryPage();
         final var dictionaryPageValues = dictionaryPage.getValues();
 
         final var matchingDictionaryIndices = new BitSet(dictionaryPage.getTotalValues());
-
-        final var predicateVisitor =
-            new Visitor() {
-              @Override
-              public void visit(int pageIndex, final boolean value) {
-                if (predicate.valueMatches(value)) matchingDictionaryIndices.set(pageIndex);
-              }
-
-              @Override
-              public void visit(int pageIndex, final ByteBuffer value) {
-                if (predicate.valueMatches(value)) matchingDictionaryIndices.set(pageIndex);
-              }
-
-              @Override
-              public void visit(int pageIndex, final float value) {
-                if (predicate.valueMatches(value)) matchingDictionaryIndices.set(pageIndex);
-              }
-
-              @Override
-              public void visit(int pageIndex, final double value) {
-                if (predicate.valueMatches(value)) matchingDictionaryIndices.set(pageIndex);
-              }
-
-              @Override
-              public void visit(int pageIndex, final int value) {
-                if (predicate.valueMatches(value)) matchingDictionaryIndices.set(pageIndex);
-              }
-
-              @Override
-              public void visit(int pageIndex, final long value) {
-                if (predicate.valueMatches(value)) matchingDictionaryIndices.set(pageIndex);
-              }
-
-              @Override
-              public void visitNull(int pageIndex) {
-                if (predicate.nullMatches()) matchingDictionaryIndices.set(pageIndex);
-              }
-            };
-
         for (var dictionaryIndex = 0;
             dictionaryIndex < dictionaryPage.getTotalValues();
             dictionaryIndex++) {
-          dictionaryPageValues.visit(dictionaryIndex, dictionaryIndex, predicateVisitor);
+          matchingDictionaryIndices.set(
+              dictionaryIndex, predicate.valueMatches(dictionaryPageValues, dictionaryIndex));
         }
 
         return index -> matchingDictionaryIndices.get(dictionaryIndices[index]);

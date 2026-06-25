@@ -31,19 +31,16 @@ public class DeltaByteArrayEncoding implements ParquetEncoding {
     }
     final var bytes = decompressedPageBuffer.slice();
 
-    return new Values() {
+    return new Values.Impl() {
       @Override
-      public void visit(final int pageIndex, final int valueIndex, final Visitor visitor) {
-        if (prefixLengths[valueIndex] == 0) {
-          visitor.visit(pageIndex, bytes.slice(offsets[valueIndex], suffixLengths[valueIndex]));
-          return;
+      public ByteBuffer getByteBuffer(final int index) {
+        if (prefixLengths[index] == 0) {
+          return bytes.slice(offsets[index], suffixLengths[index]);
         }
 
-        final var concat =
-            ByteBuffer.allocate(prefixLengths[valueIndex] + suffixLengths[valueIndex]);
-        concat.put(
-            prefixLengths[valueIndex], bytes, offsets[valueIndex], suffixLengths[valueIndex]);
-        int prevIndex = valueIndex, bytesNeeded = prefixLengths[valueIndex];
+        final var concat = ByteBuffer.allocate(prefixLengths[index] + suffixLengths[index]);
+        concat.put(prefixLengths[index], bytes, offsets[index], suffixLengths[index]);
+        int prevIndex = index, bytesNeeded = prefixLengths[index];
         do {
           prevIndex--;
           if (bytesNeeded > prefixLengths[prevIndex]) {
@@ -52,7 +49,7 @@ public class DeltaByteArrayEncoding implements ParquetEncoding {
             bytesNeeded -= bytesAvailable;
           }
         } while (prefixLengths[prevIndex] != 0);
-        visitor.visit(pageIndex, concat);
+        return concat;
       }
 
       @Override

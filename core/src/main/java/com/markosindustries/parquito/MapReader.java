@@ -1,10 +1,10 @@
 package com.markosindustries.parquito;
 
+import com.markosindustries.parquito.page.Values;
 import com.markosindustries.parquito.rows.FieldVisitor;
 import com.markosindustries.parquito.types.ConversionStrategy;
 import com.markosindustries.parquito.types.JavaTypesConversionStrategy;
 import com.markosindustries.parquito.types.LogicalTypeConverter;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -92,33 +92,8 @@ public class MapReader implements Reader<Map<String, Object>> {
     public void endRepeated() {}
 
     @Override
-    public void visit(final int pageIndex, final boolean value) {
-      parent.map.put(parquetSchemaNode.getElement().name, converter.fromBoolean(value));
-    }
-
-    @Override
-    public void visit(final int pageIndex, final ByteBuffer value) {
-      parent.map.put(parquetSchemaNode.getElement().name, converter.fromByteBuffer(value));
-    }
-
-    @Override
-    public void visit(final int pageIndex, final float value) {
-      parent.map.put(parquetSchemaNode.getElement().name, converter.fromFloat(value));
-    }
-
-    @Override
-    public void visit(final int pageIndex, final double value) {
-      parent.map.put(parquetSchemaNode.getElement().name, converter.fromDouble(value));
-    }
-
-    @Override
-    public void visit(final int pageIndex, final int value) {
-      parent.map.put(parquetSchemaNode.getElement().name, converter.fromInt32(value));
-    }
-
-    @Override
-    public void visit(final int pageIndex, final long value) {
-      parent.map.put(parquetSchemaNode.getElement().name, converter.fromInt64(value));
+    public void visit(final int pageIndex, final Values values, final int valueIndex) {
+      parent.map.put(parquetSchemaNode.getElement().name, converter.from(values, valueIndex));
     }
 
     @Override
@@ -155,33 +130,8 @@ public class MapReader implements Reader<Map<String, Object>> {
     }
 
     @Override
-    public void visit(final int pageIndex, final boolean value) {
-      list.add(converter.fromBoolean(value));
-    }
-
-    @Override
-    public void visit(final int pageIndex, final ByteBuffer value) {
-      list.add(converter.fromByteBuffer(value));
-    }
-
-    @Override
-    public void visit(final int pageIndex, final float value) {
-      list.add(converter.fromFloat(value));
-    }
-
-    @Override
-    public void visit(final int pageIndex, final double value) {
-      list.add(converter.fromDouble(value));
-    }
-
-    @Override
-    public void visit(final int pageIndex, final int value) {
-      list.add(converter.fromInt32(value));
-    }
-
-    @Override
-    public void visit(final int pageIndex, final long value) {
-      list.add(converter.fromInt64(value));
+    public void visit(final int pageIndex, final Values values, final int valueIndex) {
+      list.add(converter.from(values, valueIndex));
     }
 
     @Override

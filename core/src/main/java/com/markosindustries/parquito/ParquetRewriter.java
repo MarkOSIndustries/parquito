@@ -7,7 +7,6 @@ import com.markosindustries.parquito.rows.OptionalBranchIterator;
 import com.markosindustries.parquito.rows.PushdownPredicates;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.ByteBuffer;
 import java.util.BitSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
@@ -191,42 +190,12 @@ public class ParquetRewriter {
           columnChunkWriter);
     }
 
-    static class ColumnWritingVisitor implements Values.Visitor {
+    abstract static class ColumnWritingVisitor implements Values.Visitor {
       private final ColumnChunkWriter columnChunkWriter;
-      private int repetitionLevel, definitionLevel;
+      protected int repetitionLevel, definitionLevel;
 
       public ColumnWritingVisitor(ColumnChunkWriter columnChunkWriter) {
         this.columnChunkWriter = columnChunkWriter;
-      }
-
-      @Override
-      public void visit(final int pageIndex, final boolean value) {
-        columnChunkWriter.accumulateValue(repetitionLevel, value);
-      }
-
-      @Override
-      public void visit(final int pageIndex, final ByteBuffer value) {
-        columnChunkWriter.accumulateValue(repetitionLevel, value);
-      }
-
-      @Override
-      public void visit(final int pageIndex, final float value) {
-        columnChunkWriter.accumulateValue(repetitionLevel, value);
-      }
-
-      @Override
-      public void visit(final int pageIndex, final double value) {
-        columnChunkWriter.accumulateValue(repetitionLevel, value);
-      }
-
-      @Override
-      public void visit(final int pageIndex, final int value) {
-        columnChunkWriter.accumulateValue(repetitionLevel, value);
-      }
-
-      @Override
-      public void visit(final int pageIndex, final long value) {
-        columnChunkWriter.accumulateValue(repetitionLevel, value);
       }
 
       public void visitNull(int pageIndex) {
@@ -245,13 +214,76 @@ public class ParquetRewriter {
     public void transferRows(final BitSet rowsToKeep) {
       final var columnValueIterator = columnValueIteratorFuture.join();
       var rowIndex = 0;
-      final var visitor = new ColumnWritingVisitor(columnChunkWriter);
+      final ColumnWritingVisitor columnWritingVisitor =
+          switch (columnChunkWriter.getColumnType().getType()) {
+            case BOOLEAN ->
+                new ColumnWritingVisitor(columnChunkWriter) {
+                  @Override
+                  public void visit(
+                      final int pageIndex, final Values values, final int valueIndex) {
+                    columnChunkWriter.accumulateValue(
+                        repetitionLevel, values.getBoolean(valueIndex));
+                  }
+                };
+            case INT32 ->
+                new ColumnWritingVisitor(columnChunkWriter) {
+                  @Override
+                  public void visit(
+                      final int pageIndex, final Values values, final int valueIndex) {
+                    columnChunkWriter.accumulateValue(repetitionLevel, values.getInt32(valueIndex));
+                  }
+                };
+            case INT64 ->
+                new ColumnWritingVisitor(columnChunkWriter) {
+                  @Override
+                  public void visit(
+                      final int pageIndex, final Values values, final int valueIndex) {
+                    columnChunkWriter.accumulateValue(repetitionLevel, values.getInt64(valueIndex));
+                  }
+                };
+            case INT96 -> throw new UnsupportedOperationException("Can't handle int96 yet");
+            case FLOAT ->
+                new ColumnWritingVisitor(columnChunkWriter) {
+                  @Override
+                  public void visit(
+                      final int pageIndex, final Values values, final int valueIndex) {
+                    columnChunkWriter.accumulateValue(repetitionLevel, values.getFloat(valueIndex));
+                  }
+                };
+            case DOUBLE ->
+                new ColumnWritingVisitor(columnChunkWriter) {
+                  @Override
+                  public void visit(
+                      final int pageIndex, final Values values, final int valueIndex) {
+                    columnChunkWriter.accumulateValue(
+                        repetitionLevel, values.getDouble(valueIndex));
+                  }
+                };
+            case BYTE_ARRAY ->
+                new ColumnWritingVisitor(columnChunkWriter) {
+                  @Override
+                  public void visit(
+                      final int pageIndex, final Values values, final int valueIndex) {
+                    columnChunkWriter.accumulateValue(
+                        repetitionLevel, values.getByteBuffer(valueIndex));
+                  }
+                };
+            case FIXED_LEN_BYTE_ARRAY ->
+                new ColumnWritingVisitor(columnChunkWriter) {
+                  @Override
+                  public void visit(
+                      final int pageIndex, final Values values, final int valueIndex) {
+                    columnChunkWriter.accumulateValue(
+                        repetitionLevel, values.getByteBuffer(valueIndex));
+                  }
+                };
+          };
       while (columnValueIterator.hasNext()) {
         if (rowsToKeep.get(rowIndex++)) {
           do {
-            visitor.setRepetitionLevel(columnValueIterator.peekRepetitionLevel());
-            visitor.setDefinitionLevel(columnValueIterator.peekDefinitionLevel());
-            columnValueIterator.visitNext(visitor);
+            columnWritingVisitor.setRepetitionLevel(columnValueIterator.peekRepetitionLevel());
+            columnWritingVisitor.setDefinitionLevel(columnValueIterator.peekDefinitionLevel());
+            columnValueIterator.visitNext(columnWritingVisitor);
           } while (columnValueIterator.hasNext()
               && columnValueIterator.peekRepetitionLevel() > 0); // zero means a new row
         } else {

@@ -3,8 +3,8 @@ package com.markosindustries.parquito.predicates;
 import com.markosindustries.parquito.ColumnValuesSet;
 import com.markosindustries.parquito.ConvertedColumnType;
 import com.markosindustries.parquito.ParquetSchemaPath;
+import com.markosindustries.parquito.page.Values;
 import com.markosindustries.parquito.rows.PredicateRowMatcher;
-import java.nio.ByteBuffer;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -27,33 +27,8 @@ public class AnyInSet<Converted> extends ColumnPredicate<Converted, PredicateRow
   }
 
   @Override
-  public boolean valueMatches(final boolean value) {
-    return referenceValues.contains(value);
-  }
-
-  @Override
-  public boolean valueMatches(final ByteBuffer value) {
-    return referenceValues.contains(value);
-  }
-
-  @Override
-  public boolean valueMatches(final double value) {
-    return referenceValues.contains(value);
-  }
-
-  @Override
-  public boolean valueMatches(final float value) {
-    return referenceValues.contains(value);
-  }
-
-  @Override
-  public boolean valueMatches(final int value) {
-    return referenceValues.contains(value);
-  }
-
-  @Override
-  public boolean valueMatches(final long value) {
-    return referenceValues.contains(value);
+  public boolean valueMatches(final Values values, final int index) {
+    return referenceValues.contains(values, index);
   }
 
   @Override

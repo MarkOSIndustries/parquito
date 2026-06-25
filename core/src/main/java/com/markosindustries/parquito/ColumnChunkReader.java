@@ -4,7 +4,6 @@ import com.markosindustries.parquito.bloomfilter.BloomFilter;
 import com.markosindustries.parquito.bloomfilter.BloomFilterRead;
 import com.markosindustries.parquito.page.DataPageReader;
 import com.markosindustries.parquito.page.DictionaryPageReader;
-import com.markosindustries.parquito.page.Values;
 import com.markosindustries.parquito.types.ConversionStrategy;
 import com.markosindustries.parquito.types.LogicalTypeConverter;
 import java.io.IOException;
@@ -18,7 +17,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.parquet.format.BloomFilterHeader;
 import org.apache.parquet.format.ColumnChunk;
 import org.apache.parquet.format.ColumnMetaData;
@@ -245,65 +243,11 @@ public class ColumnChunkReader {
   private <T> boolean dictionaryContainsAny(final ColumnValuesSet<T> columnValuesSet) {
     final var dictionaryPage = getDictionaryPage();
     final var dictionaryPageValues = dictionaryPage.getValues();
-    final var foundAny = new AtomicBoolean(false);
-    for (int i = 0; i < dictionaryPage.getNonNullValues(); i++) {
-      dictionaryPageValues.visit(
-          i,
-          i,
-          new Values.Visitor() {
-            @Override
-            public void visit(final int pageIndex, final boolean value) {
-              if (columnValuesSet.contains(value)) {
-                foundAny.set(true);
-              }
-            }
-
-            @Override
-            public void visit(final int pageIndex, final ByteBuffer value) {
-              if (columnValuesSet.contains(value)) {
-                foundAny.set(true);
-              }
-            }
-
-            @Override
-            public void visit(final int pageIndex, final float value) {
-              if (columnValuesSet.contains(value)) {
-                foundAny.set(true);
-              }
-            }
-
-            @Override
-            public void visit(final int pageIndex, final double value) {
-              if (columnValuesSet.contains(value)) {
-                foundAny.set(true);
-              }
-            }
-
-            @Override
-            public void visit(final int pageIndex, final int value) {
-              if (columnValuesSet.contains(value)) {
-                foundAny.set(true);
-              }
-            }
-
-            @Override
-            public void visit(final int pageIndex, final long value) {
-              if (columnValuesSet.contains(value)) {
-                foundAny.set(true);
-              }
-            }
-
-            @Override
-            public void visitNull(int pageIndex) {
-              throw new UnsupportedOperationException(
-                  "We shouldn't encounter nulls in a dictionary page");
-            }
-          });
-      if (foundAny.get()) {
+    for (int i = 0; i < dictionaryPageValues.count(); i++) {
+      if (columnValuesSet.contains(dictionaryPageValues, i)) {
         return true;
       }
     }
-
     return false;
   }
 
@@ -319,48 +263,9 @@ public class ColumnChunkReader {
         .thenApplyAsync(
             page -> {
               final var hashSet = new HashSet<T>();
-              final var values = page.getValues();
-              for (var i = 0; i < page.getNonNullValues(); i++) {
-                values.visit(
-                    i,
-                    i,
-                    new Values.Visitor() {
-                      @Override
-                      public void visit(final int pageIndex, final boolean value) {
-                        hashSet.add(logicalTypeConverter.fromBoolean(value));
-                      }
-
-                      @Override
-                      public void visit(final int pageIndex, final ByteBuffer value) {
-                        hashSet.add(logicalTypeConverter.fromByteBuffer(value));
-                      }
-
-                      @Override
-                      public void visit(final int pageIndex, final float value) {
-                        hashSet.add(logicalTypeConverter.fromFloat(value));
-                      }
-
-                      @Override
-                      public void visit(final int pageIndex, final double value) {
-                        hashSet.add(logicalTypeConverter.fromDouble(value));
-                      }
-
-                      @Override
-                      public void visit(final int pageIndex, final int value) {
-                        hashSet.add(logicalTypeConverter.fromInt32(value));
-                      }
-
-                      @Override
-                      public void visit(final int pageIndex, final long value) {
-                        hashSet.add(logicalTypeConverter.fromInt64(value));
-                      }
-
-                      @Override
-                      public void visitNull(int pageIndex) {
-                        throw new UnsupportedOperationException(
-                            "We shouldn't encounter nulls in a dictionary page");
-                      }
-                    });
+              final var dictionaryPageValues = page.getValues();
+              for (int i = 0; i < dictionaryPageValues.count(); i++) {
+                hashSet.add(logicalTypeConverter.from(dictionaryPageValues, i));
               }
               return hashSet;
             },

@@ -2,6 +2,7 @@ package com.markosindustries.parquito.predicates;
 
 import com.markosindustries.parquito.ConvertedColumnType;
 import com.markosindustries.parquito.ParquetSchemaPath;
+import com.markosindustries.parquito.page.Values;
 import com.markosindustries.parquito.rows.DataPageCursor;
 import com.markosindustries.parquito.rows.PredicateMaterialisedMatches;
 import com.markosindustries.parquito.rows.PredicateRowMatcher;
@@ -89,17 +90,20 @@ public abstract class ColumnPredicate<Converted, RowMatcher extends PredicateRow
     return convertedColumnType.compareNull(o2);
   }
 
-  public abstract boolean valueMatches(final boolean value);
+  protected int compare(final Values values, final int index, final Converted other) {
+    return switch (this.convertedColumnType.columnType().getType()) {
+      case BOOLEAN -> convertedColumnType.compare(values.getBoolean(index), other);
+      case INT32 -> convertedColumnType.compare(values.getInt32(index), other);
+      case INT64 -> convertedColumnType.compare(values.getInt64(index), other);
+      case INT96 -> throw new UnsupportedOperationException("We don't currently support Int96");
+      case FLOAT -> convertedColumnType.compare(values.getFloat(index), other);
+      case DOUBLE -> convertedColumnType.compare(values.getDouble(index), other);
+      case BYTE_ARRAY, FIXED_LEN_BYTE_ARRAY ->
+          convertedColumnType.compare(values.getByteBuffer(index), other);
+    };
+  }
 
-  public abstract boolean valueMatches(final ByteBuffer value);
-
-  public abstract boolean valueMatches(final double value);
-
-  public abstract boolean valueMatches(final float value);
-
-  public abstract boolean valueMatches(final int value);
-
-  public abstract boolean valueMatches(final long value);
+  public abstract boolean valueMatches(final Values values, final int index);
 
   public abstract boolean nullMatches();
 
@@ -118,11 +122,7 @@ public abstract class ColumnPredicate<Converted, RowMatcher extends PredicateRow
   }
 
   public final void newPage(final DataPageCursor dataPageCursor) {
-    final var materialisedMatches =
-        dataPageCursor
-            .getDataPage()
-            .getValues()
-            .materialise(this, this.convertedColumnType.logicalTypeConverter().getConvertedClass());
+    final var materialisedMatches = dataPageCursor.getDataPage().getValues().materialise(this);
     this.rowMatcher =
         rowMatcherConstructor.create(dataPageCursor, materialisedMatches, nullMatches());
   }

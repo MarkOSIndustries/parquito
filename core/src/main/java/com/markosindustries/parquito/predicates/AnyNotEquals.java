@@ -2,8 +2,8 @@ package com.markosindustries.parquito.predicates;
 
 import com.markosindustries.parquito.ConvertedColumnType;
 import com.markosindustries.parquito.ParquetSchemaPath;
+import com.markosindustries.parquito.page.Values;
 import com.markosindustries.parquito.rows.PredicateRowMatcher;
-import java.nio.ByteBuffer;
 
 /**
  * Matches a row if at least one value for the given column does not equal the referenceValue
@@ -23,33 +23,8 @@ public class AnyNotEquals<Converted>
   }
 
   @Override
-  public boolean valueMatches(final boolean value) {
-    return compare(value, referenceValue) != 0;
-  }
-
-  @Override
-  public boolean valueMatches(final ByteBuffer value) {
-    return compare(value, referenceValue) != 0;
-  }
-
-  @Override
-  public boolean valueMatches(final double value) {
-    return compare(value, referenceValue) != 0;
-  }
-
-  @Override
-  public boolean valueMatches(final float value) {
-    return compare(value, referenceValue) != 0;
-  }
-
-  @Override
-  public boolean valueMatches(final int value) {
-    return compare(value, referenceValue) != 0;
-  }
-
-  @Override
-  public boolean valueMatches(final long value) {
-    return compare(value, referenceValue) != 0;
+  public boolean valueMatches(final Values values, final int index) {
+    return compare(values, index, referenceValue) != 0;
   }
 
   @Override

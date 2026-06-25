@@ -25,10 +25,10 @@ public class RLEBooleanEncoding implements ParquetEncoding {
     final var values =
         IntEncodings.INT_ENCODING_RLE.decode(expectedValues, 1, decompressedPageBuffer);
 
-    return new Values() {
+    return new Values.Impl() {
       @Override
-      public void visit(final int pageIndex, final int valueIndex, final Visitor visitor) {
-        visitor.visit(pageIndex, values[valueIndex] != 0);
+      public boolean getBoolean(final int index) {
+        return values[index] != 0;
       }
 
       @Override

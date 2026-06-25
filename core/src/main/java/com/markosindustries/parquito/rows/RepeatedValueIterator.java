@@ -88,7 +88,7 @@ public class RepeatedValueIterator implements ParquetFieldIterator, DataPageCurs
   public void visitNext(final FieldVisitor visitor) {
     do {
       if (dataPage.getDefinitionLevels()[definitionIndex] == schemaNode.getDefinitionLevelMax()) {
-        dataPage.getValues().visit(definitionIndex, valueIndex++, visitor);
+        visitor.visit(definitionIndex, dataPage.getValues(), valueIndex++);
       }
       definitionIndex++;
     } while (definitionIndex < dataPage.getDefinitionLevels().length

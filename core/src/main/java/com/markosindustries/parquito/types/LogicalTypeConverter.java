@@ -1,5 +1,6 @@
 package com.markosindustries.parquito.types;
 
+import com.markosindustries.parquito.page.Values;
 import java.nio.ByteBuffer;
 import org.apache.parquet.format.Type;
 
@@ -43,4 +44,17 @@ public interface LogicalTypeConverter<T> {
   int compareInt32(final int value, T referenceValue);
 
   int compareInt64(final long value, T referenceValue);
+
+  // TODO - make this replace all the fromXXX methods
+  default T from(Values values, int valueIndex) {
+    return switch (getType()) {
+      case BOOLEAN -> fromBoolean(values.getBoolean(valueIndex));
+      case INT32 -> fromInt32(values.getInt32(valueIndex));
+      case INT64 -> fromInt64(values.getInt64(valueIndex));
+      case INT96 -> throw new UnsupportedOperationException("We can't currently handle Int96");
+      case FLOAT -> fromFloat(values.getFloat(valueIndex));
+      case DOUBLE -> fromDouble(values.getDouble(valueIndex));
+      case BYTE_ARRAY, FIXED_LEN_BYTE_ARRAY -> fromByteBuffer(values.getByteBuffer(valueIndex));
+    };
+  }
 }

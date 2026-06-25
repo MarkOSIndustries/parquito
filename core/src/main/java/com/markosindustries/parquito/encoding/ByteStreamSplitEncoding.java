@@ -6,7 +6,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.function.BiConsumer;
 import java.util.function.IntConsumer;
 
 public class ByteStreamSplitEncoding implements ParquetEncoding {
@@ -37,33 +36,58 @@ public class ByteStreamSplitEncoding implements ParquetEncoding {
               + decompressedPageBytes);
     }
 
-    final var buffer = ByteBuffer.allocate(byteWidth).order(ByteOrder.LITTLE_ENDIAN);
-    final BiConsumer<Integer, Values.Visitor> visitBuffer =
-        switch (type) {
-          case INT32 -> (pageIndex, visitor) -> visitor.visit(pageIndex, buffer.getInt(0));
-          case INT64 -> (pageIndex, visitor) -> visitor.visit(pageIndex, buffer.getLong(0));
-          case FLOAT -> (pageIndex, visitor) -> visitor.visit(pageIndex, buffer.getFloat(0));
-          case DOUBLE -> (pageIndex, visitor) -> visitor.visit(pageIndex, buffer.getDouble(0));
-          default ->
-              throw new UnsupportedOperationException(
-                  this.getClass().getSimpleName() + " does not support type " + type);
-        };
-    return new Values() {
-      @Override
-      public void visit(final int pageIndex, final int valueIndex, final Visitor visitor) {
+    abstract class BufferExtractor extends Values.Impl {
+      private final ByteBuffer buffer =
+          ByteBuffer.allocate(byteWidth).order(ByteOrder.LITTLE_ENDIAN);
+
+      protected ByteBuffer bufferValueAtIndex(int index) {
         var byteIndex = 0;
-        for (var streamIndex = valueIndex;
+        for (var streamIndex = index;
             streamIndex < decompressedPageBuffer.remaining();
             streamIndex += expectedValues) {
           buffer.put(byteIndex++, decompressedPageBuffer.get(streamIndex));
         }
-        visitBuffer.accept(pageIndex, visitor);
+        return buffer;
       }
 
       @Override
       public int count() {
         return expectedValues;
       }
+    }
+
+    return switch (type) {
+      case INT32 ->
+          new BufferExtractor() {
+            @Override
+            public int getInt32(final int index) {
+              return bufferValueAtIndex(index).getInt(0);
+            }
+          };
+      case INT64 ->
+          new BufferExtractor() {
+            @Override
+            public long getInt64(final int index) {
+              return bufferValueAtIndex(index).getLong(0);
+            }
+          };
+      case FLOAT ->
+          new BufferExtractor() {
+            @Override
+            public float getFloat(final int index) {
+              return bufferValueAtIndex(index).getFloat(0);
+            }
+          };
+      case DOUBLE ->
+          new BufferExtractor() {
+            @Override
+            public double getDouble(final int index) {
+              return bufferValueAtIndex(index).getDouble(0);
+            }
+          };
+      default ->
+          throw new UnsupportedOperationException(
+              this.getClass().getSimpleName() + " does not support type " + type);
     };
   }
 

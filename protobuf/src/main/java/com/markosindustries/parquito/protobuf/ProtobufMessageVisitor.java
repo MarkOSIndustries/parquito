@@ -1,13 +1,12 @@
 package com.markosindustries.parquito.protobuf;
 
-import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.Message;
 import com.markosindustries.parquito.ParquetSchemaNode;
+import com.markosindustries.parquito.page.Values;
 import com.markosindustries.parquito.rows.AbstractFieldVisitor;
 import com.markosindustries.parquito.rows.FieldVisitor;
 import com.markosindustries.parquito.rows.NoOpFieldVisitor;
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -57,6 +56,11 @@ class ProtobufMessageVisitor extends AbstractFieldVisitor {
   @Override
   public void endRepeated() {}
 
+  @Override
+  public void visit(final int pageIndex, final Values values, final int valueIndex) {
+    throw new UnsupportedOperationException("Unexpected value at Message (branch) node");
+  }
+
   private FieldVisitor determineAppropriateFieldVisitor(
       final Message.Builder parentBuilder,
       final Descriptors.FieldDescriptor field,
@@ -64,61 +68,21 @@ class ProtobufMessageVisitor extends AbstractFieldVisitor {
       Supplier<Message.Builder> newBuilder) {
     final Consumer<Object> storeValueInParent =
         field.isRepeated()
-            ? value -> parentBuilder.addRepeatedField(field, mapToProtobuf(field, value))
-            : value -> parentBuilder.setField(field, mapToProtobuf(field, value));
+            ? (value) -> parentBuilder.addRepeatedField(field, value)
+            : (value) -> parentBuilder.setField(field, value);
     final var isMessage = field.getType() == Descriptors.FieldDescriptor.Type.MESSAGE;
     if (field.isRepeated() && childSchemaNode.getConvertedType() == ConvertedType.LIST) {
       // Repeated but not LIST would imply legacy style without the 3 layer list structure
       return isMessage
           ? ProtobufListVisitor.forMessage(newBuilder, childSchemaNode, storeValueInParent)
-          : ProtobufListVisitor.forLeaf(childSchemaNode, storeValueInParent);
+          : ProtobufListVisitor.forLeaf(childSchemaNode, field, storeValueInParent);
     } else if (field.isMapField() && childSchemaNode.getConvertedType() == ConvertedType.MAP) {
       // MapField but not MAP would imply legacy style without the 3 layer map structure
       return new ProtobufMapVisitor(newBuilder, childSchemaNode, storeValueInParent);
     } else if (isMessage) {
       return new ProtobufMessageVisitor(newBuilder.get(), childSchemaNode, storeValueInParent);
     } else {
-      return new ProtobufLeafVisitor(storeValueInParent, field.isRepeated());
+      return ProtobufLeafVisitor.create(childSchemaNode, field, storeValueInParent);
     }
-  }
-
-  private static Object mapToProtobuf(final Descriptors.FieldDescriptor field, final Object value) {
-    return switch (field.getType()) {
-      case STRING -> mapStringToProtobuf(field, value);
-      case BYTES -> mapBytesToProtobuf(field, value);
-      case ENUM -> mapEnumsToProtobuf(field, value);
-      default -> value;
-    };
-  }
-
-  @SuppressWarnings("unchecked")
-  private static Object mapStringToProtobuf(
-      final Descriptors.FieldDescriptor field, final Object value) {
-    return ByteString.copyFrom((ByteBuffer) value).toStringUtf8();
-  }
-
-  @SuppressWarnings("unchecked")
-  private static Object mapBytesToProtobuf(
-      final Descriptors.FieldDescriptor field, final Object value) {
-    return ByteString.copyFrom((ByteBuffer) value);
-  }
-
-  @SuppressWarnings("unchecked")
-  private static Object mapEnumsToProtobuf(
-      final Descriptors.FieldDescriptor field, final Object value) {
-    return mapEnumToProtobuf(field.getEnumType(), value);
-  }
-
-  private static Object mapEnumToProtobuf(
-      final Descriptors.EnumDescriptor enumType, final Object value) {
-    if (value instanceof final ByteBuffer valueAsByteBuffer) {
-      final var asString = ByteString.copyFrom(valueAsByteBuffer).toStringUtf8();
-      return enumType.findValueByName(asString);
-    }
-    if (value instanceof Integer) {
-      return enumType.findValueByNumber((int) value);
-    }
-    throw new UnsupportedOperationException(
-        "Setting a protobuf enum from a " + value.getClass().getName() + " is not supported");
   }
 }

@@ -25,10 +25,10 @@ public class DeltaBinaryPackedEncoding implements ParquetEncoding {
       case INT32 -> {
         final var values =
             DeltaBinaryPackedEncoding.decode32(expectedValues, decompressedPageBuffer);
-        yield new Values() {
+        yield new Values.Impl() {
           @Override
-          public void visit(final int pageIndex, final int valueIndex, final Visitor visitor) {
-            visitor.visit(pageIndex, values[valueIndex]);
+          public int getInt32(final int index) {
+            return values[index];
           }
 
           @Override
@@ -40,10 +40,10 @@ public class DeltaBinaryPackedEncoding implements ParquetEncoding {
       case INT64 -> {
         final var values =
             DeltaBinaryPackedEncoding.decode64(expectedValues, decompressedPageBuffer);
-        yield new Values() {
+        yield new Values.Impl() {
           @Override
-          public void visit(final int pageIndex, final int valueIndex, final Visitor visitor) {
-            visitor.visit(pageIndex, values[valueIndex]);
+          public long getInt64(final int index) {
+            return values[index];
           }
 
           @Override

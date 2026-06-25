@@ -2,6 +2,7 @@ package com.markosindustries.parquito.protobuf;
 
 import com.google.protobuf.Message;
 import com.markosindustries.parquito.ParquetSchemaNode;
+import com.markosindustries.parquito.page.Values;
 import com.markosindustries.parquito.rows.AbstractFieldVisitor;
 import com.markosindustries.parquito.rows.FieldVisitor;
 import java.util.function.Consumer;
@@ -36,4 +37,9 @@ public class ProtobufMapVisitor extends AbstractFieldVisitor {
 
   @Override
   public void endBranch() {}
+
+  @Override
+  public void visit(final int pageIndex, final Values values, final int valueIndex) {
+    throw new UnsupportedOperationException("Unexpected value at map group node");
+  }
 }

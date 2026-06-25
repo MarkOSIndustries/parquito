@@ -89,7 +89,7 @@ public class OptionalValueIterator implements ParquetFieldIterator, DataPageCurs
   public void visitNext(final FieldVisitor visitor) {
     final var pageIndex = definitionIndex++;
     if (dataPage.getDefinitionLevels()[pageIndex] == schemaNode.getDefinitionLevelMax()) {
-      dataPage.getValues().visit(pageIndex, valueIndex++, visitor);
+      visitor.visit(pageIndex, dataPage.getValues(), valueIndex++);
     } else {
       visitor.visitNull(pageIndex);
     }

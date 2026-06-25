@@ -42,10 +42,10 @@ public class PlainEncoding implements ParquetEncoding {
       throws IOException {
     final int[] values =
         IntEncodings.INT_ENCODING_BIT_PACKED.decode(expectedValues, 1, decompressedPageBuffer);
-    return new Values() {
+    return new Values.Impl() {
       @Override
-      public void visit(final int pageIndex, final int valueIndex, final Visitor visitor) {
-        visitor.visit(pageIndex, values[valueIndex] != 0);
+      public boolean getBoolean(final int index) {
+        return values[index] != 0;
       }
 
       @Override
@@ -64,10 +64,10 @@ public class PlainEncoding implements ParquetEncoding {
     final var intBuffer =
         decompressedPageBuffer.slice(0, expectedBytes).order(ByteOrder.LITTLE_ENDIAN).asIntBuffer();
 
-    return new Values() {
+    return new Values.Impl() {
       @Override
-      public void visit(final int pageIndex, final int valueIndex, final Visitor visitor) {
-        visitor.visit(pageIndex, intBuffer.get(valueIndex));
+      public int getInt32(final int index) {
+        return intBuffer.get(index);
       }
 
       @Override
@@ -89,10 +89,10 @@ public class PlainEncoding implements ParquetEncoding {
             .order(ByteOrder.LITTLE_ENDIAN)
             .asLongBuffer();
 
-    return new Values() {
+    return new Values.Impl() {
       @Override
-      public void visit(final int pageIndex, final int valueIndex, final Visitor visitor) {
-        visitor.visit(pageIndex, longBuffer.get(valueIndex));
+      public long getInt64(final int index) {
+        return longBuffer.get(index);
       }
 
       @Override
@@ -114,10 +114,10 @@ public class PlainEncoding implements ParquetEncoding {
             .order(ByteOrder.LITTLE_ENDIAN)
             .asFloatBuffer();
 
-    return new Values() {
+    return new Values.Impl() {
       @Override
-      public void visit(final int pageIndex, final int valueIndex, final Visitor visitor) {
-        visitor.visit(pageIndex, floatBuffer.get(valueIndex));
+      public float getFloat(final int index) {
+        return floatBuffer.get(index);
       }
 
       @Override
@@ -139,10 +139,10 @@ public class PlainEncoding implements ParquetEncoding {
             .order(ByteOrder.LITTLE_ENDIAN)
             .asDoubleBuffer();
 
-    return new Values() {
+    return new Values.Impl() {
       @Override
-      public void visit(final int pageIndex, final int valueIndex, final Visitor visitor) {
-        visitor.visit(pageIndex, doubleBuffer.get(valueIndex));
+      public double getDouble(final int index) {
+        return doubleBuffer.get(index);
       }
 
       @Override
@@ -153,7 +153,7 @@ public class PlainEncoding implements ParquetEncoding {
   }
 
   private Values decodeVariableBytes(
-      final int expectedValues, final ByteBuffer decompressedPageBuffer) throws IOException {
+      final int expectedValues, final ByteBuffer decompressedPageBuffer) {
     decompressedPageBuffer.order(ByteOrder.LITTLE_ENDIAN);
     final var buffers = new ByteBuffer[expectedValues];
     for (int bufferIndex = decompressedPageBuffer.position(), i = 0; i < expectedValues; i++) {
@@ -167,10 +167,10 @@ public class PlainEncoding implements ParquetEncoding {
       }
     }
 
-    return new Values() {
+    return new Values.Impl() {
       @Override
-      public void visit(final int pageIndex, final int valueIndex, final Visitor visitor) {
-        visitor.visit(pageIndex, buffers[valueIndex].reset());
+      public ByteBuffer getByteBuffer(final int index) {
+        return buffers[index].reset();
       }
 
       @Override
@@ -181,8 +181,7 @@ public class PlainEncoding implements ParquetEncoding {
   }
 
   private Values decodeFixedBytes(
-      final int typeLength, final int expectedValues, final ByteBuffer decompressedPageBuffer)
-      throws IOException {
+      final int typeLength, final int expectedValues, final ByteBuffer decompressedPageBuffer) {
     final var totalBytes = expectedValues * typeLength;
     final var bytes = decompressedPageBuffer.slice(decompressedPageBuffer.position(), totalBytes);
     final var buffers = new ByteBuffer[expectedValues];
@@ -192,10 +191,10 @@ public class PlainEncoding implements ParquetEncoding {
       offset += typeLength;
     }
 
-    return new Values() {
+    return new Values.Impl() {
       @Override
-      public void visit(final int pageIndex, final int valueIndex, final Visitor visitor) {
-        visitor.visit(pageIndex, buffers[valueIndex].reset());
+      public ByteBuffer getByteBuffer(final int index) {
+        return buffers[index].reset();
       }
 
       @Override
