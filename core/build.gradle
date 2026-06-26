@@ -6,14 +6,7 @@ plugins {
 dependencies {
   api 'org.apache.parquet:parquet-format-structures:1.12.2'
   api 'org.xerial.snappy:snappy-java:1.1.10.4'
-  api 'org.anarres.lzo:lzo-core:1.0.6'
-  api 'org.brotli:dec:0.1.2'
-  api 'at.yawk.lz4:lz4-java:1.10.4'
   api 'net.openhft:zero-allocation-hashing:2026.0'
-
-  // I think this will be useful when trying to decide whether to use dictionary encoding for a given column chunk on write...
-  // specifically, the LinearCounting implementation (or HyperLogLog for cardinalities greater than 10^9, but that seems less likely)
-  api 'com.clearspring.analytics:stream:2.9.8'
 
   api 'it.unimi.dsi:fastutil:8.5.18'
 

@@ -1,6 +1,5 @@
 package com.markosindustries.parquito.encoding;
 
-import com.clearspring.analytics.util.Varint;
 import com.markosindustries.parquito.ByteBufferOutputStream;
 import com.markosindustries.parquito.ParquetIOException;
 import com.markosindustries.parquito.arrays.FastArray;
@@ -43,7 +42,6 @@ public class RLEIntEncoding implements ParquetIntEncoding {
 
     decompressedPageBuffer.order(ByteOrder.LITTLE_ENDIAN);
 
-    final ByteBuffer pageBuffer;
     if (hasLengthHeader) {
       final var length = decompressedPageBuffer.getInt();
       if (decompressedPageBuffer.remaining() < length) {
@@ -62,10 +60,8 @@ public class RLEIntEncoding implements ParquetIntEncoding {
       final int[] values,
       final int offset,
       final int bitWidth,
-      final ByteBuffer decompressedPageBuffer)
-      throws IOException {
-    final var header =
-        Varint.readUnsignedVarInt(new DataInputFromByteBuffer(decompressedPageBuffer));
+      final ByteBuffer decompressedPageBuffer) {
+    final var header = VarInt.getUnsigned32(decompressedPageBuffer);
     if ((header & HEADER_FLAG_BIT_PACKED) == HEADER_FLAG_BIT_PACKED) {
       return decodeBitPackedRun(
           values, offset, (header >>> 1) << 3, bitWidth, decompressedPageBuffer);
@@ -172,7 +168,7 @@ public class RLEIntEncoding implements ParquetIntEncoding {
       final int value, final int bitWidth, final int runLength, final DataOutputStream dataOutput)
       throws IOException {
     final var header = runLength << 1;
-    Varint.writeUnsignedVarInt(header, dataOutput);
+    VarInt.putUnsigned32(header, dataOutput);
     int buffer = value;
     for (int shift = 0; shift < bitWidth; shift += 8) {
       dataOutput.writeByte(buffer);
@@ -185,7 +181,7 @@ public class RLEIntEncoding implements ParquetIntEncoding {
       throws IOException {
     final var runLengthDividedBy8 = Maths.ceilDivPow2(values.length(), 3);
     final var header = HEADER_FLAG_BIT_PACKED | (runLengthDividedBy8 << 1);
-    Varint.writeUnsignedVarInt(header, dataOutput);
+    VarInt.putUnsigned32(header, dataOutput);
     writeBitPacked(values, bitWidth, runLengthDividedBy8 << 3, dataOutput);
   }
 

@@ -1,10 +1,8 @@
 package com.markosindustries.parquito.encoding;
 
-import com.clearspring.analytics.util.Varint;
 import com.markosindustries.parquito.ColumnChunkReader;
 import com.markosindustries.parquito.arrays.FastArray;
 import com.markosindustries.parquito.page.Values;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
@@ -84,11 +82,9 @@ public class DeltaBinaryPackedEncoding implements ParquetEncoding {
 
   static void decodeInto(FastArray targetArray, final ByteBuffer decompressedPageBuffer)
       throws IOException {
-
-    final var dataInputStream = new DataInputFromByteBuffer(decompressedPageBuffer);
-    final var valuesPerBlock = Varint.readUnsignedVarInt(dataInputStream);
-    final var miniBlocksPerBlock = Varint.readUnsignedVarInt(dataInputStream);
-    final var totalValueCount = Varint.readUnsignedVarInt(dataInputStream);
+    final var valuesPerBlock = VarInt.getUnsigned32(decompressedPageBuffer);
+    final var miniBlocksPerBlock = VarInt.getUnsigned32(decompressedPageBuffer);
+    final var totalValueCount = VarInt.getUnsigned32(decompressedPageBuffer);
 
     if (totalValueCount != targetArray.length()) {
       throw new IllegalArgumentException(
@@ -107,15 +103,15 @@ public class DeltaBinaryPackedEncoding implements ParquetEncoding {
     }
 
     final var valuesPerMiniBlock = valuesPerBlock / miniBlocksPerBlock;
-    long previousValue = ZigZag.decode(Varint.readUnsignedVarLong(dataInputStream));
+    long previousValue = ZigZag.decode(VarInt.getUnsigned64(decompressedPageBuffer));
     targetArray.set(0, previousValue);
 
     final var bitWidthsForBlock = new int[miniBlocksPerBlock];
     for (int valuesSeen = 1; valuesSeen < totalValueCount; ) {
       // Read a block
-      final long minDelta = ZigZag.decode(Varint.readUnsignedVarLong(dataInputStream));
+      final long minDelta = ZigZag.decode(VarInt.getUnsigned64(decompressedPageBuffer));
       for (int miniBlockIdx = 0; miniBlockIdx < miniBlocksPerBlock; miniBlockIdx++) {
-        bitWidthsForBlock[miniBlockIdx] = dataInputStream.readUnsignedByte();
+        bitWidthsForBlock[miniBlockIdx] = 0xFF & decompressedPageBuffer.get();
       }
       for (int miniBlockIdx = 0; miniBlockIdx < miniBlocksPerBlock; miniBlockIdx++) {
         final var bitWidth = bitWidthsForBlock[miniBlockIdx];
@@ -167,10 +163,9 @@ public class DeltaBinaryPackedEncoding implements ParquetEncoding {
     final var miniBlocksPerBlock = 4;
     final var totalValueCount = sourceArray.length();
 
-    final var dataOutputStream = new DataOutputStream(uncompressedPageStream);
-    Varint.writeUnsignedVarInt(valuesPerBlock, dataOutputStream);
-    Varint.writeUnsignedVarInt(miniBlocksPerBlock, dataOutputStream);
-    Varint.writeUnsignedVarInt(totalValueCount, dataOutputStream);
+    VarInt.putUnsigned32(valuesPerBlock, uncompressedPageStream);
+    VarInt.putUnsigned32(miniBlocksPerBlock, uncompressedPageStream);
+    VarInt.putUnsigned32(totalValueCount, uncompressedPageStream);
 
     if (totalValueCount == 0) {
       return;
@@ -178,7 +173,7 @@ public class DeltaBinaryPackedEncoding implements ParquetEncoding {
 
     final var valuesPerMiniBlock = valuesPerBlock / miniBlocksPerBlock;
     long previousValue = sourceArray.get(0);
-    Varint.writeUnsignedVarLong(ZigZag.encode(previousValue), dataOutputStream);
+    VarInt.putUnsigned64(ZigZag.encode(previousValue), uncompressedPageStream);
 
     final var bitWidthsForBlock = new int[miniBlocksPerBlock];
     final var deltasForBlock = new long[valuesPerBlock];
@@ -200,7 +195,7 @@ public class DeltaBinaryPackedEncoding implements ParquetEncoding {
         }
       }
 
-      Varint.writeUnsignedVarLong(ZigZag.encode(minDelta), dataOutputStream);
+      VarInt.putUnsigned64(ZigZag.encode(minDelta), uncompressedPageStream);
 
       for (int miniBlockIdx = 0, blockIdx = 0; miniBlockIdx < miniBlocksPerBlock; miniBlockIdx++) {
         bitWidthsForBlock[miniBlockIdx] = 0;
@@ -212,7 +207,7 @@ public class DeltaBinaryPackedEncoding implements ParquetEncoding {
           }
         }
 
-        dataOutputStream.writeByte(bitWidthsForBlock[miniBlockIdx]);
+        uncompressedPageStream.write(bitWidthsForBlock[miniBlockIdx]);
       }
 
       for (int miniBlockIdx = 0; miniBlockIdx < miniBlocksPerBlock; miniBlockIdx++) {
@@ -224,7 +219,7 @@ public class DeltaBinaryPackedEncoding implements ParquetEncoding {
         RLEIntEncoding.writeBitPacked(
             FastArray.slice(deltasForBlock, miniBlockIdx * valuesPerMiniBlock, valuesPerMiniBlock),
             bitWidth,
-            dataOutputStream);
+            uncompressedPageStream);
       }
     }
   }
