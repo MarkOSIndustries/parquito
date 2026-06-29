@@ -5,5 +5,5 @@ plugins {
 
 dependencies {
   api project(':core')
-  api 'com.alibaba:fastjson:2.0.57'
+  api 'com.alibaba.fastjson2:fastjson2:2.0.62'
 }

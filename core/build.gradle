@@ -4,10 +4,9 @@ plugins {
 }
 
 dependencies {
-  api 'org.apache.parquet:parquet-format-structures:1.12.2'
-  api 'org.xerial.snappy:snappy-java:1.1.10.4'
+  api 'org.apache.parquet:parquet-format-structures:1.17.1'
+  api 'org.xerial.snappy:snappy-java:1.1.10.8'
   api 'net.openhft:zero-allocation-hashing:2026.0'
-
   api 'it.unimi.dsi:fastutil:8.5.18'
 
   testImplementation 'com.google.guava:guava:33.5.0-jre'
