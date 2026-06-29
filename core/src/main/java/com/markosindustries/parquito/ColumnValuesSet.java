@@ -17,6 +17,7 @@ import it.unimi.dsi.fastutil.objects.ObjectSet;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Collection;
+import java.util.Objects;
 import org.apache.parquet.format.Statistics;
 
 public class ColumnValuesSet<T> {
@@ -116,28 +117,20 @@ public class ColumnValuesSet<T> {
     };
   }
 
-  public boolean contains(final boolean value) {
-    return booleans.contains(value);
-  }
-
-  public boolean contains(final ByteBuffer value) {
-    return byteBuffers.contains(value);
-  }
-
-  public boolean contains(final float value) {
-    return floats.contains(value);
-  }
-
-  public boolean contains(final double value) {
-    return doubles.contains(value);
-  }
-
-  public boolean contains(final int value) {
-    return ints.contains(value);
-  }
-
-  public boolean contains(final long value) {
-    return longs.contains(value);
+  public boolean contains(final T value) {
+    if (Objects.isNull(value)) {
+      return containedNull;
+    }
+    return switch (logicalTypeConverter.getType()) {
+      case BOOLEAN -> booleans.contains(logicalTypeConverter.toBoolean(value));
+      case INT32 -> ints.contains(logicalTypeConverter.toInt32(value));
+      case INT64 -> longs.contains(logicalTypeConverter.toInt64(value));
+      case INT96 -> throw new UnsupportedOperationException("We don't currently support Int96");
+      case FLOAT -> floats.contains(logicalTypeConverter.toFloat(value));
+      case DOUBLE -> doubles.contains(logicalTypeConverter.toDouble(value));
+      case BYTE_ARRAY, FIXED_LEN_BYTE_ARRAY ->
+          byteBuffers.contains(logicalTypeConverter.toByteBuffer(value));
+    };
   }
 
   public boolean containsNull() {
