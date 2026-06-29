@@ -54,7 +54,7 @@ public interface EncodingSelector {
       if (maybeOverride != null) {
         return maybeOverride;
       }
-      if (distinctValues << 1 <= totalNonNull) {
+      if (distinctValues << 1 <= totalNonNull && type != Type.BOOLEAN) {
         return Encoding.RLE_DICTIONARY;
       }
       return switch (type) {

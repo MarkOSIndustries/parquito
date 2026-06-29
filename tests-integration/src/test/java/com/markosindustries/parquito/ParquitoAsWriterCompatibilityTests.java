@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 import org.apache.parquet.format.CompressionCodec;
+import org.apache.parquet.format.Encoding;
 import org.apache.parquet.proto.ProtoParquetReader;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -143,13 +144,19 @@ public class ParquitoAsWriterCompatibilityTests {
         new RowGroupWriter<>(
             outputStream,
             WriteSpec.newBuilder()
-                .withTargetBytesPerRowGroup(10)
                 .withCompressionCodec(compressionCodec)
                 .withBloomFilterSelector(
                     BloomFilterSelector.fpp(
                         Map.of(
-                            protobufWriter.getSchemaRoot().parseDotSeparatedPath("some_string"),
+                            protobufWriter
+                                .getSchemaRoot()
+                                .parseDotSeparatedPath("some_child.some_string"),
                             0.001)))
+                .withEncodingSelector(
+                    new EncodingSelector.DefaultEncodingSelector(
+                        Map.of(
+                            protobufWriter.getSchemaRoot().parseDotSeparatedPath("some_string"),
+                            Encoding.DELTA_LENGTH_BYTE_ARRAY)))
                 .build(),
             protobufWriter)) {
       writer.putMetaData(PB_CLASS, Example.class.getName());

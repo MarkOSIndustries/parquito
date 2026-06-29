@@ -168,6 +168,9 @@ public class DeltaBinaryPackedEncoding implements ParquetEncoding {
     VarInt.putUnsigned32(totalValueCount, uncompressedPageStream);
 
     if (totalValueCount == 0) {
+      // We have to write something, because the parquet format considers
+      // "first value" to be part of the header, and therefore mandatory
+      VarInt.putUnsigned64(ZigZag.encode(0), uncompressedPageStream);
       return;
     }
 

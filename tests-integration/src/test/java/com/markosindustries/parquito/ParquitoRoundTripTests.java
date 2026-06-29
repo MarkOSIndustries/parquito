@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Stream;
 import org.apache.parquet.format.CompressionCodec;
+import org.apache.parquet.format.Encoding;
 import org.apache.parquet.format.RowGroup;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -164,6 +165,11 @@ public class ParquitoRoundTripTests {
                                 .getSchemaRoot()
                                 .parseDotSeparatedPath("some_child.some_string"),
                             0.001)))
+                .withEncodingSelector(
+                    new EncodingSelector.DefaultEncodingSelector(
+                        Map.of(
+                            protobufWriter.getSchemaRoot().parseDotSeparatedPath("some_string"),
+                            Encoding.DELTA_LENGTH_BYTE_ARRAY)))
                 .build(),
             protobufWriter)) {
       writer.write(expectedProtobufs.iterator());
