@@ -64,7 +64,7 @@ public final class CompressionCodecs {
               new Codec(
                   compressed -> {
                     // GZIPInputStream constructor reads the header (its size varies)
-                    new GZIPInputStream(new ByteBufferInputStream(compressed));
+                    new GZIPInputStream(new ByteBufferInputStream(compressed)).close();
 
                     // GZIP puts the uncompressed size as a little endian int at the end of the
                     // trailer

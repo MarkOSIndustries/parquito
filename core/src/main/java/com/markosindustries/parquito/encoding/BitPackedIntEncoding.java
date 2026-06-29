@@ -27,7 +27,7 @@ public class BitPackedIntEncoding implements ParquetIntEncoding {
     for (int index = 0; index < expectedValues; index++) {
       while (availableBits < bitWidth) {
         buffer <<= Maths.BITS_PER_BYTE;
-        buffer |= decompressedPageBuffer.get();
+        buffer |= 0xFF & decompressedPageBuffer.get();
         availableBits += Maths.BITS_PER_BYTE;
       }
       availableBits -= bitWidth;

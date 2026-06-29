@@ -11,7 +11,7 @@ public class LeafAccumulator implements ParquetFieldAccumulator {
   private final AccumulatorState state;
   private final ColumnChunkWriter columnChunkWriter;
 
-  public int repetitionLevel = 0;
+  private int repetitionLevel = 0;
 
   LeafAccumulator(
       final ParquetSchemaNode schemaNode,
