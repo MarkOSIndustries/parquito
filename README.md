@@ -15,7 +15,7 @@ Parquito libraries are published to [maven central][maven]. Add a dependency on 
 <dependency>
   <groupId>com.markosindustries.parquito</groupId>
   <artifactId>parquito-core</artifactId>
-  <version>2.0.0</version>
+  <version>2.1.0</version>
 </dependency>
 ```
 
