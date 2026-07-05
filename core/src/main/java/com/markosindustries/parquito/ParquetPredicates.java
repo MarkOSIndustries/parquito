@@ -213,7 +213,8 @@ public class ParquetPredicates {
       final Set<?> referenceValues,
       final ConvertedColumnType<ReadAs> columnType,
       final ParquetSchemaPath schemaPath) {
-    return AnyInSet.from(referenceValues, columnType, schemaPath);
+    return new AnyInSet<>(
+        ColumnValuesSet.castFrom(columnType.logicalTypeConverter(), referenceValues), schemaPath);
   }
 
   public static ParquetPredicate anyInSet(
@@ -230,7 +231,8 @@ public class ParquetPredicates {
       final Set<?> referenceValues,
       final ConvertedColumnType<ReadAs> columnType,
       final ParquetSchemaPath schemaPath) {
-    return AllInSet.from(referenceValues, columnType, schemaPath);
+    return new AllInSet<ReadAs>(
+        ColumnValuesSet.castFrom(columnType.logicalTypeConverter(), referenceValues), schemaPath);
   }
 
   public static ParquetPredicate allInSet(

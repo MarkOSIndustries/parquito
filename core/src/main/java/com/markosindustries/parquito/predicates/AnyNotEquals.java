@@ -11,8 +11,9 @@ import com.markosindustries.parquito.rows.PredicateRowMatcher;
  * @param <Converted> The type of value
  */
 public class AnyNotEquals<Converted>
-    extends ColumnPredicate<Converted, PredicateRowMatcher.AnyMatch> {
+    extends AbstractColumnEqualityPredicate<Converted, PredicateRowMatcher.AnyMatch> {
   private final Converted referenceValue;
+  private final ValuesPredicate predicate;
 
   public AnyNotEquals(
       final Converted referenceValue,
@@ -20,15 +21,16 @@ public class AnyNotEquals<Converted>
       ParquetSchemaPath schemaPath) {
     super(columnType, schemaPath, PredicateRowMatcher.AnyMatch::new);
     this.referenceValue = referenceValue;
+    this.predicate = makeEqualsPredicate(referenceValue);
   }
 
   @Override
   public boolean valueMatches(final Values values, final int index) {
-    return compare(values, index, referenceValue) != 0;
+    return !predicate.matches(values, index);
   }
 
   @Override
   public boolean nullMatches() {
-    return compareNull(referenceValue) != 0;
+    return !equalsNull(referenceValue);
   }
 }

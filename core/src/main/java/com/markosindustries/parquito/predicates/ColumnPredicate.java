@@ -1,13 +1,11 @@
 package com.markosindustries.parquito.predicates;
 
-import com.markosindustries.parquito.ConvertedColumnType;
 import com.markosindustries.parquito.ParquetSchemaPath;
 import com.markosindustries.parquito.page.Values;
 import com.markosindustries.parquito.rows.DataPageCursor;
 import com.markosindustries.parquito.rows.PredicateMaterialisedMatches;
 import com.markosindustries.parquito.rows.PredicateRowMatcher;
 import com.markosindustries.parquito.schematraversal.SchemaTraversalSpec;
-import java.nio.ByteBuffer;
 import java.util.stream.Stream;
 
 /**
@@ -17,7 +15,6 @@ import java.util.stream.Stream;
  */
 public abstract class ColumnPredicate<Converted, RowMatcher extends PredicateRowMatcher>
     implements ParquetPredicate {
-  private final ConvertedColumnType<Converted> convertedColumnType;
   private final ParquetSchemaPath schemaPath;
   private final RowMatcherConstructor<RowMatcher> rowMatcherConstructor;
   private PredicateRowMatcher rowMatcher;
@@ -31,10 +28,8 @@ public abstract class ColumnPredicate<Converted, RowMatcher extends PredicateRow
   }
 
   public ColumnPredicate(
-      final ConvertedColumnType<Converted> convertedColumnType,
       final ParquetSchemaPath schemaPath,
       final RowMatcherConstructor<RowMatcher> rowMatcherConstructor) {
-    this.convertedColumnType = convertedColumnType;
     this.schemaPath = schemaPath;
     this.rowMatcherConstructor = rowMatcherConstructor;
   }
@@ -60,47 +55,6 @@ public abstract class ColumnPredicate<Converted, RowMatcher extends PredicateRow
 
   public ParquetSchemaPath getSchemaPath() {
     return schemaPath;
-  }
-
-  protected int compare(final boolean o1, final Converted o2) {
-    return convertedColumnType.compare(o1, o2);
-  }
-
-  protected int compare(final ByteBuffer o1, final Converted o2) {
-    return convertedColumnType.compare(o1, o2);
-  }
-
-  protected int compare(final double o1, final Converted o2) {
-    return convertedColumnType.compare(o1, o2);
-  }
-
-  protected int compare(final float o1, final Converted o2) {
-    return convertedColumnType.compare(o1, o2);
-  }
-
-  protected int compare(final int o1, final Converted o2) {
-    return convertedColumnType.compare(o1, o2);
-  }
-
-  protected int compare(final long o1, final Converted o2) {
-    return convertedColumnType.compare(o1, o2);
-  }
-
-  protected int compareNull(final Converted o2) {
-    return convertedColumnType.compareNull(o2);
-  }
-
-  protected int compare(final Values values, final int index, final Converted other) {
-    return switch (this.convertedColumnType.columnType().getType()) {
-      case BOOLEAN -> convertedColumnType.compare(values.getBoolean(index), other);
-      case INT32 -> convertedColumnType.compare(values.getInt32(index), other);
-      case INT64 -> convertedColumnType.compare(values.getInt64(index), other);
-      case INT96 -> throw new UnsupportedOperationException("We don't currently support Int96");
-      case FLOAT -> convertedColumnType.compare(values.getFloat(index), other);
-      case DOUBLE -> convertedColumnType.compare(values.getDouble(index), other);
-      case BYTE_ARRAY, FIXED_LEN_BYTE_ARRAY ->
-          convertedColumnType.compare(values.getByteBuffer(index), other);
-    };
   }
 
   public abstract boolean valueMatches(final Values values, final int index);

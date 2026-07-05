@@ -12,8 +12,9 @@ import com.markosindustries.parquito.rows.PredicateRowMatcher;
  * @param <Converted> The type of value
  */
 public class AnyGreaterThanOrEqual<Converted>
-    extends ColumnPredicate<Converted, PredicateRowMatcher.AnyMatch> {
+    extends AbstractColumnComparisonPredicate<Converted, PredicateRowMatcher.AnyMatch> {
   private final Converted referenceValue;
+  private final ValuesComparer comparer;
 
   public AnyGreaterThanOrEqual(
       final Converted referenceValue,
@@ -21,11 +22,12 @@ public class AnyGreaterThanOrEqual<Converted>
       ParquetSchemaPath schemaPath) {
     super(columnType, schemaPath, PredicateRowMatcher.AnyMatch::new);
     this.referenceValue = referenceValue;
+    this.comparer = makeValuesComparer(referenceValue);
   }
 
   @Override
   public boolean valueMatches(final Values values, final int index) {
-    return compare(values, index, referenceValue) >= 0;
+    return comparer.compare(values, index) >= 0;
   }
 
   @Override

@@ -191,21 +191,13 @@ public class ColumnChunkReader {
   public ColumnValuesSet<?> makeColumnValuesSet(
       final Collection<?> values, final ConversionStrategy conversionStrategy) {
     final var logicalTypeConverter = conversionStrategy.converterFor(this.columnType.schemaNode());
-    return makeColumnValuesSet(logicalTypeConverter, values);
-  }
-
-  private <T> ColumnValuesSet<T> makeColumnValuesSet(
-      final LogicalTypeConverter<T> logicalTypeConverter, final Collection<?> values) {
-    final var convertedClass = logicalTypeConverter.getConvertedClass();
-    return new ColumnValuesSet<>(
-        logicalTypeConverter,
-        values.stream().filter(convertedClass::isInstance).map(convertedClass::cast).toList());
+    return ColumnValuesSet.castFrom(logicalTypeConverter, values);
   }
 
   public boolean mightContainAny(
       final Collection<?> values, final ConversionStrategy conversionStrategy) {
     final var logicalTypeConverter = conversionStrategy.converterFor(this.columnType.schemaNode());
-    final var valuesSet = makeColumnValuesSet(logicalTypeConverter, values);
+    final var valuesSet = ColumnValuesSet.castFrom(logicalTypeConverter, values);
     if (hasRangeStats() && !valuesSet.anyInRange(columnType, header.meta_data.statistics)) {
       return false;
     }

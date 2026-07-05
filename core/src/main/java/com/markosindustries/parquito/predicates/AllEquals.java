@@ -10,8 +10,10 @@ import com.markosindustries.parquito.rows.PredicateRowMatcher;
  *
  * @param <Converted> The type of value
  */
-public class AllEquals<Converted> extends ColumnPredicate<Converted, PredicateRowMatcher.AllMatch> {
+public class AllEquals<Converted>
+    extends AbstractColumnEqualityPredicate<Converted, PredicateRowMatcher.AllMatch> {
   private final Converted referenceValue;
+  private final ValuesPredicate predicate;
 
   public AllEquals(
       final Converted referenceValue,
@@ -19,15 +21,16 @@ public class AllEquals<Converted> extends ColumnPredicate<Converted, PredicateRo
       ParquetSchemaPath schemaPath) {
     super(columnType, schemaPath, PredicateRowMatcher.AllMatch::new);
     this.referenceValue = referenceValue;
+    this.predicate = makeEqualsPredicate(referenceValue);
   }
 
   @Override
   public boolean valueMatches(final Values values, final int index) {
-    return compare(values, index, referenceValue) == 0;
+    return predicate.matches(values, index);
   }
 
   @Override
   public boolean nullMatches() {
-    return compareNull(referenceValue) == 0;
+    return equalsNull(referenceValue);
   }
 }

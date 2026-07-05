@@ -1,9 +1,9 @@
 package com.markosindustries.parquito.page;
 
+import com.markosindustries.parquito.LazyBitSet;
 import com.markosindustries.parquito.predicates.ColumnPredicate;
 import com.markosindustries.parquito.rows.PredicateMaterialisedMatches;
 import java.nio.ByteBuffer;
-import java.util.BitSet;
 
 public interface Values {
   boolean getBoolean(int index);
@@ -21,10 +21,8 @@ public interface Values {
   int count();
 
   default <T> PredicateMaterialisedMatches materialise(final ColumnPredicate<T, ?> predicate) {
-    final var matchingIndices = new BitSet(count());
-    for (var index = 0; index < count(); index++) {
-      matchingIndices.set(index, predicate.valueMatches(this, index));
-    }
+    final var matchingIndices =
+        new LazyBitSet(count(), index -> predicate.valueMatches(this, index));
 
     return matchingIndices::get;
   }

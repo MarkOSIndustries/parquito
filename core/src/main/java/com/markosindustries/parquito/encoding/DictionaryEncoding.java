@@ -1,6 +1,7 @@
 package com.markosindustries.parquito.encoding;
 
 import com.markosindustries.parquito.ColumnChunkReader;
+import com.markosindustries.parquito.LazyBitSet;
 import com.markosindustries.parquito.ParquetIOException;
 import com.markosindustries.parquito.page.Values;
 import com.markosindustries.parquito.predicates.ColumnPredicate;
@@ -8,7 +9,6 @@ import com.markosindustries.parquito.rows.PredicateMaterialisedMatches;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
-import java.util.BitSet;
 
 public class DictionaryEncoding implements ParquetEncoding {
   @Override
@@ -80,14 +80,10 @@ public class DictionaryEncoding implements ParquetEncoding {
       public <T> PredicateMaterialisedMatches materialise(final ColumnPredicate<T, ?> predicate) {
         final var dictionaryPage = columnChunkReader.getDictionaryPage();
         final var dictionaryPageValues = dictionaryPage.getValues();
-
-        final var matchingDictionaryIndices = new BitSet(dictionaryPage.getTotalValues());
-        for (var dictionaryIndex = 0;
-            dictionaryIndex < dictionaryPage.getTotalValues();
-            dictionaryIndex++) {
-          matchingDictionaryIndices.set(
-              dictionaryIndex, predicate.valueMatches(dictionaryPageValues, dictionaryIndex));
-        }
+        final var matchingDictionaryIndices =
+            new LazyBitSet(
+                dictionaryPage.getTotalValues(),
+                dictionaryIndex -> predicate.valueMatches(dictionaryPageValues, dictionaryIndex));
 
         return index -> matchingDictionaryIndices.get(dictionaryIndices[index]);
       }
