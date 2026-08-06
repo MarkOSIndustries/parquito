@@ -24,8 +24,8 @@ Parquito libraries are published to [maven central][maven]. Add a dependency on 
 [license-badge]:https://img.shields.io/github/license/MarkOSIndustries/parquito
 [license]:LICENSE
 
-[docs-badge]:https://javadoc.io/badge2/com.markosindustries.parquito/core/javadoc.svg
+[docs-badge]:https://javadoc.io/badge2/com.markosindustries.parquito/parquito-core/javadoc.svg
 [docs]:https://www.javadoc.io/doc/com.markosindustries.parquito
 
-[maven-badge]:https://img.shields.io/maven-central/v/com.markosindustries.parquito/core
+[maven-badge]:https://img.shields.io/maven-central/v/com.markosindustries.parquito/parquito-core
 [maven]:https://central.sonatype.com/search?namespace=com.markosindustries.parquito
