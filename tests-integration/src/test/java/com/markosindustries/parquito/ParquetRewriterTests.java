@@ -161,7 +161,7 @@ public class ParquetRewriterTests {
     final File rewrittenFile = File.createTempFile("rewrite-test", ".parquet");
     rewrittenFile.deleteOnExit();
     try (final var byteRangeReader = new FileByteRangeReader(file);
-         final var outputStream = Files.newOutputStream(rewrittenFile.toPath())) {
+        final var outputStream = Files.newOutputStream(rewrittenFile.toPath())) {
       rewriter
           .rewrite(
               byteRangeReader,
@@ -177,7 +177,7 @@ public class ParquetRewriterTests {
     }
 
     try (final var reader =
-             ProtoParquetReader.<Example.Builder>builder(new SimpleInputFile(rewrittenFile)).build()) {
+        ProtoParquetReader.<Example.Builder>builder(new SimpleInputFile(rewrittenFile)).build()) {
       int rowIndex = 0;
       for (var builder = reader.read(); builder != null; builder = reader.read()) {
         assertEquals(expectedProtobufs.get(rowIndex), builder.build());
@@ -262,16 +262,16 @@ public class ParquetRewriterTests {
     file.deleteOnExit();
 
     try (final var outputStream = Files.newOutputStream(file.toPath());
-         final var writer =
-             new RowGroupWriter<>(
-                 outputStream,
-                 WriteSpec.newBuilder()
-                     .withCompressionCodec(compressionCodec)
-                     .withMaxRowsPerRowGroup(rowsPerRowGroup)
-                     .withEncodingSelector(dictionaryEncodedSomeString(schema))
-                     .build(),
-                 ProtobufWriter.fromDescriptor(
-                     Example.getDescriptor(), ProtobufParquetConfig.newBuilder().build()))) {
+        final var writer =
+            new RowGroupWriter<>(
+                outputStream,
+                WriteSpec.newBuilder()
+                    .withCompressionCodec(compressionCodec)
+                    .withMaxRowsPerRowGroup(rowsPerRowGroup)
+                    .withEncodingSelector(dictionaryEncodedSomeString(schema))
+                    .build(),
+                ProtobufWriter.fromDescriptor(
+                    Example.getDescriptor(), ProtobufParquetConfig.newBuilder().build()))) {
       writer.write(rows);
     }
     return file;
@@ -293,7 +293,7 @@ public class ParquetRewriterTests {
     final var destination = File.createTempFile("rewrite-twice-pass", ".parquet");
     destination.deleteOnExit();
     try (final var byteRangeReader = new FileByteRangeReader(source);
-         final var outputStream = Files.newOutputStream(destination.toPath())) {
+        final var outputStream = Files.newOutputStream(destination.toPath())) {
       rewriter
           .rewrite(
               byteRangeReader,

@@ -60,7 +60,7 @@ public class ColumnChunkReader {
     final var dictionarySize =
         columnChunkHeader.meta_data.isSetDictionary_page_offset()
             ? (columnChunkHeader.meta_data.data_page_offset
-            - columnChunkHeader.meta_data.dictionary_page_offset)
+                - columnChunkHeader.meta_data.dictionary_page_offset)
             : 0;
 
     final var dictionaryPageFuture = new CompletableFuture<DictionaryPageReader>();
@@ -116,9 +116,9 @@ public class ColumnChunkReader {
     final var columnChunkSorting =
         rowGroupHeader.isSetSorting_columns()
             ? rowGroupHeader.sorting_columns.stream()
-            .filter(sorting -> sorting.column_idx == columnChunkIndex)
-            .findAny()
-            .orElseGet(() -> new SortingColumn(columnChunkIndex, false, true))
+                .filter(sorting -> sorting.column_idx == columnChunkIndex)
+                .findAny()
+                .orElseGet(() -> new SortingColumn(columnChunkIndex, false, true))
             : new SortingColumn(columnChunkIndex, false, true);
     final var columnType = ColumnType.create(columnChunkSorting, columnSchema);
     return ColumnChunkReader.create(columnChunkHeader, columnType, byteRangeReader);
