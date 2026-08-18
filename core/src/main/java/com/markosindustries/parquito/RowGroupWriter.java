@@ -123,14 +123,17 @@ public class RowGroupWriter<Row> implements AutoCloseable {
         (int) foreignRowGroup.total_compressed_size,
         Channels.newChannel(byteCountingStream));
 
+    final var offsetShift = alterredRowGroup.file_offset - foreignRowGroup.file_offset;
     for (final var column : alterredRowGroup.columns) {
+      // Despite file_offset being deprecated in parquet-format (see PARQUET-2139), it should still
+      // be kept in sync with the data page offset otherwise a chunk may become unreadable by a
+      // reader relying on file_offset
+      column.setFile_offset(column.file_offset + offsetShift);
       if (column.meta_data.isSetData_page_offset()) {
-        column.meta_data.data_page_offset +=
-            alterredRowGroup.file_offset - foreignRowGroup.file_offset;
+        column.meta_data.data_page_offset += offsetShift;
       }
       if (column.meta_data.isSetDictionary_page_offset()) {
-        column.meta_data.dictionary_page_offset +=
-            alterredRowGroup.file_offset - foreignRowGroup.file_offset;
+        column.meta_data.dictionary_page_offset += offsetShift;
       }
       if (column.meta_data.isSetBloom_filter_offset()) {
         final var bloomFilter =

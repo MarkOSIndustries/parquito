@@ -55,11 +55,12 @@ public class ColumnChunkReader {
       final ColumnChunk columnChunkHeader,
       final ColumnType type,
       final ByteRangeReader byteRangeReader) {
-    // Writers attribute the first DataPage as the file_offset, not the first Page - and we want the
-    // first page, which is the dictionary if it has one
+    // ColumnChunk's file_offset is deprecated in parquet-format (see PARQUET-2139) and not every
+    // writer keeps it in step with the page offsets, use the data_page_offset instead.
     final var dictionarySize =
         columnChunkHeader.meta_data.isSetDictionary_page_offset()
-            ? (columnChunkHeader.file_offset - columnChunkHeader.meta_data.dictionary_page_offset)
+            ? (columnChunkHeader.meta_data.data_page_offset
+                - columnChunkHeader.meta_data.dictionary_page_offset)
             : 0;
 
     final var dictionaryPageFuture = new CompletableFuture<DictionaryPageReader>();
@@ -267,7 +268,9 @@ public class ColumnChunkReader {
 
   public CompletableFuture<Iterator<DataPageReader>> readPages(ByteRangeReader byteRangeReader) {
     return byteRangeReader
-        .readAsBuffer(header.file_offset, (int) dataPageCompressedBytes)
+        // file_offset is deprecated in parquet-format (see PARQUET-2139), use the dictionary's
+        // data_page_offset instead.
+        .readAsBuffer(header.meta_data.data_page_offset, (int) dataPageCompressedBytes)
         .thenApplyAsync(
             chunkDataBuffer -> {
               return new Iterator<DataPageReader>() {
